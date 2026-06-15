@@ -1,0 +1,48 @@
+# Build results
+bin/
+obj/
+out/
+artifacts/
+[Dd]ebug/
+[Rr]elease/
+
+# Rider / IntelliJ
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Visual Studio / VS Code
+.vs/
+.vscode/
+
+# Test results & coverage
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+coverage/
+lcov.info
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+
+# Secrets & local config
+appsettings.*.local.json
+secrets.json
+*.key
+*.pfx
+.env
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
