@@ -12,6 +12,13 @@ speed and control, this is aimed at you.
 > **Status: early / pre-release.** `SolSharp.Core` is being built first. Nothing is on
 > NuGet yet, and the public API is not stable. Expect breaking changes.
 
+## Motivation
+
+When this was started, the .NET options for Solana were either unmaintained and stale or
+heavy and not built for performance — there was no modern, fast, actively-developed client.
+SolSharp is a from-scratch answer to that: current C#, allocation-conscious, and tuned for
+latency-sensitive workloads.
+
 ## Why
 
 - **Lean.** No kitchen-sink dependency graph. `Core` depends on a single package (base58).
@@ -100,4 +107,4 @@ but sign with your own signer and simulate before sending.
 
 ## License
 
-To be decided.
+[MIT](LICENSE) © yevhen
