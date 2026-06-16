@@ -4,11 +4,19 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolSharp.Core", "src\SolSha
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolSharp.Rpc", "src\SolSharp.Rpc\SolSharp.Rpc.csproj", "{EF995B90-3354-49D1-8B88-ACCCB0E79766}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolSharp.Wallet", "src\SolSharp.Wallet\SolSharp.Wallet.csproj", "{965746E4-214C-4017-AE3D-23591F923449}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolSharp.Programs", "src\SolSharp.Programs\SolSharp.Programs.csproj", "{82887A79-230D-4FA0-B1CA-EDB3AC9E364D}"
+EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{2FBB8251-E980-47E2-B617-30C32B636B21}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolSharp.Core.Tests", "tests\SolSharp.Core.Tests\SolSharp.Core.Tests.csproj", "{9DFA7CC8-551B-49D9-9631-52967B5901FA}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolSharp.Rpc.Tests", "tests\SolSharp.Rpc.Tests\SolSharp.Rpc.Tests.csproj", "{C40E247E-E094-47B4-AE28-4190D2DADF5A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolSharp.Wallet.Tests", "tests\SolSharp.Wallet.Tests\SolSharp.Wallet.Tests.csproj", "{33B3D2B0-ACA3-4C0F-829D-CB2998D1736F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolSharp.Programs.Tests", "tests\SolSharp.Programs.Tests\SolSharp.Programs.Tests.csproj", "{ABF8B051-4DA3-4491-AAE5-61B222311F7C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -32,9 +40,27 @@ Global
 		{C40E247E-E094-47B4-AE28-4190D2DADF5A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C40E247E-E094-47B4-AE28-4190D2DADF5A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C40E247E-E094-47B4-AE28-4190D2DADF5A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{965746E4-214C-4017-AE3D-23591F923449}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{965746E4-214C-4017-AE3D-23591F923449}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{965746E4-214C-4017-AE3D-23591F923449}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{965746E4-214C-4017-AE3D-23591F923449}.Release|Any CPU.Build.0 = Release|Any CPU
+		{33B3D2B0-ACA3-4C0F-829D-CB2998D1736F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{33B3D2B0-ACA3-4C0F-829D-CB2998D1736F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{33B3D2B0-ACA3-4C0F-829D-CB2998D1736F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{33B3D2B0-ACA3-4C0F-829D-CB2998D1736F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{82887A79-230D-4FA0-B1CA-EDB3AC9E364D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{82887A79-230D-4FA0-B1CA-EDB3AC9E364D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{82887A79-230D-4FA0-B1CA-EDB3AC9E364D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{82887A79-230D-4FA0-B1CA-EDB3AC9E364D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{ABF8B051-4DA3-4491-AAE5-61B222311F7C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ABF8B051-4DA3-4491-AAE5-61B222311F7C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ABF8B051-4DA3-4491-AAE5-61B222311F7C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ABF8B051-4DA3-4491-AAE5-61B222311F7C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{9DFA7CC8-551B-49D9-9631-52967B5901FA} = {2FBB8251-E980-47E2-B617-30C32B636B21}
 		{C40E247E-E094-47B4-AE28-4190D2DADF5A} = {2FBB8251-E980-47E2-B617-30C32B636B21}
+		{33B3D2B0-ACA3-4C0F-829D-CB2998D1736F} = {2FBB8251-E980-47E2-B617-30C32B636B21}
+		{ABF8B051-4DA3-4491-AAE5-61B222311F7C} = {2FBB8251-E980-47E2-B617-30C32B636B21}
 	EndGlobalSection
 EndGlobal

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <Description>Ed25519 keys and signing for Solana on .NET: keypair generation, key parsing, message signing and verification, built on a vetted Ed25519 implementation.</Description>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="SolSharp.Wallet.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../SolSharp.Core/SolSharp.Core.csproj" />
+    </ItemGroup>
+
+</Project>

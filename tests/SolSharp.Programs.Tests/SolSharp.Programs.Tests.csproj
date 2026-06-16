@@ -16,11 +16,10 @@
           <PrivateAssets>all</PrivateAssets>
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="../../src/SolSharp.Rpc/SolSharp.Rpc.csproj" />
+        <ProjectReference Include="../../src/SolSharp.Programs/SolSharp.Programs.csproj" />
     </ItemGroup>
 
 </Project>

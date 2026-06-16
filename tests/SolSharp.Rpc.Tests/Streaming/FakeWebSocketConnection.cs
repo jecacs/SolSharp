@@ -37,4 +37,7 @@ internal sealed class FakeWebSocketConnection : IWebSocketConnection
     }
 
     public void PushFromServer(string message) => _incoming.Writer.TryWrite(message);
+
+    /// <summary>Simulates the server dropping the connection: the next <see cref="ReceiveAsync"/> returns null.</summary>
+    public void Drop() => _incoming.Writer.TryComplete();
 }

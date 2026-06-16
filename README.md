@@ -9,9 +9,10 @@ wire format and the signing path, without dragging in a large dependency graph. 
 writing bots, indexers, or backend services that talk to Solana from .NET and care about
 speed and control, this is aimed at you.
 
-> **Status: early / pre-release.** `SolSharp.Core` and `SolSharp.Rpc` (HTTP reads + WebSocket
-> streaming + DI) are in place; `Wallet` and `Programs` are planned. Nothing is on NuGet yet and
-> the public API is not stable — expect breaking changes.
+> **Status: early / pre-release.** All four packages are in place — `SolSharp.Core`, `SolSharp.Rpc`
+> (HTTP reads + send/simulate + WebSocket streaming + DI), `SolSharp.Wallet` (Ed25519 keys, signing,
+> verification), and `SolSharp.Programs` (instructions + transaction building + signing). Nothing is on
+> NuGet yet and the public API is not stable — expect breaking changes.
 
 ## Motivation
 
@@ -23,8 +24,8 @@ latency-sensitive workloads.
 ## Why
 
 - **Lean.** No kitchen-sink dependency graph. `Core` depends on a single package (base58).
-- **Wire-level control.** Hand-rolled, spec-accurate transaction encoding and Ed25519
-  signing — the parts most SDKs hide — fully under your control and tested against known vectors.
+- **Wire-level control.** Hand-rolled, spec-accurate transaction and message encoding — the part
+  most SDKs hide — with Ed25519 signing on a vetted crypto library, all tested against known vectors.
 - **Latency-minded.** Value types, allocation-free hot paths, span-based APIs.
 - **Modern .NET.** C# latest, nullable reference types, code style enforced on build.
 
@@ -34,21 +35,23 @@ latency-sensitive workloads.
 | ------------------ | --------------------------------------------------- | ----------- |
 | `SolSharp.Core`    | Primitives, encoding, JSON, program/sysvar constants | Usable      |
 | `SolSharp.Rpc`     | HTTP JSON-RPC reads + WebSocket streaming + DI       | Usable      |
-| `SolSharp.Wallet`  | Ed25519 keys, key parsing, raw transaction signing  | Planned     |
-| `SolSharp.Programs`| Instruction builders + transaction building         | Planned     |
+| `SolSharp.Wallet`  | Ed25519 keys, key parsing, signing and verification | Usable      |
+| `SolSharp.Programs`| Instructions, transaction building, System/Token/ATA | Usable      |
 
-Dependencies point downward only: `Wallet`, `Rpc`, and `Programs` all build on `Core`,
-which depends on nothing else in the solution and pulls no network or crypto package.
+Dependencies point downward only: `Rpc` and `Wallet` build on `Core`, and `Programs` builds on `Core`
+and `Wallet`. `Core` depends on nothing else in the solution and pulls no network or crypto package.
 
 ## What's here today
 
 `SolSharp.Core`:
 
 - `PublicKey` — a 32-byte value type with value equality, base58 parsing, and JSON support.
-- `Base58` and `ShortVec` (compact-u16) — the encodings Solana uses on the wire.
+- `Base58`, `ShortVec` (compact-u16), and `BorshReader` — the encodings Solana uses on the wire, plus a
+  bounds-checked reader for Anchor / Borsh account data.
 - `Commitment` — an RPC enum that serializes to its exact wire string.
 - `SolanaProgramIds`, `Sysvars`, `Mints` — well-known on-chain addresses, guarded by a test
   that every constant decodes to a valid 32-byte key.
+- `SolanaUnits` — SOL ↔ lamports conversion.
 
 ```csharp
 using SolSharp.Core.Primitives;
@@ -60,12 +63,21 @@ bool ok = PublicKey.TryParse(input, out var key);
 
 `SolSharp.Rpc`:
 
-- HTTP JSON-RPC reads — `getBalance`, `getLatestBlockhash`, `getSlot`, `getBlockHeight`,
-  `getTokenAccountBalance`, `getTokenSupply`, `getHealth`, `getVersion`, and more; each typed,
-  fully documented, and tested.
-- WebSocket streaming multiplexed over one connection: `SubscribeSlotsAsync` (`IAsyncEnumerable`)
-  and `SubscribeLogsAsync` (`ChannelReader`).
+- HTTP JSON-RPC reads — accounts (`getAccountInfo`, `getMultipleAccounts`, `getProgramAccounts` with
+  memcmp / data-size filters, `getTokenAccountsByOwner`, `getAddressLookupTable` fetch + decode),
+  transactions (`getTransaction`, `getSignaturesForAddress`, `getFeeForMessage`), and cluster state
+  (`getBalance`, `getLatestBlockhash`, `isBlockhashValid`, `getEpochInfo`, `getRecentPrioritizationFees`,
+  `getTokenSupply`, `requestAirdrop`, and more); each typed, fully documented, and tested.
+- Account-state decoders — `Mint` and `TokenAccount` (SPL Token state, via `GetMintAsync` /
+  `GetTokenAccountAsync`) and `AddressLookupTable`; for other programs, pair `getAccountInfo` with Core's
+  `BorshReader`.
+- WebSocket streaming multiplexed over one connection: `SubscribeSlotsAsync` (`IAsyncEnumerable`),
+  `SubscribeLogsAsync`, `SubscribeAccountAsync`, and `SubscribeProgramAsync` (`ChannelReader`), with
+  automatic reconnect and resubscribe across dropped connections.
 - DI registration with a built-in resilience pipeline (retry on transient errors and HTTP 429).
+- `SendTransactionAsync` / `SimulateTransactionAsync` — submit a signed transaction or dry-run it for logs and
+  compute units; `SendAndConfirmTransactionAsync` sends and waits for confirmation (throwing if the transaction
+  lands but errors), and `GetSignatureStatusesAsync` / `ConfirmTransactionAsync` poll a signature's status.
 
 ```csharp
 using SolSharp.Rpc;
@@ -83,15 +95,57 @@ await foreach (var slot in ws.SubscribeSlotsAsync())
     Console.WriteLine(slot.Slot);
 ```
 
+`SolSharp.Wallet`:
+
+- `Keypair` — generate a key, or load one from a base58 export or a `solana-keygen` JSON array;
+  signs messages and zeroes its secret on dispose.
+- `ISigner` — the signing abstraction the transaction builder depends on, so the key stays swappable.
+- `PublicKey.Verify(message, signature)` — Ed25519 verification, kept in Wallet so Core stays crypto-free.
+
+```csharp
+using SolSharp.Wallet;
+
+using var keypair = Keypair.Generate();      // or Keypair.Parse(phantomExport / id.json)
+byte[] signature = keypair.Sign(message);
+bool ok = keypair.PublicKey.Verify(message, signature);
+```
+
+`SolSharp.Programs`:
+
+- Instruction builders: `SystemProgram` (transfer, create account), `ComputeBudgetProgram` (compute-unit
+  limit and priority fee), `TokenProgram` (transfer, transfer-checked), `AssociatedTokenAccount`, and
+  `AddressLookupTableProgram` (create / extend / deactivate / close).
+- `ProgramDerivedAddress` (`FindProgramAddress` / `TryCreateProgramAddress`) and `PublicKey.IsOnCurve()`.
+- `Message` (legacy) and `MessageV0` (versioned, loading extra accounts from address lookup tables),
+  `Transaction`, and `TransactionBuilder` (`Build` / `BuildV0`) — compilation, wire serialization, signing,
+  and base64 output. Every encoding is checked byte-for-byte against the Rust `solana-sdk` (via solders)
+  and `solana-py`.
+
+```csharp
+using SolSharp.Programs;
+using SolSharp.Wallet;
+
+using var payer = Keypair.Parse(secret);
+var blockhash = (await rpc.GetLatestBlockhashAsync()).Blockhash;
+
+var tx = new TransactionBuilder()
+    .SetRecentBlockhash(blockhash)
+    .AddInstruction(ComputeBudgetProgram.SetComputeUnitPrice(50_000))
+    .AddInstruction(SystemProgram.Transfer(payer.PublicKey, recipient, 1_000_000))
+    .Build(payer);
+
+var signature = await rpc.SendTransactionAsync(tx.Serialize());
+```
+
 ## Roadmap
 
 - [x] Core primitives — `PublicKey`, `Base58`, `ShortVec`
 - [x] RPC enum + JSON converters (`Commitment`)
 - [x] Program / sysvar / mint constants + validation
-- [ ] `SolSharp.Wallet` — Ed25519 signing, key parsing, raw transaction signer
-- [x] `SolSharp.Rpc` — HTTP JSON-RPC reads, WebSocket streaming (multiplexed), DI + resilience
-- [ ] `SolSharp.Rpc` next — `getAccountInfo` / `getSignaturesForAddress`, `accountSubscribe`, auto-reconnect
-- [ ] `SolSharp.Programs` — System / Token / ATA / Compute Budget instructions, transaction builder
+- [x] `SolSharp.Wallet` — Ed25519 keys, signing/verification, key parsing
+- [x] `SolSharp.Rpc` — HTTP reads (`getAccountInfo` / `getMultipleAccounts` / `getProgramAccounts` / `getSignaturesForAddress`, balances, blockhash, token supply, ...) + `sendTransaction` / `simulateTransaction`; multiplexed WebSocket streaming (slots, logs, accounts, programs) with auto-reconnect; DI + resilience
+- [x] `SolSharp.Programs` — System / Token / ATA / Compute Budget instructions, PDA/ATA, transaction builder
+- [x] Versioned (v0) transactions + address lookup tables (compile / sign / fetch + decode / ALT program)
 - [ ] Published NuGet packages
 
 ## Requirements
@@ -112,6 +166,8 @@ dotnet format   # apply the enforced code style
 SolSharp/
   src/SolSharp.Core/   Encoding/  Primitives/  Converters/  Constants/
   src/SolSharp.Rpc/    Protocol/  Models/  Streaming/  + client, options, DI
+  src/SolSharp.Wallet/ Keypair (+ parsing), ISigner, PublicKey.Verify / IsOnCurve
+  src/SolSharp.Programs/ instructions, PDA/ATA, Message/Transaction, TransactionBuilder
   tests/               NUnit + FluentAssertions, mirroring each project
   .editorconfig        modern C# style, enforced on build
   Directory.Build.props

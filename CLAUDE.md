@@ -4,7 +4,7 @@ A lean, modern .NET SDK for Solana: RPC + WebSocket streaming, wire-level transa
 signing/building. Optimised for low latency and a small dependency footprint — it is a
 deliberate, focused alternative to the heavier general-purpose SDKs, not a clone of them.
 
-Status: early. Core primitives and the Rpc client (HTTP reads, WebSocket streaming, DI + resilience) are in place; `Wallet` and `Programs` are planned.
+Status: early. All four projects are in place: Core primitives, the Rpc client (reads incl. account info + send/simulate, WebSocket streaming with auto-reconnect, DI + resilience), the Wallet (Ed25519 keys, signing, verification, key parsing), and Programs (instructions incl. the Address Lookup Table program, PDA/ATA, legacy + v0 transaction building + signing).
 
 ## Commands
 
@@ -29,7 +29,7 @@ Layering (dependencies point downward; no cycles):
 - **Core** — byte-level types and codecs. No I/O, no crypto engine. Only dependency: `SimpleBase`.
 - **Wallet** — the Ed25519 engine: sign, keygen, verify. Depends on Core.
 - **Rpc** — HTTP JSON-RPC + WebSocket streaming client. Depends on Core.
-- **Programs** — instruction builders + transaction building. Depends on Core.
+- **Programs** — instruction builders, PDA/ATA derivation, message compilation, transaction building. Depends on Core and Wallet (for `ISigner` and the on-curve check).
 
 Rules:
 
@@ -43,7 +43,9 @@ Rules:
 SolSharp/
   src/SolSharp.Core/        Encoding/  Primitives/  Converters/  Constants/
   src/SolSharp.Rpc/         Protocol/  Models/  Streaming/  + client, options, DI
-  tests/                    SolSharp.Core.Tests + SolSharp.Rpc.Tests, mirroring src with nested fixtures
+  src/SolSharp.Wallet/      Keypair (+ parsing), ISigner, PublicKeyExtensions, Ed25519Curve
+  src/SolSharp.Programs/    AccountMeta/Instruction, Message + MessageV0, Transaction, TransactionBuilder, program builders (incl. ALT), PDA/ATA
+  tests/                    SolSharp.{Core,Rpc,Wallet,Programs}.Tests, mirroring src with nested fixtures
 ```
 
 ## Testing
@@ -67,3 +69,8 @@ SolSharp/
 - `PublicKey` is a `readonly struct` backed by four `ulong` words (32 bytes inline, value equality, no per-key heap allocation). Base58 is cached only when the key is built from a string; from-bytes stays allocation-free. No zero-copy `AsSpan()` by design — use `CopyTo` / `ToBytes`.
 - `Commitment` serializes via a custom `JsonConverter` applied as a `[JsonConverter]` attribute (net8 has no `JsonStringEnumMemberName`). The attribute makes it self-serializing under default options, not just `SolanaJsonSerializer.Options`.
 - Wire enums/types follow that same pattern: self-serializing via attribute so they hold their wire form regardless of which `JsonSerializerOptions` are in play.
+- **Ed25519 lives in `Wallet` on `BouncyCastle.Cryptography`** — not the .NET BCL (net8/10 ship no usable cross-platform `Ed25519`: Windows unsupported, Apple's is non-conformant) and not a hand-rolled curve. Pure-managed/portable was chosen over libsodium/NSec's native dependency, since signing throughput is not the bottleneck; `ISigner` keeps the backend swappable.
+- `Keypair` is one word to match the Solana ecosystem (`solana-keygen`, web3.js `Keypair`), not .NET's `KeyPair`. It stores only the 32-byte seed, derives the public key once, and zeroes the seed on `Dispose`.
+- Transactions support both the **legacy** and **v0 (versioned)** message formats behind a shared `ITransactionMessage`, so `Transaction` signs and serializes either. Account ordering matches Solana's compilation exactly (fee payer first, then accounts sorted by public-key bytes within the writable-signer / readonly-signer / writable / readonly classes). v0 additionally drains non-signer, non-program accounts found in a supplied lookup table into a table lookup and prefixes the `0x80` version byte. Both are validated byte-for-byte against `solana-sdk` (solders).
+- `PublicKey.IsOnCurve` is direct field arithmetic, not BouncyCastle: BC's public-key validation rejects non-canonical encodings (y ≥ p) that Solana's `curve25519-dalek` accepts after reducing mod p. It is fuzzed against solders so PDA/ATA derivation matches the network.
+- Money-critical encodings (message/transaction serialization, instruction data, PDA/ATA, on-curve) are checked byte-for-byte against `solana-sdk` (solders) and `solana-py`, not just round-trips.
