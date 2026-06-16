@@ -120,6 +120,9 @@ csharp_new_line_before_finally = true
 csharp_new_line_before_members_in_object_initializers = true
 csharp_new_line_between_query_expression_clauses = true
 
+# Attributes always on their own line, never inline with the member (Rider/ReSharper)
+resharper_csharp_place_attribute_on_same_line = false
+
 # Indentation / spacing
 csharp_indent_case_contents = true
 csharp_indent_switch_labels = true

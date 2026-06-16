@@ -4,7 +4,7 @@ A lean, modern .NET SDK for Solana: RPC + WebSocket streaming, wire-level transa
 signing/building. Optimised for low latency and a small dependency footprint — it is a
 deliberate, focused alternative to the heavier general-purpose SDKs, not a clone of them.
 
-Status: early. `SolSharp.Core` is being built first; `Wallet`, `Rpc`, `Programs` are planned.
+Status: early. Core primitives and Rpc HTTP reads are in place; WebSocket streaming, `Wallet`, and `Programs` are planned.
 
 ## Commands
 
@@ -17,7 +17,8 @@ Run from the repo root (where `SolSharp.sln` lives):
 ## Hard rules
 
 - **English only** — code, comments, identifiers, test names, docs.
-- **Comments earn their place.** Explain *why* — non-obvious rationale, wire-format quirks, gotchas — never restate what the code already says. No filler, decorative, or obvious comments. XML docs on public API are welcome; inline noise is not.
+- **Comments earn their place.** Explain *why* — non-obvious rationale, wire-format quirks, gotchas — never restate what the code already says. No filler, decorative, or obvious comments. Public API carries full XML docs (summary, every `<param>`, `<returns>`, and thrown `<exception>`); inline noise does not.
+- **Attributes on their own line** — never inline with the member, e.g. `[JsonPropertyName("id")]` goes above the property, not beside it. `dotnet format` does not enforce this (only Rider does), so write it that way by hand.
 - **Target framework is `net8.0`.** Do not use net9-only APIs (e.g. `JsonStringEnumMemberName`, `InlineArray`-based span tricks that need newer ref-safety).
 - **Modern C# only.** File-scoped namespaces, `var`, collection expressions `[]`, primary constructors, switch expressions, pattern matching, `is null` / `is not null`. The full rule set lives in `.editorconfig` + `Directory.Build.props` — follow the analyzers, don't fight them. Do not restate style rules here.
 
@@ -47,6 +48,7 @@ SolSharp/
 ## Testing
 
 - NUnit + FluentAssertions + NSubstitute. NSubstitute only where there are real collaborators (pure utilities have nothing to mock).
+- **Every public member is done only when it has both full XML docs and a test.** Don't skip a test because the method resembles one already covered — cover each distinct response/parse shape and each request param shape.
 - **One nested fixture per method under test:**
   `public static class XTests { [TestFixture] public sealed class Method { ... } }`.
 - Wire formats and crypto are money-critical: cover them with known vectors (RFC 8032 for signing, canonical compact-u16 / base58 vectors), not just round-trips.
