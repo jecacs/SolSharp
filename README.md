@@ -9,8 +9,9 @@ wire format and the signing path, without dragging in a large dependency graph. 
 writing bots, indexers, or backend services that talk to Solana from .NET and care about
 speed and control, this is aimed at you.
 
-> **Status: early / pre-release.** `SolSharp.Core` is being built first. Nothing is on
-> NuGet yet, and the public API is not stable. Expect breaking changes.
+> **Status: early / pre-release.** `SolSharp.Core` and `SolSharp.Rpc` (HTTP reads + WebSocket
+> streaming + DI) are in place; `Wallet` and `Programs` are planned. Nothing is on NuGet yet and
+> the public API is not stable — expect breaking changes.
 
 ## Motivation
 
@@ -31,9 +32,9 @@ latency-sensitive workloads.
 
 | Package            | Purpose                                             | Status      |
 | ------------------ | --------------------------------------------------- | ----------- |
-| `SolSharp.Core`    | Primitives, encoding, JSON, program/sysvar constants | In progress |
+| `SolSharp.Core`    | Primitives, encoding, JSON, program/sysvar constants | Usable      |
+| `SolSharp.Rpc`     | HTTP JSON-RPC reads + WebSocket streaming + DI       | Usable      |
 | `SolSharp.Wallet`  | Ed25519 keys, key parsing, raw transaction signing  | Planned     |
-| `SolSharp.Rpc`     | JSON-RPC client + WebSocket streaming               | Planned     |
 | `SolSharp.Programs`| Instruction builders + transaction building         | Planned     |
 
 Dependencies point downward only: `Wallet`, `Rpc`, and `Programs` all build on `Core`,
@@ -45,7 +46,7 @@ which depends on nothing else in the solution and pulls no network or crypto pac
 
 - `PublicKey` — a 32-byte value type with value equality, base58 parsing, and JSON support.
 - `Base58` and `ShortVec` (compact-u16) — the encodings Solana uses on the wire.
-- `Commitment` / `RpcEncoding` — RPC enums that serialize to their exact wire strings.
+- `Commitment` — an RPC enum that serializes to its exact wire string.
 - `SolanaProgramIds`, `Sysvars`, `Mints` — well-known on-chain addresses, guarded by a test
   that every constant decodes to a valid 32-byte key.
 
@@ -57,13 +58,39 @@ byte[] raw = mint.ToBytes();              // 32 bytes, allocation-free storage
 bool ok = PublicKey.TryParse(input, out var key);
 ```
 
+`SolSharp.Rpc`:
+
+- HTTP JSON-RPC reads — `getBalance`, `getLatestBlockhash`, `getSlot`, `getBlockHeight`,
+  `getTokenAccountBalance`, `getTokenSupply`, `getHealth`, `getVersion`, and more; each typed,
+  fully documented, and tested.
+- WebSocket streaming multiplexed over one connection: `SubscribeSlotsAsync` (`IAsyncEnumerable`)
+  and `SubscribeLogsAsync` (`ChannelReader`).
+- DI registration with a built-in resilience pipeline (retry on transient errors and HTTP 429).
+
+```csharp
+using SolSharp.Rpc;
+
+// typed client with retries; tune the pipeline via the optional callback
+services.AddSolanaRpc("https://your-rpc-endpoint");
+
+// injected SolanaRpcClient
+var lamports = await rpc.GetBalanceAsync(account);
+
+// streaming
+await using var ws = new SolanaWsClient();
+await ws.ConnectAsync(new Uri("wss://your-rpc-endpoint"));
+await foreach (var slot in ws.SubscribeSlotsAsync())
+    Console.WriteLine(slot.Slot);
+```
+
 ## Roadmap
 
 - [x] Core primitives — `PublicKey`, `Base58`, `ShortVec`
-- [x] RPC enums + JSON converters (`Commitment`, `RpcEncoding`)
+- [x] RPC enum + JSON converters (`Commitment`)
 - [x] Program / sysvar / mint constants + validation
 - [ ] `SolSharp.Wallet` — Ed25519 signing, key parsing, raw transaction signer
-- [ ] `SolSharp.Rpc` — HTTP JSON-RPC + WebSocket streaming (subscriptions multiplexed over one socket)
+- [x] `SolSharp.Rpc` — HTTP JSON-RPC reads, WebSocket streaming (multiplexed), DI + resilience
+- [ ] `SolSharp.Rpc` next — `getAccountInfo` / `getSignaturesForAddress`, `accountSubscribe`, auto-reconnect
 - [ ] `SolSharp.Programs` — System / Token / ATA / Compute Budget instructions, transaction builder
 - [ ] Published NuGet packages
 
@@ -83,11 +110,12 @@ dotnet format   # apply the enforced code style
 
 ```
 SolSharp/
-  src/SolSharp.Core/           Encoding/  Primitives/  Converters/  Constants/
-  tests/SolSharp.Core.Tests/   mirrors src, NUnit + FluentAssertions
-  .editorconfig                modern C# style, enforced on build
-  Directory.Build.props        shared build settings
-  CLAUDE.md                    conventions and decisions for contributors/agents
+  src/SolSharp.Core/   Encoding/  Primitives/  Converters/  Constants/
+  src/SolSharp.Rpc/    Protocol/  Models/  Streaming/  + client, options, DI
+  tests/               NUnit + FluentAssertions, mirroring each project
+  .editorconfig        modern C# style, enforced on build
+  Directory.Build.props
+  CLAUDE.md            conventions and decisions for contributors/agents
 ```
 
 ## Design notes

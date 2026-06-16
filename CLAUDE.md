@@ -4,7 +4,7 @@ A lean, modern .NET SDK for Solana: RPC + WebSocket streaming, wire-level transa
 signing/building. Optimised for low latency and a small dependency footprint — it is a
 deliberate, focused alternative to the heavier general-purpose SDKs, not a clone of them.
 
-Status: early. Core primitives and Rpc HTTP reads are in place; WebSocket streaming, `Wallet`, and `Programs` are planned.
+Status: early. Core primitives and the Rpc client (HTTP reads, WebSocket streaming, DI + resilience) are in place; `Wallet` and `Programs` are planned.
 
 ## Commands
 
@@ -42,7 +42,8 @@ Rules:
 ```
 SolSharp/
   src/SolSharp.Core/        Encoding/  Primitives/  Converters/  Constants/
-  tests/SolSharp.Core.Tests/   mirrors src, nested test fixtures
+  src/SolSharp.Rpc/         Protocol/  Models/  Streaming/  + client, options, DI
+  tests/                    SolSharp.Core.Tests + SolSharp.Rpc.Tests, mirroring src with nested fixtures
 ```
 
 ## Testing

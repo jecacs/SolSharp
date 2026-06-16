@@ -1,7 +1,10 @@
+using System.Net;
+using System.Text;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using NUnit.Framework;
+using Polly;
 
 namespace SolSharp.Rpc.Tests;
 
@@ -74,5 +77,38 @@ public static class ServiceCollectionExtensionsTests
             services.AddSolanaRpc(options => options.Endpoint = endpoint);
             return services.BuildServiceProvider();
         }
+    }
+
+    [TestFixture]
+    public sealed class Resilience
+    {
+        [Test]
+        public async Task RetriesTransientFailure()
+        {
+            var handler = new SequenceHandler(
+                new HttpResponseMessage(HttpStatusCode.ServiceUnavailable),
+                Json("""{"jsonrpc":"2.0","result":123,"id":1}"""));
+
+            var services = new ServiceCollection();
+            services
+                .AddSolanaRpc(
+                    options => options.Endpoint = "https://node.example",
+                    resilience =>
+                    {
+                        resilience.Retry.MaxRetryAttempts = 1;
+                        resilience.Retry.Delay = TimeSpan.Zero;
+                        resilience.Retry.BackoffType = DelayBackoffType.Constant;
+                        resilience.Retry.UseJitter = false;
+                    })
+                .ConfigurePrimaryHttpMessageHandler(() => handler);
+
+            var client = services.BuildServiceProvider().GetRequiredService<SolanaRpcClient>();
+
+            (await client.GetSlotAsync()).Should().Be(123);
+            handler.CallCount.Should().Be(2);
+        }
+
+        private static HttpResponseMessage Json(string body)
+            => new(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
     }
 }

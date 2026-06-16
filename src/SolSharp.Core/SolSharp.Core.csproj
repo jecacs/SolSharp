@@ -4,6 +4,7 @@
         <TargetFramework>net8.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <Description>Core Solana primitives for .NET: PublicKey, base58 and compact-u16 (shortvec) encoding, commitment levels, and well-known program, sysvar, and mint addresses. No I/O, no crypto engine, minimal dependencies.</Description>
     </PropertyGroup>
 
     <ItemGroup>

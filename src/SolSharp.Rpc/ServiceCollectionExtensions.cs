@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Options;
 
 namespace SolSharp.Rpc;
@@ -7,12 +8,17 @@ namespace SolSharp.Rpc;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers <see cref="SolanaRpcClient"/> as a typed <see cref="HttpClient"/> configured from the supplied options.
+    /// Registers <see cref="SolanaRpcClient"/> as a typed <see cref="HttpClient"/> with a standard
+    /// resilience pipeline (retry on transient failures and HTTP 429, with backoff and a request timeout).
     /// </summary>
     /// <param name="services">The service collection to add to.</param>
     /// <param name="configure">Configures the <see cref="SolanaRpcOptions"/>.</param>
-    /// <returns>The same <paramref name="services"/> instance, for chaining.</returns>
-    public static IServiceCollection AddSolanaRpc(this IServiceCollection services, Action<SolanaRpcOptions> configure)
+    /// <param name="configureResilience">Optionally tunes the resilience pipeline (retries, timeouts, circuit breaker).</param>
+    /// <returns>The <see cref="IHttpClientBuilder"/>, so the caller can keep configuring the client (headers, timeout, handlers).</returns>
+    public static IHttpClientBuilder AddSolanaRpc(
+        this IServiceCollection services,
+        Action<SolanaRpcOptions> configure,
+        Action<HttpStandardResilienceOptions>? configureResilience = null)
     {
         services
             .AddOptions<SolanaRpcOptions>()
@@ -24,13 +30,17 @@ public static class ServiceCollectionExtensions
                 "SolanaRpcOptions.Endpoint must be an absolute http(s) URL.")
             .ValidateOnStart();
 
-        services.AddHttpClient<SolanaRpcClient>((provider, client) =>
+        var builder = services.AddHttpClient<SolanaRpcClient>((provider, client) =>
         {
             var options = provider.GetRequiredService<IOptions<SolanaRpcOptions>>().Value;
             client.BaseAddress = new Uri(options.Endpoint);
         });
 
-        return services;
+        var resilience = builder.AddStandardResilienceHandler();
+        if (configureResilience is not null)
+            resilience.Configure(configureResilience);
+
+        return builder;
     }
 
     /// <summary>
@@ -38,7 +48,7 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection to add to.</param>
     /// <param name="endpoint">The JSON-RPC HTTP endpoint URL.</param>
-    /// <returns>The same <paramref name="services"/> instance, for chaining.</returns>
-    public static IServiceCollection AddSolanaRpc(this IServiceCollection services, string endpoint)
+    /// <returns>The <see cref="IHttpClientBuilder"/>, so the caller can keep configuring the client.</returns>
+    public static IHttpClientBuilder AddSolanaRpc(this IServiceCollection services, string endpoint)
         => services.AddSolanaRpc(options => options.Endpoint = endpoint);
 }
