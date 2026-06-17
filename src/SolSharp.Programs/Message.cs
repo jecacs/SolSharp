@@ -168,6 +168,18 @@ public sealed class Message : ITransactionMessage
         return buffer.ToArray();
     }
 
+    /// <summary>Resolves the compiled instructions back into <see cref="Instruction"/>s, with each account's key and signer/writable flags.</summary>
+    /// <param name="lookupTables">Ignored for a legacy message, which loads no lookup-table accounts.</param>
+    /// <returns>The resolved instructions, in order.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="lookupTables"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">An account index is out of range.</exception>
+    public IReadOnlyList<Instruction> DecompileInstructions(IReadOnlyList<AddressLookupTableAccount> lookupTables)
+    {
+        ArgumentNullException.ThrowIfNull(lookupTables);
+        return MessageDecompiler.Decompile(
+            Instructions, AccountKeys, RequiredSignatures, ReadonlySignedAccounts, ReadonlyUnsignedAccounts, AccountKeys.Count, numLoadedWritable: 0);
+    }
+
     /// <summary>Parses a legacy message from its wire bytes.</summary>
     /// <param name="data">The serialized message (no version prefix).</param>
     /// <returns>The parsed message.</returns>

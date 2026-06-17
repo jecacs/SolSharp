@@ -386,18 +386,51 @@ tx.Sign(payer);
 string resubmittable = tx.ToBase64();
 ```
 
-The same works for a historical transaction fetched from the node — `getTransaction` returns the decoded
-bytes plus rich metadata (SOL and token balance deltas, inner instructions, loaded lookup-table addresses):
+### Analyzing a historical transaction
+
+`getTransaction` returns the decoded bytes plus rich metadata. Parse the bytes, **decompile** the instructions
+(resolving each account index to a public key and signer/writable flags), read the token-balance deltas, and
+decode any failure into a typed error:
 
 ```csharp
 var fetched = await rpc.GetTransactionAsync(signature);
 if (fetched is not null)
 {
-    var parsed = Transaction.Deserialize(fetched.Transaction!);   // message, accounts, instructions
+    var parsed = Transaction.Deserialize(fetched.Transaction!);
+
+    // Resolve instructions to program ids + account keys. A v0 transaction loads accounts from lookup tables:
+    var instructions = parsed.Message is MessageV0 v0
+        ? v0.DecompileInstructions(await FetchTablesAsync(rpc, v0))
+        : parsed.Message.DecompileInstructions();
+
+    foreach (var ix in instructions)
+        Console.WriteLine($"{ix.ProgramId} over {ix.Accounts.Count} accounts");
+
     foreach (var post in fetched.Meta?.PostTokenBalances ?? [])
         Console.WriteLine($"{post.Mint}: {post.UiTokenAmount.UiAmountString}");
+
+    if (fetched.Meta?.Error is { } error)   // typed failure reason
+        Console.WriteLine(error.InstructionError?.CustomCode is { } code
+            ? $"failed with program error {code}"
+            : error.ToString());
+}
+
+// Fetch and wrap the lookup tables a v0 message references:
+static async Task<IReadOnlyList<AddressLookupTableAccount>> FetchTablesAsync(SolanaRpcClient rpc, MessageV0 message)
+{
+    var tables = new List<AddressLookupTableAccount>();
+    foreach (var lookup in message.AddressTableLookups)
+    {
+        var table = await rpc.GetAddressLookupTableAsync(lookup.AccountKey)
+            ?? throw new InvalidOperationException($"lookup table {lookup.AccountKey} not found");
+        tables.Add(new AddressLookupTableAccount(lookup.AccountKey, table.Addresses));
+    }
+    return tables;
 }
 ```
+
+`MessageV0.GetAccountKeys(tables)` gives the full resolved account list (static + lookup-loaded), so you can
+map a balance entry's `accountIndex` back to a public key.
 
 ## WebSocket subscriptions
 

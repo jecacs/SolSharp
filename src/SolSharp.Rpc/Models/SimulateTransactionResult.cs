@@ -21,4 +21,8 @@ public sealed record SimulateTransactionResult
     /// <summary>True when the simulation reported an error (<see cref="Err"/> is present).</summary>
     [JsonIgnore]
     public bool IsError => Err is { ValueKind: not JsonValueKind.Null };
+
+    /// <summary>The decoded transaction error, or <c>null</c> if the simulation succeeded.</summary>
+    [JsonIgnore]
+    public TransactionError? Error => TransactionError.Parse(Err);
 }

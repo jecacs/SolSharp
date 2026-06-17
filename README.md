@@ -50,8 +50,8 @@ and `Wallet`. `Core` depends on nothing else in the solution and pulls no networ
 `SolSharp.Core`:
 
 - `PublicKey` — a 32-byte value type with value equality, base58 parsing, and JSON support.
-- `Base58`, `ShortVec` (compact-u16), and `BorshReader` — the encodings Solana uses on the wire, plus a
-  bounds-checked reader for Anchor / Borsh account data.
+- `Base58`, `ShortVec` (compact-u16), and `BorshReader` / `BorshWriter` — the encodings Solana uses on the
+  wire, plus a bounds-checked reader and writer for Anchor / Borsh account data and instruction arguments.
 - `Commitment` — an RPC enum that serializes to its exact wire string.
 - `SolanaProgramIds`, `Sysvars`, `Mints` — well-known on-chain addresses, guarded by a test
   that every constant decodes to a valid 32-byte key.
@@ -78,7 +78,8 @@ bool ok = PublicKey.TryParse(input, out var key);
   `BorshReader`.
 - `getTransaction` returns the decoded transaction bytes (feed to `Transaction.Deserialize`) alongside rich
   metadata — pre/post SOL and token balances, inner (CPI) instructions, loaded lookup-table addresses, logs,
-  and compute units.
+  and compute units. Failures decode to a typed `TransactionError` (exposing the program's `Custom` code) on
+  `TransactionMeta`, `SignatureStatus`, and `SimulateTransactionResult`.
 - WebSocket streaming multiplexed over one connection: `SubscribeSlotsAsync` and `SubscribeRootsAsync`
   (`IAsyncEnumerable`), `SubscribeLogsAsync`, `SubscribeAccountAsync`, `SubscribeProgramAsync`,
   `SubscribeSignatureAsync`, and `SubscribeBlocksAsync` (`ChannelReader`), with automatic reconnect and
@@ -130,8 +131,9 @@ bool ok = keypair.PublicKey.Verify(message, signature);
 - `ProgramDerivedAddress` (`FindProgramAddress` / `TryCreateProgramAddress`) and `PublicKey.IsOnCurve()`.
 - `Message` (legacy) and `MessageV0` (versioned, loading extra accounts from address lookup tables),
   `Transaction`, and `TransactionBuilder` (`Build` / `BuildV0`) — compilation, wire serialization (with
-  `Transaction.Deserialize` to parse one back), signing, and base64 output. Every encoding is checked
-  byte-for-byte against the Rust `solana-sdk` (via solders) and `solana-py`.
+  `Transaction.Deserialize` to parse one back, and `DecompileInstructions` to resolve a parsed message's
+  instructions to program ids and account keys, loading v0 lookup-table accounts), signing, and base64
+  output. Every encoding is checked byte-for-byte against the Rust `solana-sdk` (via solders) and `solana-py`.
 
 ```csharp
 using SolSharp.Programs;

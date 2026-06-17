@@ -74,6 +74,10 @@ public sealed record TransactionMeta
     /// <summary>True when the transaction failed (<see cref="Err"/> is present).</summary>
     [JsonIgnore]
     public bool IsError => Err is { ValueKind: not JsonValueKind.Null };
+
+    /// <summary>The decoded transaction error, or <c>null</c> if it succeeded.</summary>
+    [JsonIgnore]
+    public TransactionError? Error => TransactionError.Parse(Err);
 }
 
 /// <summary>A pre- or post-execution SPL token balance snapshot from a transaction's metadata.</summary>

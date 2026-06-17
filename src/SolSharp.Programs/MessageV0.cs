@@ -263,6 +263,75 @@ public sealed class MessageV0 : ITransactionMessage
         return buffer.ToArray();
     }
 
+    /// <summary>
+    /// The full account list this message addresses: its static keys followed by the writable and then the
+    /// read-only accounts loaded from <paramref name="lookupTables"/>. Use it to map an account index (for
+    /// example one of a transaction's pre/post balance entries) to a public key.
+    /// </summary>
+    /// <param name="lookupTables">The resolved lookup tables this message references; supply every one it uses.</param>
+    /// <returns>The resolved account keys, in index order.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="lookupTables"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">A referenced table is not supplied, or a lookup index is out of range.</exception>
+    public IReadOnlyList<PublicKey> GetAccountKeys(IReadOnlyList<AddressLookupTableAccount> lookupTables)
+    {
+        ArgumentNullException.ThrowIfNull(lookupTables);
+        var (writable, readOnly) = ResolveLoaded(lookupTables);
+        return BuildKeys(writable, readOnly);
+    }
+
+    /// <summary>Resolves the compiled instructions back into <see cref="Instruction"/>s, loading extra accounts from <paramref name="lookupTables"/>.</summary>
+    /// <param name="lookupTables">The resolved lookup tables this message references; supply every one it uses.</param>
+    /// <returns>The resolved instructions, in order.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="lookupTables"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">A referenced table is not supplied, or an account index is out of range.</exception>
+    public IReadOnlyList<Instruction> DecompileInstructions(IReadOnlyList<AddressLookupTableAccount> lookupTables)
+    {
+        ArgumentNullException.ThrowIfNull(lookupTables);
+        var (writable, readOnly) = ResolveLoaded(lookupTables);
+        var keys = BuildKeys(writable, readOnly);
+        return MessageDecompiler.Decompile(
+            Instructions, keys, RequiredSignatures, ReadonlySignedAccounts, ReadonlyUnsignedAccounts, AccountKeys.Count, writable.Count);
+    }
+
+    private List<PublicKey> BuildKeys(List<PublicKey> loadedWritable, List<PublicKey> loadedReadonly)
+    {
+        var keys = new List<PublicKey>(AccountKeys.Count + loadedWritable.Count + loadedReadonly.Count);
+        keys.AddRange(AccountKeys);
+        keys.AddRange(loadedWritable);
+        keys.AddRange(loadedReadonly);
+        return keys;
+    }
+
+    private (List<PublicKey> Writable, List<PublicKey> Readonly) ResolveLoaded(IReadOnlyList<AddressLookupTableAccount> lookupTables)
+    {
+        var writable = new List<PublicKey>();
+        var readOnly = new List<PublicKey>();
+        foreach (var lookup in AddressTableLookups)
+        {
+            var table = FindTable(lookupTables, lookup.AccountKey);
+            foreach (var index in lookup.WritableIndexes)
+                writable.Add(AddressAt(table, index));
+            foreach (var index in lookup.ReadonlyIndexes)
+                readOnly.Add(AddressAt(table, index));
+        }
+
+        return (writable, readOnly);
+    }
+
+    private static AddressLookupTableAccount FindTable(IReadOnlyList<AddressLookupTableAccount> tables, PublicKey key)
+    {
+        foreach (var table in tables)
+            if (table.Key == key)
+                return table;
+
+        throw new ArgumentException($"No lookup table was supplied for {key}.", nameof(tables));
+    }
+
+    private static PublicKey AddressAt(AddressLookupTableAccount table, byte index)
+        => index < table.Addresses.Count
+            ? table.Addresses[index]
+            : throw new ArgumentException($"Lookup index {index} is out of range in table {table.Key} ({table.Addresses.Count} addresses).");
+
     /// <summary>Parses a v0 message from its wire bytes (including the leading <see cref="VersionPrefix"/> byte).</summary>
     /// <param name="data">The serialized v0 message.</param>
     /// <returns>The parsed message.</returns>

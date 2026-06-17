@@ -25,4 +25,8 @@ public sealed record SignatureStatus
     /// <summary>True when the transaction failed (<see cref="Err"/> is present).</summary>
     [JsonIgnore]
     public bool IsError => Err is { ValueKind: not JsonValueKind.Null };
+
+    /// <summary>The decoded transaction error, or <c>null</c> if it succeeded.</summary>
+    [JsonIgnore]
+    public TransactionError? Error => TransactionError.Parse(Err);
 }
