@@ -11,6 +11,9 @@ public sealed record GetProgramAccountsOptions
     /// <summary>Filters every returned account must satisfy (memcmp / data size); none are applied when null.</summary>
     public IReadOnlyList<AccountFilter>? Filters { get; init; }
 
+    /// <summary>Return only this slice of each account's data; the whole account when null.</summary>
+    public DataSlice? DataSlice { get; init; }
+
     /// <summary>The minimum slot the request can be evaluated at.</summary>
     public ulong? MinContextSlot { get; init; }
 }

@@ -149,7 +149,12 @@ if (info is not null)
 
 // Several at once (order preserved; missing accounts come back null):
 IReadOnlyList<AccountInfo?> many = await rpc.GetMultipleAccountsAsync([accountA, accountB]);
+
+// Fetch only a slice of a large account (e.g. the first 8 bytes, an Anchor discriminator):
+var head = await rpc.GetAccountInfoAsync(account, dataSlice: new DataSlice(0, 8));
 ```
+
+`getProgramAccounts` takes the same `DataSlice` (via `GetProgramAccountsOptions.DataSlice`) to trim large result sets.
 
 For a program that uses Anchor / Borsh layout, pair `getAccountInfo` with Core's `BorshReader`:
 
@@ -308,6 +313,17 @@ TokenProgram.MintTo(mint, destination, mintAuthority, amount: 500_000);
 TokenProgram.Burn(tokenAccount, mint, owner, amount: 100_000);
 ```
 
+Every builder takes an optional `tokenProgram` to target **Token-2022** (the instruction layouts are shared):
+
+```csharp
+using SolSharp.Core.Constants;
+
+var token2022 = PublicKey.Parse(SolanaProgramIds.Token2022Program);
+
+var ix = TokenProgram.TransferChecked(source, mint, destination, owner, 1_000_000, decimals, token2022);
+var ata = AssociatedTokenAccount.GetAddress(owner, mint, token2022);  // matching ATA derivation
+```
+
 ## Attaching a memo
 
 ```csharp
@@ -370,6 +386,19 @@ tx.Sign(payer);
 string resubmittable = tx.ToBase64();
 ```
 
+The same works for a historical transaction fetched from the node — `getTransaction` returns the decoded
+bytes plus rich metadata (SOL and token balance deltas, inner instructions, loaded lookup-table addresses):
+
+```csharp
+var fetched = await rpc.GetTransactionAsync(signature);
+if (fetched is not null)
+{
+    var parsed = Transaction.Deserialize(fetched.Transaction!);   // message, accounts, instructions
+    foreach (var post in fetched.Meta?.PostTokenBalances ?? [])
+        Console.WriteLine($"{post.Mint}: {post.UiTokenAmount.UiAmountString}");
+}
+```
+
 ## WebSocket subscriptions
 
 All subscriptions share one connection and survive dropped connections (auto-reconnect + resubscribe).
@@ -398,7 +427,8 @@ await foreach (var note in accounts.ReadAllAsync())
     Console.WriteLine(note.Value!.Lamports);
 ```
 
-Also available: `SubscribeProgramAsync` (with memcmp / data-size filters), `SubscribeSignatureAsync`, and
+Also available: `SubscribeRootsAsync` (rooted slots, like `SubscribeSlotsAsync`), `SubscribeProgramAsync`
+(with memcmp / data-size filters), `SubscribeSignatureAsync`, and
 `SubscribeBlocksAsync`. Cancel any channel subscription by cancelling the `CancellationToken` you pass in.
 
 ## Confirming a transaction

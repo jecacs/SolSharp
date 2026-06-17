@@ -40,6 +40,33 @@ public static class SolanaWsClientTests
     }
 
     [TestFixture]
+    public sealed class SubscribeRoots
+    {
+        [Test]
+        public async Task SendsSubscribe_YieldsRoot_ThenUnsubscribes()
+        {
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+
+            var subscription = client.SubscribeRootsAsync().GetAsyncEnumerator();
+            var move = subscription.MoveNextAsync();
+
+            await WaitUntil(() => fake.Sent.Count > 0);
+            fake.Sent[0].Should().Contain("\"method\":\"rootSubscribe\"");
+
+            fake.PushFromServer("""{"jsonrpc":"2.0","result":42,"id":1}""");
+            fake.PushFromServer("""{"jsonrpc":"2.0","method":"rootNotification","params":{"subscription":42,"result":12345}}""");
+
+            (await move).Should().BeTrue();
+            subscription.Current.Should().Be(12345ul);
+
+            await subscription.DisposeAsync();
+            fake.Sent.Should().Contain(message => message.Contains("\"method\":\"rootUnsubscribe\""));
+        }
+    }
+
+    [TestFixture]
     public sealed class SubscribeLogs
     {
         [Test]

@@ -13,15 +13,10 @@
     <AnalysisLevel>latest</AnalysisLevel>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
 
-    <!-- Emit XML docs for the public API; CS1591 (missing doc) is not enforced. -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
-  <!-- NuGet package metadata shared by the publishable projects (SolSharp.Core, SolSharp.Rpc).
-       Test projects set IsPackable=false and are unaffected. PackageId defaults to the assembly
-       name; each project supplies its own Description. Set RepositoryUrl / PackageProjectUrl
-       once the repository is public. -->
   <PropertyGroup Label="Package metadata">
     <Version>0.1.0-alpha</Version>
     <Authors>yevhen</Authors>
@@ -31,13 +26,21 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>solana;web3;blockchain;rpc;crypto;defi</PackageTags>
     <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/jecacs/SolSharp</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/jecacs/SolSharp</PackageProjectUrl>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
-  <!-- Pack the shared README into every publishable package. -->
   <ItemGroup Condition="'$(IsPackable)' != 'false'">
     <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(IsPackable)' != 'false'">
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
   </ItemGroup>
 
 </Project>

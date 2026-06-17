@@ -1,5 +1,6 @@
 using FluentAssertions;
 using NUnit.Framework;
+using SolSharp.Core.Constants;
 using SolSharp.Core.Primitives;
 
 namespace SolSharp.Programs.Tests;
@@ -44,6 +45,34 @@ public static class TokenProgramTests
                 (Key(3), false, false),
                 (Key(5), false, true),
                 (Key(6), true, false));
+        }
+    }
+
+    [TestFixture]
+    public sealed class TokenProgramOverride
+    {
+        private static PublicKey Token2022 => PublicKey.Parse(SolanaProgramIds.Token2022Program);
+
+        [Test]
+        public void TransferChecked_TargetsGivenProgram_WithIdenticalLayout()
+        {
+            var classic = TokenProgram.TransferChecked(Key(4), Key(3), Key(5), Key(6), 1000, 6);
+            var extended = TokenProgram.TransferChecked(Key(4), Key(3), Key(5), Key(6), 1000, 6, Token2022);
+
+            classic.ProgramId.Should().Be(TokenProgram.ProgramId); // default stays classic SPL Token
+            extended.ProgramId.Should().Be(Token2022);
+            extended.Data.Should().Equal(classic.Data);
+            extended.Accounts.Select(a => (a.PublicKey, a.IsSigner, a.IsWritable))
+                .Should().Equal(classic.Accounts.Select(a => (a.PublicKey, a.IsSigner, a.IsWritable)));
+        }
+
+        [Test]
+        public void MintTo_TargetsGivenProgram_WithIdenticalLayout()
+        {
+            var extended = TokenProgram.MintTo(Key(1), Key(2), Key(3), 500, Token2022);
+
+            extended.ProgramId.Should().Be(Token2022);
+            extended.Data.Should().Equal(TokenProgram.MintTo(Key(1), Key(2), Key(3), 500).Data);
         }
     }
 }

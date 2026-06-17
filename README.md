@@ -68,7 +68,7 @@ bool ok = PublicKey.TryParse(input, out var key);
 `SolSharp.Rpc`:
 
 - HTTP JSON-RPC reads — accounts (`getAccountInfo`, `getMultipleAccounts`, `getProgramAccounts` with
-  memcmp / data-size filters, `getTokenAccountsByOwner`, `getTokenLargestAccounts`, `getAddressLookupTable`
+  memcmp / data-size filters and data slices, `getTokenAccountsByOwner`, `getTokenLargestAccounts`, `getAddressLookupTable`
   fetch + decode), transactions and blocks (`getTransaction`, `getSignaturesForAddress`, `getBlock`,
   `getFeeForMessage`), and cluster state (`getBalance`, `getLatestBlockhash`, `isBlockhashValid`,
   `getEpochInfo`, `getSupply`, `getSlotLeaders`, `getRecentPrioritizationFees`, `getTokenSupply`,
@@ -76,9 +76,13 @@ bool ok = PublicKey.TryParse(input, out var key);
 - Account-state decoders — `Mint` and `TokenAccount` (SPL Token state, via `GetMintAsync` /
   `GetTokenAccountAsync`) and `AddressLookupTable`; for other programs, pair `getAccountInfo` with Core's
   `BorshReader`.
-- WebSocket streaming multiplexed over one connection: `SubscribeSlotsAsync` (`IAsyncEnumerable`),
-  `SubscribeLogsAsync`, `SubscribeAccountAsync`, `SubscribeProgramAsync`, `SubscribeSignatureAsync`, and
-  `SubscribeBlocksAsync` (`ChannelReader`), with automatic reconnect and resubscribe across dropped connections.
+- `getTransaction` returns the decoded transaction bytes (feed to `Transaction.Deserialize`) alongside rich
+  metadata — pre/post SOL and token balances, inner (CPI) instructions, loaded lookup-table addresses, logs,
+  and compute units.
+- WebSocket streaming multiplexed over one connection: `SubscribeSlotsAsync` and `SubscribeRootsAsync`
+  (`IAsyncEnumerable`), `SubscribeLogsAsync`, `SubscribeAccountAsync`, `SubscribeProgramAsync`,
+  `SubscribeSignatureAsync`, and `SubscribeBlocksAsync` (`ChannelReader`), with automatic reconnect and
+  resubscribe across dropped connections.
 - DI registration with a built-in resilience pipeline (retry on transient errors and HTTP 429).
 - `SendTransactionAsync` / `SimulateTransactionAsync` — submit a signed transaction or dry-run it for logs and
   compute units; `SendAndConfirmTransactionAsync` sends and waits for confirmation (throwing if the transaction
@@ -118,10 +122,11 @@ bool ok = keypair.PublicKey.Verify(message, signature);
 
 `SolSharp.Programs`:
 
-- Instruction builders: `SystemProgram` (transfer, create account), `ComputeBudgetProgram` (compute-unit
+- Instruction builders: `SystemProgram` (transfer, create / allocate / assign, create-with-seed, durable nonce), `ComputeBudgetProgram` (compute-unit
   limit and priority fee), `TokenProgram` (transfer / transfer-checked, mint / burn, approve / revoke,
-  freeze / thaw, initialize mint / account, close, sync-native), `AssociatedTokenAccount`,
-  `AddressLookupTableProgram` (create / extend / deactivate / close), and `MemoProgram`.
+  freeze / thaw, initialize mint / account, close, sync-native — each with a `tokenProgram` override for
+  Token-2022), `AssociatedTokenAccount`, `AddressLookupTableProgram` (create / extend / deactivate / close),
+  and `MemoProgram`.
 - `ProgramDerivedAddress` (`FindProgramAddress` / `TryCreateProgramAddress`) and `PublicKey.IsOnCurve()`.
 - `Message` (legacy) and `MessageV0` (versioned, loading extra accounts from address lookup tables),
   `Transaction`, and `TransactionBuilder` (`Build` / `BuildV0`) — compilation, wire serialization (with

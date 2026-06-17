@@ -60,5 +60,16 @@ public static class SolanaRpcClientProgramAccountsTests
             handler.CapturedRequestBody.Should().Contain("\"bytes\":\"3Mc6vR\"");
             handler.CapturedRequestBody.Should().Contain("\"dataSize\":165");
         }
+
+        [Test]
+        public async Task SendsDataSlice()
+        {
+            var (client, handler) = Make("""{"jsonrpc":"2.0","result":[],"id":1}""");
+            var options = new GetProgramAccountsOptions { DataSlice = new DataSlice(8, 32) };
+
+            await client.GetProgramAccountsAsync(PublicKey.Parse(ProgramId), options);
+
+            handler.CapturedRequestBody.Should().Contain("\"dataSlice\":{\"offset\":8,\"length\":32}");
+        }
     }
 }

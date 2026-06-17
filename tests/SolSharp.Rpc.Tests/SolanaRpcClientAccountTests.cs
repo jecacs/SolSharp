@@ -54,6 +54,16 @@ public static class SolanaRpcClientAccountTests
 
             info.Should().BeNull();
         }
+
+        [Test]
+        public async Task SendsDataSlice()
+        {
+            var (client, handler) = Make(ContextEnvelope(AccountValueJson));
+
+            await client.GetAccountInfoAsync(PublicKey.Parse(OwnerBase58), dataSlice: new DataSlice(8, 32));
+
+            handler.CapturedRequestBody.Should().Contain("\"dataSlice\":{\"offset\":8,\"length\":32}");
+        }
     }
 
     [TestFixture]

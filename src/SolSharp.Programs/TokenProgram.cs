@@ -6,7 +6,9 @@ namespace SolSharp.Programs;
 
 /// <summary>
 /// Builds instructions for the SPL Token program: transfers, mint and burn, approve and revoke, freeze and
-/// thaw, account initialization and close, and wrapped-SOL sync.
+/// thaw, account initialization and close, and wrapped-SOL sync. Every builder takes an optional
+/// <c>tokenProgram</c> so the same instructions can target Token-2022 (the layouts are shared); it defaults
+/// to the classic SPL Token program.
 /// </summary>
 public static class TokenProgram
 {
@@ -36,8 +38,9 @@ public static class TokenProgram
     /// <param name="destination">The destination token account; credited.</param>
     /// <param name="authority">The source account's owner or delegate; signs the transaction.</param>
     /// <param name="amount">The amount to transfer, in the token's base units.</param>
+    /// <param name="tokenProgram">The token program to target; defaults to the classic SPL Token program. Pass <c>SolanaProgramIds.Token2022Program</c> for Token-2022.</param>
     /// <returns>The transfer instruction.</returns>
-    public static Instruction Transfer(PublicKey source, PublicKey destination, PublicKey authority, ulong amount)
+    public static Instruction Transfer(PublicKey source, PublicKey destination, PublicKey authority, ulong amount, PublicKey? tokenProgram = null)
     {
         var data = new byte[9];
         data[0] = TransferDiscriminator;
@@ -45,7 +48,7 @@ public static class TokenProgram
 
         return new Instruction
         {
-            ProgramId = ProgramId,
+            ProgramId = tokenProgram ?? ProgramId,
             Accounts =
             [
                 AccountMeta.Writable(source),
@@ -63,6 +66,7 @@ public static class TokenProgram
     /// <param name="authority">The source account's owner or delegate; signs the transaction.</param>
     /// <param name="amount">The amount to transfer, in the token's base units.</param>
     /// <param name="decimals">The mint's decimals; must match the on-chain mint.</param>
+    /// <param name="tokenProgram">The token program to target; defaults to the classic SPL Token program. Pass <c>SolanaProgramIds.Token2022Program</c> for Token-2022.</param>
     /// <returns>The checked transfer instruction.</returns>
     public static Instruction TransferChecked(
         PublicKey source,
@@ -70,7 +74,8 @@ public static class TokenProgram
         PublicKey destination,
         PublicKey authority,
         ulong amount,
-        byte decimals)
+        byte decimals,
+        PublicKey? tokenProgram = null)
     {
         var data = new byte[10];
         data[0] = TransferCheckedDiscriminator;
@@ -79,7 +84,7 @@ public static class TokenProgram
 
         return new Instruction
         {
-            ProgramId = ProgramId,
+            ProgramId = tokenProgram ?? ProgramId,
             Accounts =
             [
                 AccountMeta.Writable(source),
@@ -96,11 +101,12 @@ public static class TokenProgram
     /// <param name="destination">The token account to credit (writable).</param>
     /// <param name="authority">The mint authority; signs.</param>
     /// <param name="amount">The amount to mint, in base units.</param>
+    /// <param name="tokenProgram">The token program to target; defaults to the classic SPL Token program. Pass <c>SolanaProgramIds.Token2022Program</c> for Token-2022.</param>
     /// <returns>The mintTo instruction.</returns>
-    public static Instruction MintTo(PublicKey mint, PublicKey destination, PublicKey authority, ulong amount)
+    public static Instruction MintTo(PublicKey mint, PublicKey destination, PublicKey authority, ulong amount, PublicKey? tokenProgram = null)
         => new()
         {
-            ProgramId = ProgramId,
+            ProgramId = tokenProgram ?? ProgramId,
             Accounts = [AccountMeta.Writable(mint), AccountMeta.Writable(destination), AccountMeta.ReadonlySigner(authority)],
             Data = AmountData(MintToDiscriminator, amount)
         };
@@ -110,11 +116,12 @@ public static class TokenProgram
     /// <param name="mint">The token mint (writable).</param>
     /// <param name="authority">The account's owner or delegate; signs.</param>
     /// <param name="amount">The amount to burn, in base units.</param>
+    /// <param name="tokenProgram">The token program to target; defaults to the classic SPL Token program. Pass <c>SolanaProgramIds.Token2022Program</c> for Token-2022.</param>
     /// <returns>The burn instruction.</returns>
-    public static Instruction Burn(PublicKey account, PublicKey mint, PublicKey authority, ulong amount)
+    public static Instruction Burn(PublicKey account, PublicKey mint, PublicKey authority, ulong amount, PublicKey? tokenProgram = null)
         => new()
         {
-            ProgramId = ProgramId,
+            ProgramId = tokenProgram ?? ProgramId,
             Accounts = [AccountMeta.Writable(account), AccountMeta.Writable(mint), AccountMeta.ReadonlySigner(authority)],
             Data = AmountData(BurnDiscriminator, amount)
         };
@@ -124,11 +131,12 @@ public static class TokenProgram
     /// <param name="delegate">The delegate authorized to transfer.</param>
     /// <param name="owner">The account's owner; signs.</param>
     /// <param name="amount">The maximum amount the delegate may transfer, in base units.</param>
+    /// <param name="tokenProgram">The token program to target; defaults to the classic SPL Token program. Pass <c>SolanaProgramIds.Token2022Program</c> for Token-2022.</param>
     /// <returns>The approve instruction.</returns>
-    public static Instruction Approve(PublicKey source, PublicKey @delegate, PublicKey owner, ulong amount)
+    public static Instruction Approve(PublicKey source, PublicKey @delegate, PublicKey owner, ulong amount, PublicKey? tokenProgram = null)
         => new()
         {
-            ProgramId = ProgramId,
+            ProgramId = tokenProgram ?? ProgramId,
             Accounts = [AccountMeta.Writable(source), AccountMeta.Readonly(@delegate), AccountMeta.ReadonlySigner(owner)],
             Data = AmountData(ApproveDiscriminator, amount)
         };
@@ -136,11 +144,12 @@ public static class TokenProgram
     /// <summary>Revokes a token account's current delegate.</summary>
     /// <param name="source">The token account whose delegate is revoked (writable).</param>
     /// <param name="owner">The account's owner; signs.</param>
+    /// <param name="tokenProgram">The token program to target; defaults to the classic SPL Token program. Pass <c>SolanaProgramIds.Token2022Program</c> for Token-2022.</param>
     /// <returns>The revoke instruction.</returns>
-    public static Instruction Revoke(PublicKey source, PublicKey owner)
+    public static Instruction Revoke(PublicKey source, PublicKey owner, PublicKey? tokenProgram = null)
         => new()
         {
-            ProgramId = ProgramId,
+            ProgramId = tokenProgram ?? ProgramId,
             Accounts = [AccountMeta.Writable(source), AccountMeta.ReadonlySigner(owner)],
             Data = [RevokeDiscriminator]
         };
@@ -152,22 +161,24 @@ public static class TokenProgram
     /// <param name="account">The token account to close (writable).</param>
     /// <param name="destination">The account that receives the reclaimed lamports (writable).</param>
     /// <param name="owner">The account's owner; signs.</param>
+    /// <param name="tokenProgram">The token program to target; defaults to the classic SPL Token program. Pass <c>SolanaProgramIds.Token2022Program</c> for Token-2022.</param>
     /// <returns>The closeAccount instruction.</returns>
-    public static Instruction CloseAccount(PublicKey account, PublicKey destination, PublicKey owner)
+    public static Instruction CloseAccount(PublicKey account, PublicKey destination, PublicKey owner, PublicKey? tokenProgram = null)
         => new()
         {
-            ProgramId = ProgramId,
+            ProgramId = tokenProgram ?? ProgramId,
             Accounts = [AccountMeta.Writable(account), AccountMeta.Writable(destination), AccountMeta.ReadonlySigner(owner)],
             Data = [CloseAccountDiscriminator]
         };
 
     /// <summary>Syncs a native (wrapped SOL) token account's token balance to its underlying lamports.</summary>
     /// <param name="account">The native token account to sync (writable).</param>
+    /// <param name="tokenProgram">The token program to target; defaults to the classic SPL Token program. Pass <c>SolanaProgramIds.Token2022Program</c> for Token-2022.</param>
     /// <returns>The syncNative instruction.</returns>
-    public static Instruction SyncNative(PublicKey account)
+    public static Instruction SyncNative(PublicKey account, PublicKey? tokenProgram = null)
         => new()
         {
-            ProgramId = ProgramId,
+            ProgramId = tokenProgram ?? ProgramId,
             Accounts = [AccountMeta.Writable(account)],
             Data = [SyncNativeDiscriminator]
         };
@@ -176,11 +187,12 @@ public static class TokenProgram
     /// <param name="account">The token account to freeze (writable).</param>
     /// <param name="mint">The token mint.</param>
     /// <param name="authority">The mint's freeze authority; signs.</param>
+    /// <param name="tokenProgram">The token program to target; defaults to the classic SPL Token program. Pass <c>SolanaProgramIds.Token2022Program</c> for Token-2022.</param>
     /// <returns>The freezeAccount instruction.</returns>
-    public static Instruction FreezeAccount(PublicKey account, PublicKey mint, PublicKey authority)
+    public static Instruction FreezeAccount(PublicKey account, PublicKey mint, PublicKey authority, PublicKey? tokenProgram = null)
         => new()
         {
-            ProgramId = ProgramId,
+            ProgramId = tokenProgram ?? ProgramId,
             Accounts = [AccountMeta.Writable(account), AccountMeta.Readonly(mint), AccountMeta.ReadonlySigner(authority)],
             Data = [FreezeAccountDiscriminator]
         };
@@ -189,11 +201,12 @@ public static class TokenProgram
     /// <param name="account">The token account to thaw (writable).</param>
     /// <param name="mint">The token mint.</param>
     /// <param name="authority">The mint's freeze authority; signs.</param>
+    /// <param name="tokenProgram">The token program to target; defaults to the classic SPL Token program. Pass <c>SolanaProgramIds.Token2022Program</c> for Token-2022.</param>
     /// <returns>The thawAccount instruction.</returns>
-    public static Instruction ThawAccount(PublicKey account, PublicKey mint, PublicKey authority)
+    public static Instruction ThawAccount(PublicKey account, PublicKey mint, PublicKey authority, PublicKey? tokenProgram = null)
         => new()
         {
-            ProgramId = ProgramId,
+            ProgramId = tokenProgram ?? ProgramId,
             Accounts = [AccountMeta.Writable(account), AccountMeta.Readonly(mint), AccountMeta.ReadonlySigner(authority)],
             Data = [ThawAccountDiscriminator]
         };
@@ -202,11 +215,12 @@ public static class TokenProgram
     /// <param name="account">The uninitialized account to initialize (writable).</param>
     /// <param name="mint">The mint the account will hold.</param>
     /// <param name="owner">The account's owner.</param>
+    /// <param name="tokenProgram">The token program to target; defaults to the classic SPL Token program. Pass <c>SolanaProgramIds.Token2022Program</c> for Token-2022.</param>
     /// <returns>The initializeAccount instruction.</returns>
-    public static Instruction InitializeAccount(PublicKey account, PublicKey mint, PublicKey owner)
+    public static Instruction InitializeAccount(PublicKey account, PublicKey mint, PublicKey owner, PublicKey? tokenProgram = null)
         => new()
         {
-            ProgramId = ProgramId,
+            ProgramId = tokenProgram ?? ProgramId,
             Accounts =
             [
                 AccountMeta.Writable(account),
@@ -222,8 +236,9 @@ public static class TokenProgram
     /// <param name="decimals">The number of base-unit decimal places.</param>
     /// <param name="mintAuthority">The authority allowed to mint tokens.</param>
     /// <param name="freezeAuthority">The authority allowed to freeze accounts, or <c>null</c> for none.</param>
+    /// <param name="tokenProgram">The token program to target; defaults to the classic SPL Token program. Pass <c>SolanaProgramIds.Token2022Program</c> for Token-2022.</param>
     /// <returns>The initializeMint instruction.</returns>
-    public static Instruction InitializeMint(PublicKey mint, byte decimals, PublicKey mintAuthority, PublicKey? freezeAuthority = null)
+    public static Instruction InitializeMint(PublicKey mint, byte decimals, PublicKey mintAuthority, PublicKey? freezeAuthority = null, PublicKey? tokenProgram = null)
     {
         // data: discriminator, decimals, mint authority (32), then a compact COption freeze authority
         // (1-byte tag, plus 32 bytes when present) - the minimal form spl-token packs.
@@ -243,7 +258,7 @@ public static class TokenProgram
 
         return new Instruction
         {
-            ProgramId = ProgramId,
+            ProgramId = tokenProgram ?? ProgramId,
             Accounts = [AccountMeta.Writable(mint), AccountMeta.Readonly(RentSysvar)],
             Data = buffer.ToArray()
         };

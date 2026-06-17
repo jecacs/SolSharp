@@ -119,11 +119,20 @@ public static class RpcRequests
             ]
         };
 
-    public static RpcRequest GetAccountInfo(PublicKey account, Commitment commitment) =>
+    public static RpcRequest GetAccountInfo(PublicKey account, Commitment commitment, DataSlice? dataSlice = null) =>
         new()
         {
             Method = "getAccountInfo",
-            Params = [account, new { encoding = "base64", commitment }]
+            Params =
+            [
+                account,
+                new
+                {
+                    encoding = "base64",
+                    commitment,
+                    dataSlice = dataSlice is { } slice ? new { offset = slice.Offset, length = slice.Length } : null
+                }
+            ]
         };
 
     public static RpcRequest GetMultipleAccounts(IReadOnlyList<PublicKey> accounts, Commitment commitment) =>
@@ -154,6 +163,7 @@ public static class RpcRequests
         PublicKey programId,
         Commitment? commitment,
         IReadOnlyList<AccountFilter>? filters,
+        DataSlice? dataSlice,
         ulong? minContextSlot) =>
         new()
         {
@@ -166,6 +176,7 @@ public static class RpcRequests
                     encoding = "base64",
                     commitment,
                     minContextSlot,
+                    dataSlice = dataSlice is { } slice ? new { offset = slice.Offset, length = slice.Length } : null,
                     filters = filters?.Select(filter => filter.Payload).ToArray()
                 }
             ]

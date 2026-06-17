@@ -249,6 +249,7 @@ public class SolanaRpcClient(HttpClient httpClient)
     /// </summary>
     /// <param name="account">The account to query.</param>
     /// <param name="commitment">The commitment level to query at.</param>
+    /// <param name="dataSlice">Return only this slice of the account's data; the whole account when null.</param>
     /// <param name="cancellationToken">A token to cancel the request.</param>
     /// <returns>The account, or <c>null</c> if nothing exists at <paramref name="account"/>.</returns>
     /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
@@ -257,10 +258,11 @@ public class SolanaRpcClient(HttpClient httpClient)
     public async Task<AccountInfo?> GetAccountInfoAsync(
         PublicKey account,
         Commitment commitment = Commitment.Confirmed,
+        DataSlice? dataSlice = null,
         CancellationToken cancellationToken = default)
     {
         var result = await SendAsync<RpcContextValue<AccountInfo>>(
-            RpcRequests.GetAccountInfo(account, commitment), cancellationToken);
+            RpcRequests.GetAccountInfo(account, commitment, dataSlice), cancellationToken);
 
         return result.Value;
     }
@@ -333,7 +335,7 @@ public class SolanaRpcClient(HttpClient httpClient)
     {
         options ??= new GetProgramAccountsOptions();
         return await SendAsync<ProgramAccount[]>(
-            RpcRequests.GetProgramAccounts(programId, options.Commitment, options.Filters, options.MinContextSlot),
+            RpcRequests.GetProgramAccounts(programId, options.Commitment, options.Filters, options.DataSlice, options.MinContextSlot),
             cancellationToken);
     }
 
@@ -354,7 +356,7 @@ public class SolanaRpcClient(HttpClient httpClient)
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
     {
-        var account = await GetAccountInfoAsync(tableAddress, commitment, cancellationToken);
+        var account = await GetAccountInfoAsync(tableAddress, commitment, cancellationToken: cancellationToken);
         return account is null ? null : AddressLookupTable.Decode(account.Data);
     }
 
@@ -627,7 +629,7 @@ public class SolanaRpcClient(HttpClient httpClient)
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
     {
-        var account = await GetAccountInfoAsync(mint, commitment, cancellationToken);
+        var account = await GetAccountInfoAsync(mint, commitment, cancellationToken: cancellationToken);
         return account is null ? null : Mint.Decode(account.Data);
     }
 
@@ -647,7 +649,7 @@ public class SolanaRpcClient(HttpClient httpClient)
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
     {
-        var account = await GetAccountInfoAsync(tokenAccount, commitment, cancellationToken);
+        var account = await GetAccountInfoAsync(tokenAccount, commitment, cancellationToken: cancellationToken);
         return account is null ? null : TokenAccount.Decode(account.Data);
     }
 

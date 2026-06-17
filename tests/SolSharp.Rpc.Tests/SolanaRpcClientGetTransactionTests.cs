@@ -1,5 +1,6 @@
 using FluentAssertions;
 using NUnit.Framework;
+using SolSharp.Core.Primitives;
 
 namespace SolSharp.Rpc.Tests;
 
@@ -34,6 +35,9 @@ public static class SolanaRpcClientGetTransactionTests
             transaction.Meta.PostBalances.Should().Equal(95ul, 205ul);
             transaction.Meta.LogMessages.Should().ContainSingle().Which.Should().Be("Program log: ok");
 
+            byte[] expectedBytes = [1, 2, 3]; // "AQID" base64
+            transaction.Transaction.Should().Equal(expectedBytes);
+
             handler.CapturedRequestBody.Should().Contain("\"getTransaction\"");
             handler.CapturedRequestBody.Should().Contain("Sig1111");
             handler.CapturedRequestBody.Should().Contain("maxSupportedTransactionVersion");
@@ -58,6 +62,38 @@ public static class SolanaRpcClientGetTransactionTests
             var transaction = await client.GetTransactionAsync("Sig1111");
 
             transaction!.Meta!.IsError.Should().BeTrue();
+        }
+
+        [Test]
+        public async Task ParsesTokenBalancesInnerInstructionsAndLoadedAddresses()
+        {
+            var (client, _) = Make(
+                """{"jsonrpc":"2.0","result":{"slot":100,"transaction":["AQID","base64"],"meta":{"err":null,"fee":5000,"preTokenBalances":[{"accountIndex":1,"mint":"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v","owner":"11111111111111111111111111111111","uiTokenAmount":{"amount":"1000000","decimals":6,"uiAmount":1.0,"uiAmountString":"1"}}],"postTokenBalances":[{"accountIndex":1,"mint":"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v","owner":"11111111111111111111111111111111","uiTokenAmount":{"amount":"2000000","decimals":6,"uiAmount":2.0,"uiAmountString":"2"}}],"innerInstructions":[{"index":0,"instructions":[{"programIdIndex":5,"accounts":[1,2,3],"data":"3Bxs","stackHeight":2}]}],"loadedAddresses":{"writable":["So11111111111111111111111111111111111111112"],"readonly":["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"]}}},"id":1}""");
+
+            var meta = (await client.GetTransactionAsync("Sig1111"))!.Meta!;
+
+            var pre = meta.PreTokenBalances.Should().ContainSingle().Subject;
+            pre.AccountIndex.Should().Be(1);
+            pre.Mint.Should().Be(PublicKey.Parse("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"));
+            pre.Owner.Should().Be(PublicKey.Parse("11111111111111111111111111111111"));
+            pre.UiTokenAmount.Amount.Should().Be("1000000");
+            pre.UiTokenAmount.Decimals.Should().Be(6);
+
+            meta.PostTokenBalances.Should().ContainSingle().Which.UiTokenAmount.Amount.Should().Be("2000000");
+
+            var inner = meta.InnerInstructions.Should().ContainSingle().Subject;
+            inner.Index.Should().Be(0);
+            var cpi = inner.Instructions.Should().ContainSingle().Subject;
+            cpi.ProgramIdIndex.Should().Be(5);
+            cpi.Accounts.Should().Equal(1, 2, 3);
+            cpi.Data.Should().Be("3Bxs");
+            cpi.StackHeight.Should().Be(2);
+
+            meta.LoadedAddresses.Should().NotBeNull();
+            meta.LoadedAddresses!.Writable.Should().ContainSingle()
+                .Which.Should().Be(PublicKey.Parse("So11111111111111111111111111111111111111112"));
+            meta.LoadedAddresses.Readonly.Should().ContainSingle()
+                .Which.Should().Be(PublicKey.Parse("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"));
         }
     }
 }

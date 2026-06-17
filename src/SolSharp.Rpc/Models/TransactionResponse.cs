@@ -1,9 +1,10 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using SolSharp.Core.Primitives;
 
 namespace SolSharp.Rpc.Models;
 
-/// <summary>A confirmed transaction as returned by <c>getTransaction</c>: where it landed and how it executed.</summary>
+/// <summary>A confirmed transaction as returned by <c>getTransaction</c>: where it landed, its bytes, and how it executed.</summary>
 public sealed record TransactionResponse
 {
     /// <summary>The slot the transaction was processed in.</summary>
@@ -14,7 +15,15 @@ public sealed record TransactionResponse
     [JsonPropertyName("blockTime")]
     public long? BlockTime { get; init; }
 
-    /// <summary>Execution metadata: fee, balances, logs, and any error.</summary>
+    /// <summary>
+    /// The transaction's wire bytes, decoded from the node's base64 form; pass to
+    /// <c>Transaction.Deserialize</c> (in SolSharp.Programs) to read its message, accounts, and instructions.
+    /// </summary>
+    [JsonPropertyName("transaction")]
+    [JsonConverter(typeof(Base64TupleJsonConverter))]
+    public byte[]? Transaction { get; init; }
+
+    /// <summary>Execution metadata: fee, balances, token balances, logs, inner instructions, and any error.</summary>
     [JsonPropertyName("meta")]
     public TransactionMeta? Meta { get; init; }
 }
@@ -38,6 +47,22 @@ public sealed record TransactionMeta
     [JsonPropertyName("postBalances")]
     public IReadOnlyList<ulong>? PostBalances { get; init; }
 
+    /// <summary>SPL token balances before the transaction, for the accounts that hold tokens.</summary>
+    [JsonPropertyName("preTokenBalances")]
+    public IReadOnlyList<TokenBalance>? PreTokenBalances { get; init; }
+
+    /// <summary>SPL token balances after the transaction, for the accounts that hold tokens.</summary>
+    [JsonPropertyName("postTokenBalances")]
+    public IReadOnlyList<TokenBalance>? PostTokenBalances { get; init; }
+
+    /// <summary>The inner (CPI) instructions invoked, grouped by their top-level instruction; <c>null</c> if the node omitted them.</summary>
+    [JsonPropertyName("innerInstructions")]
+    public IReadOnlyList<InnerInstructionGroup>? InnerInstructions { get; init; }
+
+    /// <summary>The accounts a versioned transaction loaded from address lookup tables, or <c>null</c> for a legacy transaction.</summary>
+    [JsonPropertyName("loadedAddresses")]
+    public LoadedAddresses? LoadedAddresses { get; init; }
+
     /// <summary>The log lines the transaction emitted, if the node returned them.</summary>
     [JsonPropertyName("logMessages")]
     public IReadOnlyList<string>? LogMessages { get; init; }
@@ -49,4 +74,68 @@ public sealed record TransactionMeta
     /// <summary>True when the transaction failed (<see cref="Err"/> is present).</summary>
     [JsonIgnore]
     public bool IsError => Err is { ValueKind: not JsonValueKind.Null };
+}
+
+/// <summary>A pre- or post-execution SPL token balance snapshot from a transaction's metadata.</summary>
+public sealed record TokenBalance
+{
+    /// <summary>The index, into the transaction's account list, of the token account this balance is for.</summary>
+    [JsonPropertyName("accountIndex")]
+    public int AccountIndex { get; init; }
+
+    /// <summary>The token mint.</summary>
+    [JsonPropertyName("mint")]
+    public PublicKey Mint { get; init; }
+
+    /// <summary>The token account's owner, if the node reported it.</summary>
+    [JsonPropertyName("owner")]
+    public PublicKey? Owner { get; init; }
+
+    /// <summary>The balance, in base units and as a UI amount.</summary>
+    [JsonPropertyName("uiTokenAmount")]
+    public TokenAmount UiTokenAmount { get; init; } = new();
+}
+
+/// <summary>The inner (CPI) instructions invoked under one top-level instruction.</summary>
+public sealed record InnerInstructionGroup
+{
+    /// <summary>The index of the top-level instruction these inner instructions were invoked from.</summary>
+    [JsonPropertyName("index")]
+    public int Index { get; init; }
+
+    /// <summary>The inner instructions, in invocation order.</summary>
+    [JsonPropertyName("instructions")]
+    public IReadOnlyList<InnerInstruction> Instructions { get; init; } = [];
+}
+
+/// <summary>One compiled inner instruction, as returned with base64 transaction encoding.</summary>
+public sealed record InnerInstruction
+{
+    /// <summary>The index, into the transaction's account list, of the invoked program.</summary>
+    [JsonPropertyName("programIdIndex")]
+    public int ProgramIdIndex { get; init; }
+
+    /// <summary>The indices, into the transaction's account list, of the accounts passed to the instruction.</summary>
+    [JsonPropertyName("accounts")]
+    public IReadOnlyList<int> Accounts { get; init; } = [];
+
+    /// <summary>The instruction data, base58-encoded.</summary>
+    [JsonPropertyName("data")]
+    public string Data { get; init; } = string.Empty;
+
+    /// <summary>The CPI stack height at which the instruction ran, if the node reported it.</summary>
+    [JsonPropertyName("stackHeight")]
+    public int? StackHeight { get; init; }
+}
+
+/// <summary>The accounts a versioned transaction loaded from address lookup tables.</summary>
+public sealed record LoadedAddresses
+{
+    /// <summary>The writable accounts loaded from lookup tables.</summary>
+    [JsonPropertyName("writable")]
+    public IReadOnlyList<PublicKey> Writable { get; init; } = [];
+
+    /// <summary>The read-only accounts loaded from lookup tables.</summary>
+    [JsonPropertyName("readonly")]
+    public IReadOnlyList<PublicKey> Readonly { get; init; } = [];
 }

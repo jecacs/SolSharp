@@ -85,6 +85,17 @@ public sealed class SolanaWsClient : IAsyncDisposable
         => SubscribeAsync<SlotInfo>("slotSubscribe", [], "slotUnsubscribe", cancellationToken);
 
     /// <summary>
+    /// Subscribes to root-change notifications - the slot the cluster has newly rooted (finalized). Ending the
+    /// enumeration sends the matching unsubscribe.
+    /// See <see href="https://solana.com/docs/rpc/websocket/rootsubscribe">rootSubscribe</see>.
+    /// </summary>
+    /// <param name="cancellationToken">Stops the subscription when cancelled.</param>
+    /// <returns>An async stream of newly rooted slot numbers.</returns>
+    /// <exception cref="InvalidOperationException">Surfaced during enumeration if the connection closes or the node rejects the subscription.</exception>
+    public IAsyncEnumerable<ulong> SubscribeRootsAsync(CancellationToken cancellationToken = default)
+        => SubscribeAsync<ulong>("rootSubscribe", [], "rootUnsubscribe", cancellationToken);
+
+    /// <summary>
     /// Subscribes to transaction logs mentioning <paramref name="program"/>, delivered through a channel.
     /// Cancelling <paramref name="cancellationToken"/> unsubscribes and completes the channel.
     /// See <see href="https://solana.com/docs/rpc/websocket/logssubscribe">logsSubscribe</see>.
