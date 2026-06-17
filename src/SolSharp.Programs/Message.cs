@@ -64,8 +64,6 @@ public sealed class Message : ITransactionMessage
         ArgumentNullException.ThrowIfNull(recentBlockhash);
         ArgumentNullException.ThrowIfNull(instructions);
 
-        // Merge the signer/writable flags for every referenced account (and the programs, which are
-        // read-only non-signers). The fee payer is forced to a writable signer.
         var flags = new Dictionary<PublicKey, AccountFlags>();
 
         void Merge(PublicKey key, bool signer, bool writable)
@@ -86,8 +84,6 @@ public sealed class Message : ITransactionMessage
         if (flags.Count > MaxAccounts)
             throw new ArgumentException($"A legacy message can reference at most {MaxAccounts} accounts, got {flags.Count}.", nameof(instructions));
 
-        // Account order mirrors Solana's BTreeMap-keyed compilation: fee payer first, then every other
-        // account sorted by its public-key bytes, grouped by class in header order.
         var rest = new List<PublicKey>(flags.Count);
         foreach (var key in flags.Keys)
             if (key != feePayer)

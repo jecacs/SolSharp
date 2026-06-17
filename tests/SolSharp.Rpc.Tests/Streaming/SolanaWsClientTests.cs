@@ -55,7 +55,7 @@ public static class SolanaWsClientTests
 
             await WaitUntil(() => fake.Sent.Count > 0);
             fake.Sent[0].Should().Contain("\"method\":\"logsSubscribe\"");
-            fake.Sent[0].Should().Contain(SolanaProgramIds.TokenProgram); // program -> base58 in mentions
+            fake.Sent[0].Should().Contain(SolanaProgramIds.TokenProgram);
 
             fake.PushFromServer("""{"jsonrpc":"2.0","result":7,"id":1}""");
             var reader = await subscribe;
@@ -91,7 +91,7 @@ public static class SolanaWsClientTests
             await WaitUntil(() => fake.Sent.Count > 0);
             fake.Sent[0].Should().Contain("\"method\":\"accountSubscribe\"");
             fake.Sent[0].Should().Contain("\"base64\"");
-            fake.Sent[0].Should().Contain(SolanaProgramIds.TokenProgram); // account -> base58
+            fake.Sent[0].Should().Contain(SolanaProgramIds.TokenProgram);
 
             fake.PushFromServer("""{"jsonrpc":"2.0","result":5,"id":1}""");
             var reader = await subscribe;
@@ -170,7 +170,7 @@ public static class SolanaWsClientTests
             await WaitUntil(() => fake.Sent.Count > 0);
             fake.Sent[0].Should().Contain("\"method\":\"programSubscribe\"");
             fake.Sent[0].Should().Contain("\"base64\"");
-            fake.Sent[0].Should().Contain(SolanaProgramIds.TokenProgram); // program -> base58
+            fake.Sent[0].Should().Contain(SolanaProgramIds.TokenProgram);
             fake.Sent[0].Should().Contain("\"dataSize\":165");
 
             fake.PushFromServer("""{"jsonrpc":"2.0","result":9,"id":1}""");
@@ -258,7 +258,7 @@ public static class SolanaWsClientTests
 
             await WaitUntil(() => fake.Sent.Count > 0);
             fake.Sent[0].Should().Contain("\"method\":\"blockSubscribe\"");
-            fake.Sent[0].Should().Contain("\"all\""); // no filter -> "all"
+            fake.Sent[0].Should().Contain("\"all\"");
             fake.Sent[0].Should().Contain("\"transactionDetails\":\"signatures\"");
 
             fake.PushFromServer("""{"jsonrpc":"2.0","result":8,"id":1}""");
@@ -291,7 +291,7 @@ public static class SolanaWsClientTests
             await WaitUntil(() => fake.Sent.Count > 0);
             fake.Sent[0].Should().Contain("\"method\":\"blockSubscribe\"");
             fake.Sent[0].Should().Contain("\"mentionsAccountOrProgram\"");
-            fake.Sent[0].Should().Contain(SolanaProgramIds.TokenProgram); // program -> base58
+            fake.Sent[0].Should().Contain(SolanaProgramIds.TokenProgram);
 
             await cts.CancelAsync();
         }

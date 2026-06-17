@@ -9,7 +9,6 @@ public sealed class AccountFilter
 {
     private AccountFilter(object payload) => Payload = payload;
 
-    // The wire-shaped object handed to the serializer; kept internal so the request builder can read it.
     internal object Payload { get; }
 
     /// <summary>Matches accounts whose data at <paramref name="offset"/> equals <paramref name="bytesBase58"/> (a <c>memcmp</c> filter).</summary>

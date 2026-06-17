@@ -137,7 +137,6 @@ public static class RpcReadIntegrationTests
             using var provider = CreateProvider();
             var client = provider.GetRequiredService<SolanaRpcClient>();
 
-            // The USDC mint account itself holds rent-exempt lamports.
             var lamports = await IntegrationEnvironment.CallAsync(() => client.GetBalanceAsync(UsdcMint));
 
             lamports.Should().BeGreaterThan(0);
@@ -158,7 +157,7 @@ public static class RpcReadIntegrationTests
 
             account.Should().NotBeNull();
             account!.Owner.Should().Be(TokenProgram);
-            account.Data.Length.Should().Be(Mint.Length); // 82-byte SPL mint layout
+            account.Data.Length.Should().Be(Mint.Length);
         }
     }
 

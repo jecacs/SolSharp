@@ -187,15 +187,12 @@ public sealed partial class Keypair
         }
     }
 
-    // Returns the decoded key only when it is a valid 32- or 64-byte length, so Parse can fall through
-    // to the next format rather than committing to a decoder that produced the wrong size.
     private static byte[]? TryDecodeHex(string text)
     {
         var digits = text.AsSpan();
         if (digits.StartsWith("0x") || digits.StartsWith("0X"))
             digits = digits[2..];
 
-        // Only exactly 32- or 64-byte hex is treated as a key, so this never shadows a base58/base64 string.
         if (digits.Length is not (SeedLength * 2 or SecretKeyLength * 2))
             return null;
 

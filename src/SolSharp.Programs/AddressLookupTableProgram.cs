@@ -58,7 +58,6 @@ public static class AddressLookupTableProgram
     {
         ArgumentNullException.ThrowIfNull(newAddresses);
 
-        // Instruction 2 (ExtendLookupTable): u32 discriminant, u64 address count, then the 32-byte addresses.
         using var buffer = new MemoryStream(sizeof(uint) + sizeof(ulong) + newAddresses.Count * PublicKey.Length);
         Span<byte> head = stackalloc byte[sizeof(uint) + sizeof(ulong)];
         BinaryPrimitives.WriteUInt32LittleEndian(head, 2);

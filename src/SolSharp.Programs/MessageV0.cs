@@ -80,8 +80,6 @@ public sealed class MessageV0 : ITransactionMessage
         ArgumentNullException.ThrowIfNull(instructions);
         ArgumentNullException.ThrowIfNull(addressLookupTables);
 
-        // Merge each account's signer/writable flags, and mark program ids as invoked - invoked keys and
-        // signers must stay in the static keys and can never be sourced from a lookup table.
         var metas = new Dictionary<PublicKey, KeyMeta>();
 
         void Merge(PublicKey key, bool signer, bool writable, bool invoked)
@@ -154,7 +152,6 @@ public sealed class MessageV0 : ITransactionMessage
                 drained.Add(key);
             }
 
-            // A table that contributed no accounts is left out entirely.
             if (writableIndexes.Count == 0 && readonlyIndexes.Count == 0)
                 continue;
 
@@ -195,7 +192,6 @@ public sealed class MessageV0 : ITransactionMessage
             }
         }
 
-        // Instruction indices address the static keys first, then the loaded writables, then the loaded read-onlys.
         var position = new Dictionary<PublicKey, int>(metas.Count);
         var slot = 0;
         foreach (var key in orderedStatic)
@@ -342,7 +338,6 @@ public sealed class MessageV0 : ITransactionMessage
         return -1;
     }
 
-    // Mirrors Message.CompareByBytes; kept local so the v0 compiler does not reach into the legacy one.
     private static int CompareByBytes(PublicKey a, PublicKey b)
     {
         Span<byte> x = stackalloc byte[PublicKey.Length];

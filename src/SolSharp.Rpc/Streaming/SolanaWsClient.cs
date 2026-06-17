@@ -22,8 +22,8 @@ public sealed class SolanaWsClient : IAsyncDisposable
     private readonly Func<IWebSocketConnection> _connectionFactory;
     private readonly SolanaWsClientOptions _options;
     private readonly ConcurrentDictionary<int, PendingSubscribe> _pending = new();
-    private readonly ConcurrentDictionary<long, Subscription> _active = new();     // keyed by stable local id
-    private readonly ConcurrentDictionary<long, Subscription> _byServerId = new(); // keyed by server subscription id
+    private readonly ConcurrentDictionary<long, Subscription> _active = new();
+    private readonly ConcurrentDictionary<long, Subscription> _byServerId = new();
     private readonly SemaphoreSlim _sendLock = new(1, 1);
     private readonly CancellationTokenSource _lifetimeCts = new();
 
@@ -51,7 +51,6 @@ public sealed class SolanaWsClient : IAsyncDisposable
         _options = options;
     }
 
-    // A single fixed connection cannot be reopened, so this back-compat overload disables auto-reconnect.
     internal SolanaWsClient(IWebSocketConnection connection)
         : this(() => connection, new SolanaWsClientOptions { AutoReconnect = false })
     {
@@ -279,7 +278,6 @@ public sealed class SolanaWsClient : IAsyncDisposable
         }
         finally
         {
-            // On success the node has already unsubscribed server-side; cancel to drop our local subscription too.
             await timeoutCts.CancelAsync();
         }
     }
@@ -371,7 +369,6 @@ public sealed class SolanaWsClient : IAsyncDisposable
         }
         catch
         {
-            // best effort: the connection may already be gone
         }
     }
 
@@ -410,7 +407,6 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
             var reason = failure ?? new InvalidOperationException("The WebSocket connection was closed.");
 
-            // In-flight subscribes belonged to the dead connection; fail them so their callers can retry.
             FaultPending(reason);
 
             if (!_options.AutoReconnect || !await TryReconnectAsync(token))
@@ -434,7 +430,6 @@ public sealed class SolanaWsClient : IAsyncDisposable
                 if (message is null)
                     return null;
 
-                // Routing is intentionally inside the try: a malformed frame faults this connection and triggers a reconnect.
                 Route(message);
             }
         }
@@ -510,7 +505,6 @@ public sealed class SolanaWsClient : IAsyncDisposable
             }
             catch
             {
-                // The connection dropped again mid-replay; the next reconnect will retry this subscription.
             }
         }
     }
@@ -520,7 +514,6 @@ public sealed class SolanaWsClient : IAsyncDisposable
         using var document = JsonDocument.Parse(message);
         var root = document.RootElement;
 
-        // Subscribe acknowledgement: { "id": <reqId>, "result": <subscriptionId|bool> }.
         if (root.TryGetProperty("id", out var idElement) &&
             root.TryGetProperty("result", out var resultElement) &&
             idElement.TryGetInt32(out var requestId) &&
@@ -541,7 +534,6 @@ public sealed class SolanaWsClient : IAsyncDisposable
             return;
         }
 
-        // Notification: { "method": "...", "params": { "subscription": <id>, "result": <payload> } }.
         if (root.TryGetProperty("params", out var paramsElement) &&
             paramsElement.TryGetProperty("subscription", out var subscriptionElement) &&
             paramsElement.TryGetProperty("result", out var notification) &&
@@ -577,7 +569,6 @@ public sealed class SolanaWsClient : IAsyncDisposable
         }
         catch
         {
-            // ignore dispose faults
         }
     }
 
@@ -595,7 +586,6 @@ public sealed class SolanaWsClient : IAsyncDisposable
             }
             catch
             {
-                // ignore shutdown faults
             }
         }
 
@@ -625,10 +615,8 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
         public ISubscriptionSink Sink { get; } = sink;
 
-        // The server-assigned id, refreshed on every (re)subscribe; 0 until the first ack.
         public long ServerId { get; set; }
 
-        // True once the server has acknowledged this subscription at least once, so it is replayed on reconnect.
         public bool Established { get; set; }
     }
 

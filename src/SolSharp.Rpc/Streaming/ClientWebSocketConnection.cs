@@ -52,7 +52,6 @@ internal sealed class ClientWebSocketConnection : IWebSocketConnection
             }
             catch
             {
-                // best effort
             }
         }
 

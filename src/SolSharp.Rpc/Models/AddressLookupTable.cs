@@ -10,7 +10,6 @@ namespace SolSharp.Rpc.Models;
 /// </summary>
 public sealed record AddressLookupTable
 {
-    // The fixed size of the serialized table metadata that precedes the addresses (solana-program state.rs).
     private const int MetaSize = 56;
 
     /// <summary>The slot the table was deactivated at, or <see cref="ulong.MaxValue"/> while it is still active.</summary>

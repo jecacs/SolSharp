@@ -24,8 +24,8 @@ public static class RpcRequestsTests
             var json = Serialize(RpcRequests.GetBalance(account, Commitment.Finalized));
 
             json.Should().Contain("\"method\":\"getBalance\"");
-            json.Should().Contain(SolanaProgramIds.TokenProgram); // PublicKey -> base58
-            json.Should().Contain("\"finalized\"");               // Commitment -> wire string
+            json.Should().Contain(SolanaProgramIds.TokenProgram);
+            json.Should().Contain("\"finalized\"");
         }
     }
 
