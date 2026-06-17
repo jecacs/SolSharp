@@ -158,9 +158,9 @@ var signature = await rpc.SendTransactionAsync(tx.Serialize());
 - [x] Program / sysvar / mint constants + validation
 - [x] `SolSharp.Wallet` — Ed25519 keys, signing/verification, key parsing
 - [x] `SolSharp.Rpc` — HTTP reads (`getAccountInfo` / `getMultipleAccounts` / `getProgramAccounts` / `getSignaturesForAddress`, balances, blockhash, token supply, ...) + `sendTransaction` / `simulateTransaction`; multiplexed WebSocket streaming (slots, logs, accounts, programs, signatures, blocks) with auto-reconnect; DI + resilience
-- [x] `SolSharp.Programs` — System / Token / ATA / Compute Budget / Memo instructions, PDA/ATA, transaction builder
+- [x] `SolSharp.Programs` — System / Token (+ Token-2022) / ATA / Compute Budget / Memo instructions, PDA/ATA, transaction builder
 - [x] Versioned (v0) transactions + address lookup tables (compile / sign / fetch + decode / ALT program)
-- [x] Borsh reader + typed SPL account state (`Mint` / `TokenAccount`) and `Transaction.Deserialize`
+- [x] Borsh reader + writer, typed SPL account state (`Mint` / `TokenAccount`), `Transaction.Deserialize` + instruction decompilation, and typed `TransactionError`
 - [x] Live integration test suite (configurable RPC / WS endpoint)
 - [ ] Published NuGet packages
 

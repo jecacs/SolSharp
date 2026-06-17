@@ -171,6 +171,17 @@ PublicKey owner = reader.ReadPublicKey();
 bool initialized = reader.ReadBool();
 ```
 
+`BorshWriter` is the inverse — build Anchor / Borsh instruction data (an 8-byte discriminator, then the args):
+
+```csharp
+var writer = new BorshWriter();
+writer.WriteBytes(discriminator);     // 8-byte Anchor method discriminator
+writer.WriteU64(amount);
+writer.WriteOption(true);
+writer.WritePublicKey(authority);
+byte[] data = writer.ToArray();       // feed to new Instruction { ..., Data = data }
+```
+
 ## SPL token accounts and mints
 
 SolSharp decodes the SPL Token `Pack` layout into typed records.

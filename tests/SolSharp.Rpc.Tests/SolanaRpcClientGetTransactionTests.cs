@@ -62,6 +62,9 @@ public static class SolanaRpcClientGetTransactionTests
             var transaction = await client.GetTransactionAsync("Sig1111");
 
             transaction!.Meta!.IsError.Should().BeTrue();
+            var error = transaction.Meta!.Error!;
+            error.Kind.Should().Be("InstructionError");
+            error.InstructionIndex.Should().Be(0);
         }
 
         [Test]
