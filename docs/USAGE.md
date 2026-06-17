@@ -1,0 +1,479 @@
+# SolSharp — Usage Guide
+
+A task-oriented tour of SolSharp with copy-pasteable C# examples. For the high-level overview and design
+notes see the [README](../README.md); for conventions and architecture see [CLAUDE.md](../CLAUDE.md).
+
+Every snippet targets **.NET 8** and assumes these packages exist in the solution:
+`SolSharp.Core`, `SolSharp.Rpc`, `SolSharp.Wallet`, `SolSharp.Programs`.
+
+## Contents
+
+- [Installation](#installation)
+- [Creating a client](#creating-a-client)
+- [Keys and wallets](#keys-and-wallets)
+- [SOL and lamports](#sol-and-lamports)
+- [Reading accounts](#reading-accounts)
+- [SPL token accounts and mints](#spl-token-accounts-and-mints)
+- [Sending your first transaction](#sending-your-first-transaction)
+- [Simulating before sending](#simulating-before-sending)
+- [Priority fees (compute budget)](#priority-fees-compute-budget)
+- [SPL token transfers](#spl-token-transfers)
+- [Attaching a memo](#attaching-a-memo)
+- [Versioned (v0) transactions and address lookup tables](#versioned-v0-transactions-and-address-lookup-tables)
+- [Decoding a transaction](#decoding-a-transaction)
+- [WebSocket subscriptions](#websocket-subscriptions)
+- [Confirming a transaction](#confirming-a-transaction)
+- [Program-derived addresses (PDAs)](#program-derived-addresses-pdas)
+- [Rate limits, custom endpoints, and headers](#rate-limits-custom-endpoints-and-headers)
+- [Error handling](#error-handling)
+
+## Installation
+
+SolSharp is pre-NuGet. Reference the projects directly until packages are published:
+
+```bash
+dotnet add reference path/to/SolSharp/src/SolSharp.Rpc/SolSharp.Rpc.csproj
+dotnet add reference path/to/SolSharp/src/SolSharp.Wallet/SolSharp.Wallet.csproj
+dotnet add reference path/to/SolSharp/src/SolSharp.Programs/SolSharp.Programs.csproj
+```
+
+`SolSharp.Core` comes in transitively. Use only what you need — a read-only indexer can reference just
+`SolSharp.Rpc`; a signer needs `SolSharp.Wallet` and `SolSharp.Programs`.
+
+## Creating a client
+
+The HTTP client is a typed `HttpClient` registered through dependency injection, so it gets a resilience
+pipeline (retry on transient errors and HTTP 429) for free.
+
+```csharp
+using Microsoft.Extensions.DependencyInjection;
+using SolSharp.Rpc;
+
+// In an app with a DI container (ASP.NET, Worker, Generic Host):
+services.AddSolanaRpc("https://api.mainnet-beta.solana.com");
+// ...then inject SolanaRpcClient wherever you need it.
+```
+
+In a console app or test, build a provider once and resolve the client:
+
+```csharp
+using Microsoft.Extensions.DependencyInjection;
+using SolSharp.Rpc;
+
+var provider = new ServiceCollection()
+    .AddSolanaRpc("https://api.mainnet-beta.solana.com")
+    .Services
+    .BuildServiceProvider();
+
+var rpc = provider.GetRequiredService<SolanaRpcClient>();
+```
+
+The WebSocket client is standalone — construct and connect it directly:
+
+```csharp
+using SolSharp.Rpc.Streaming;
+
+await using var ws = new SolanaWsClient();
+await ws.ConnectAsync(new Uri("wss://api.mainnet-beta.solana.com"));
+```
+
+> The examples below assume an injected/resolved `SolanaRpcClient rpc` and, where relevant, a connected
+> `SolanaWsClient ws`.
+
+## Keys and wallets
+
+`Keypair` is the local signer. It holds only the 32-byte seed and zeroes it on `Dispose`, so wrap it in `using`.
+
+```csharp
+using SolSharp.Wallet;
+using SolSharp.Core.Primitives;
+
+// Generate a fresh key.
+using var wallet = Keypair.Generate();
+Console.WriteLine(wallet.PublicKey);            // base58
+
+// Load an existing key — Parse auto-detects the format:
+using var fromIdJson  = Keypair.Parse(File.ReadAllText("id.json")); // solana-keygen JSON array
+using var fromPhantom = Keypair.Parse(base58Export);                // wallet export (base58)
+using var fromHex     = Keypair.Parse("0x9d61b19d…");               // hex, 0x optional
+using var fromBase64  = Keypair.Parse("nWGxne/9WmC…");              // base64
+
+// Or be explicit about the format:
+using var k1 = Keypair.FromBase58String(base58Export);
+using var k2 = Keypair.FromSecretKey(sixtyFourBytes);  // 32-byte seed + 32-byte public key
+```
+
+Sign and verify:
+
+```csharp
+byte[] message = System.Text.Encoding.UTF8.GetBytes("hello");
+byte[] signature = wallet.Sign(message);
+
+bool ok = wallet.PublicKey.Verify(message, signature);   // Verify lives in SolSharp.Wallet
+```
+
+Public keys on their own:
+
+```csharp
+var mint = PublicKey.Parse("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+if (PublicKey.TryParse(userInput, out var key))
+    Console.WriteLine(key);
+
+byte[] raw = mint.ToBytes();   // 32 bytes
+```
+
+## SOL and lamports
+
+```csharp
+using SolSharp.Core;
+
+ulong lamports = SolanaUnits.SolToLamports(1.5m);     // 1_500_000_000
+decimal sol    = SolanaUnits.LamportsToSol(2_000_000_000);  // 2.0
+ulong perSol   = SolanaUnits.LamportsPerSol;          // 1_000_000_000
+```
+
+## Reading accounts
+
+```csharp
+var account = PublicKey.Parse("…");
+
+ulong lamports = await rpc.GetBalanceAsync(account);
+
+var info = await rpc.GetAccountInfoAsync(account);
+if (info is not null)
+{
+    Console.WriteLine($"owner:    {info.Owner}");
+    Console.WriteLine($"lamports: {info.Lamports}");
+    Console.WriteLine($"data:     {info.Data.Length} bytes"); // already base64-decoded
+}
+
+// Several at once (order preserved; missing accounts come back null):
+IReadOnlyList<AccountInfo?> many = await rpc.GetMultipleAccountsAsync([accountA, accountB]);
+```
+
+For a program that uses Anchor / Borsh layout, pair `getAccountInfo` with Core's `BorshReader`:
+
+```csharp
+using SolSharp.Core.Encoding;
+
+var info = await rpc.GetAccountInfoAsync(account)
+    ?? throw new InvalidOperationException("account not found");
+
+var reader = new BorshReader(info.Data);
+reader.Skip(8);                       // Anchor 8-byte discriminator
+ulong authority = reader.ReadU64();
+PublicKey owner = reader.ReadPublicKey();
+bool initialized = reader.ReadBool();
+```
+
+## SPL token accounts and mints
+
+SolSharp decodes the SPL Token `Pack` layout into typed records.
+
+```csharp
+var usdc = PublicKey.Parse("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+
+var mint = await rpc.GetMintAsync(usdc);
+if (mint is not null)
+{
+    Console.WriteLine($"decimals: {mint.Decimals}");
+    Console.WriteLine($"supply:   {mint.Supply}");
+    Console.WriteLine($"mintAuthority: {mint.MintAuthority}");   // null if fixed supply
+}
+
+// A specific token account:
+var tokenAccount = await rpc.GetTokenAccountAsync(someTokenAccount);
+if (tokenAccount is not null)
+{
+    Console.WriteLine($"owner:  {tokenAccount.Owner}");
+    Console.WriteLine($"mint:   {tokenAccount.Mint}");
+    Console.WriteLine($"amount: {tokenAccount.Amount}");   // base units
+    Console.WriteLine($"frozen: {tokenAccount.IsFrozen}");
+}
+
+// All of an owner's accounts for a given mint:
+var owned = await rpc.GetTokenAccountsByOwnerAsync(owner, usdc);
+foreach (var entry in owned)
+{
+    var decoded = TokenAccount.Decode(entry.Account.Data);  // SolSharp.Rpc.Models
+    Console.WriteLine($"{entry.PublicKey}: {decoded!.Amount}");
+}
+
+// The mint's total supply as a UI amount:
+var supply = await rpc.GetTokenSupplyAsync(usdc);
+Console.WriteLine($"{supply.UiAmountString} ({supply.Decimals} decimals)");
+```
+
+## Sending your first transaction
+
+Transfer SOL end-to-end: fetch a blockhash, build, sign, send, and wait for confirmation.
+
+```csharp
+using SolSharp.Core;
+using SolSharp.Core.Primitives;
+using SolSharp.Programs;
+using SolSharp.Wallet;
+
+using var payer = Keypair.Parse(secret);
+var recipient = PublicKey.Parse("…");
+
+var blockhash = (await rpc.GetLatestBlockhashAsync()).Blockhash;
+
+var tx = new TransactionBuilder()
+    .SetRecentBlockhash(blockhash)
+    .AddInstruction(SystemProgram.Transfer(payer.PublicKey, recipient, SolanaUnits.SolToLamports(0.01m)))
+    .Build(payer);   // the first signer becomes the fee payer unless SetFeePayer was called
+
+// Send and wait; throws TransactionFailedException if it lands but errors on-chain.
+string signature = await rpc.SendAndConfirmTransactionAsync(tx.Serialize());
+Console.WriteLine(signature);
+```
+
+Fire-and-forget instead of waiting:
+
+```csharp
+string signature = await rpc.SendTransactionAsync(tx.Serialize());
+```
+
+Need devnet test funds first?
+
+```csharp
+await rpc.RequestAirdropAsync(payer.PublicKey, SolanaUnits.LamportsPerSol);
+```
+
+## Simulating before sending
+
+Dry-run a transaction to read its logs and compute-unit cost without paying a fee.
+
+```csharp
+var sim = await rpc.SimulateTransactionAsync(tx.Serialize());
+
+Console.WriteLine($"compute units: {sim.UnitsConsumed}");
+foreach (var line in sim.Logs ?? [])
+    Console.WriteLine(line);
+
+if (sim.IsError)
+    Console.WriteLine($"would fail: {sim.Err}");
+```
+
+## Priority fees (compute budget)
+
+`ComputeBudgetProgram.SetPriorityFee` returns the unit-limit and unit-price instructions together; add them
+alongside your other instructions.
+
+```csharp
+var tx = new TransactionBuilder()
+    .SetRecentBlockhash(blockhash)
+    .AddInstructions(ComputeBudgetProgram.SetPriorityFee(
+        computeUnitLimit: 200_000,
+        microLamportsPerComputeUnit: 50_000))
+    .AddInstruction(SystemProgram.Transfer(payer.PublicKey, recipient, lamports))
+    .Build(payer);
+```
+
+Or set the two knobs individually:
+
+```csharp
+.AddInstruction(ComputeBudgetProgram.SetComputeUnitLimit(200_000))
+.AddInstruction(ComputeBudgetProgram.SetComputeUnitPrice(50_000)) // micro-lamports per CU
+```
+
+## SPL token transfers
+
+Token balances live in associated token accounts (ATAs). Derive them, optionally create the recipient's,
+then transfer with `TransferChecked` (which verifies mint and decimals on-chain).
+
+```csharp
+var mint = PublicKey.Parse("…");
+byte decimals = 6;
+
+var source = AssociatedTokenAccount.GetAddress(payer.PublicKey, mint);
+var destination = AssociatedTokenAccount.GetAddress(recipient, mint);
+
+var tx = new TransactionBuilder()
+    .SetRecentBlockhash(blockhash)
+    // Create the recipient's ATA if it might not exist yet:
+    .AddInstruction(AssociatedTokenAccount.Create(payer.PublicKey, recipient, mint))
+    .AddInstruction(TokenProgram.TransferChecked(source, mint, destination, payer.PublicKey, 1_000_000, decimals))
+    .Build(payer);
+
+await rpc.SendAndConfirmTransactionAsync(tx.Serialize());
+```
+
+The full op set is available: `Transfer`, `TransferChecked`, `MintTo`, `Burn`, `Approve` / `Revoke`,
+`FreezeAccount` / `ThawAccount`, `InitializeMint`, `InitializeAccount`, `CloseAccount`, `SyncNative`.
+
+```csharp
+TokenProgram.MintTo(mint, destination, mintAuthority, amount: 500_000);
+TokenProgram.Burn(tokenAccount, mint, owner, amount: 100_000);
+```
+
+## Attaching a memo
+
+```csharp
+var tx = new TransactionBuilder()
+    .SetRecentBlockhash(blockhash)
+    .AddInstruction(SystemProgram.Transfer(payer.PublicKey, recipient, lamports))
+    .AddInstruction(MemoProgram.Memo("gm", payer.PublicKey))  // signer(s) optional
+    .Build(payer);
+```
+
+## Versioned (v0) transactions and address lookup tables
+
+A v0 transaction can load extra accounts from an on-chain Address Lookup Table (ALT) instead of listing
+them all in the message. Fetch the table, wrap it, hand it to the builder, and call `BuildV0`.
+
+```csharp
+using SolSharp.Programs;
+
+var tableKey = PublicKey.Parse("…");
+
+// Fetch + decode the table (SolSharp.Rpc model), then wrap it for the builder.
+var fetched = await rpc.GetAddressLookupTableAsync(tableKey)
+    ?? throw new InvalidOperationException("lookup table not found");
+var table = new AddressLookupTableAccount(tableKey, fetched.Addresses);
+
+var tx = new TransactionBuilder()
+    .SetRecentBlockhash(blockhash)
+    .SetAddressLookupTables(table)
+    .AddInstruction(SystemProgram.Transfer(payer.PublicKey, recipient, lamports))
+    .BuildV0(payer);
+
+await rpc.SendTransactionAsync(tx.Serialize());
+```
+
+Accounts that appear in the table (and are not signers or program IDs) are drained out of the static keys
+and referenced through the table, shrinking the transaction. Building the table itself is done with
+`AddressLookupTableProgram` (`CreateLookupTable`, `ExtendLookupTable`, `DeactivateLookupTable`, `CloseLookupTable`).
+
+## Decoding a transaction
+
+Parse a serialized transaction (from `getTransaction`, a log, or a wallet) back into a `Transaction`.
+
+```csharp
+using SolSharp.Programs;
+
+byte[] raw = Convert.FromBase64String(base64Tx);
+var tx = Transaction.Deserialize(raw);
+
+Console.WriteLine(tx.Message is MessageV0 ? "versioned (v0)" : "legacy");
+Console.WriteLine($"required signers: {tx.Message.RequiredSignatures}");
+foreach (var key in tx.Message.AccountKeys)
+    Console.WriteLine(key);
+```
+
+You can re-sign a parsed transaction (for example to add your signature to a partially signed one): only the
+matching signer's slot is filled, leaving existing signatures intact.
+
+```csharp
+tx.Sign(payer);
+string resubmittable = tx.ToBase64();
+```
+
+## WebSocket subscriptions
+
+All subscriptions share one connection and survive dropped connections (auto-reconnect + resubscribe).
+Slots arrive as an `IAsyncEnumerable`; the rest return a `ChannelReader`.
+
+```csharp
+using SolSharp.Core.Constants;
+using SolSharp.Core.Primitives;
+using SolSharp.Rpc.Streaming;
+
+await using var ws = new SolanaWsClient();
+await ws.ConnectAsync(new Uri("wss://api.mainnet-beta.solana.com"));
+
+// Slots:
+await foreach (var slot in ws.SubscribeSlotsAsync())
+    Console.WriteLine(slot.Slot);
+
+// Logs mentioning a program (ChannelReader):
+var logs = await ws.SubscribeLogsAsync(PublicKey.Parse(SolanaProgramIds.TokenProgram));
+await foreach (var note in logs.ReadAllAsync())
+    Console.WriteLine(note.Value!.Signature);
+
+// Account changes:
+var accounts = await ws.SubscribeAccountAsync(someAccount);
+await foreach (var note in accounts.ReadAllAsync())
+    Console.WriteLine(note.Value!.Lamports);
+```
+
+Also available: `SubscribeProgramAsync` (with memcmp / data-size filters), `SubscribeSignatureAsync`, and
+`SubscribeBlocksAsync`. Cancel any channel subscription by cancelling the `CancellationToken` you pass in.
+
+## Confirming a transaction
+
+Two ways to wait for a signature to reach a commitment level — poll, or get pushed over the WebSocket.
+
+```csharp
+// Poll getSignatureStatuses until confirmed:
+var status = await rpc.ConfirmTransactionAsync(signature);
+Console.WriteLine(status.ConfirmationStatus);
+
+// Or wait for a single push over the WebSocket (no polling):
+var result = await ws.ConfirmSignatureAsync(signature);
+if (result.IsError)
+    Console.WriteLine("transaction failed on-chain");
+```
+
+`SendAndConfirmTransactionAsync` wraps the send-then-poll flow and throws `TransactionFailedException` if the
+transaction lands but errors.
+
+## Program-derived addresses (PDAs)
+
+```csharp
+using System.Text;
+using SolSharp.Programs;
+using SolSharp.Wallet;   // IsOnCurve
+
+var (pda, bump) = ProgramDerivedAddress.FindProgramAddress(
+    [Encoding.UTF8.GetBytes("vault"), owner.ToBytes()],
+    programId);
+
+// Check whether a key is a valid Ed25519 point (PDAs are off-curve):
+bool onCurve = somePublicKey.IsOnCurve();
+```
+
+## Rate limits, custom endpoints, and headers
+
+`AddSolanaRpc` takes an options delegate and an optional resilience delegate; the returned builder is a
+standard `IHttpClientBuilder`, so you can add headers or swap the handler.
+
+```csharp
+using Microsoft.Extensions.DependencyInjection;
+using SolSharp.Rpc;
+
+services.AddSolanaRpc(
+        options => options.Endpoint = "https://your-node.example/<token>",
+        resilience =>
+        {
+            resilience.Retry.MaxRetryAttempts = 5;          // back off harder on a busy provider
+            resilience.AttemptTimeout.Timeout = TimeSpan.FromSeconds(15);
+        })
+    .ConfigureHttpClient(http =>
+        http.DefaultRequestHeaders.Add("x-api-key", apiKey)); // auth header for the provider
+```
+
+## Error handling
+
+- **`RpcException`** — the node returned a JSON-RPC error; `Code` and `Message` carry the details.
+- **`TransactionFailedException`** — from `SendAndConfirmTransactionAsync` when the transaction is confirmed
+  but errored on-chain; `Signature` and the error payload are attached.
+- **`HttpRequestException`** — a transport-level failure or non-success status (after the resilience pipeline
+  has exhausted its retries).
+- **`FormatException`** — malformed input to a parser (`PublicKey.Parse`, `Keypair.Parse`, `Transaction.Deserialize`).
+
+```csharp
+try
+{
+    var signature = await rpc.SendAndConfirmTransactionAsync(tx.Serialize());
+}
+catch (TransactionFailedException ex)
+{
+    Console.WriteLine($"{ex.Signature} failed on-chain");
+}
+catch (RpcException ex)
+{
+    Console.WriteLine($"node rejected the request: {ex.Code} {ex.Message}");
+}
+```

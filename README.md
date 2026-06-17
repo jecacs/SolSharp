@@ -14,6 +14,10 @@ speed and control, this is aimed at you.
 > verification), and `SolSharp.Programs` (instructions + transaction building + signing). Nothing is on
 > NuGet yet and the public API is not stable — expect breaking changes.
 
+📖 **New here? Read the [usage guide](docs/USAGE.md)** — a task-oriented cookbook covering keys, reads,
+SPL token state, building/signing/sending transactions, v0 + address lookup tables, decoding transactions,
+WebSocket subscriptions, confirmation, and more.
+
 ## Motivation
 
 When this was started, the .NET options for Solana were either unmaintained and stale or
@@ -36,7 +40,7 @@ latency-sensitive workloads.
 | `SolSharp.Core`    | Primitives, encoding, JSON, program/sysvar constants | Usable      |
 | `SolSharp.Rpc`     | HTTP JSON-RPC reads + WebSocket streaming + DI       | Usable      |
 | `SolSharp.Wallet`  | Ed25519 keys, key parsing, signing and verification | Usable      |
-| `SolSharp.Programs`| Instructions, transaction building, System/Token/ATA | Usable      |
+| `SolSharp.Programs`| Instructions (System/Token/ATA/Memo/Compute Budget/ALT) + transaction building | Usable |
 
 Dependencies point downward only: `Rpc` and `Wallet` build on `Core`, and `Programs` builds on `Core`
 and `Wallet`. `Core` depends on nothing else in the solution and pulls no network or crypto package.
@@ -146,9 +150,11 @@ var signature = await rpc.SendTransactionAsync(tx.Serialize());
 - [x] RPC enum + JSON converters (`Commitment`)
 - [x] Program / sysvar / mint constants + validation
 - [x] `SolSharp.Wallet` — Ed25519 keys, signing/verification, key parsing
-- [x] `SolSharp.Rpc` — HTTP reads (`getAccountInfo` / `getMultipleAccounts` / `getProgramAccounts` / `getSignaturesForAddress`, balances, blockhash, token supply, ...) + `sendTransaction` / `simulateTransaction`; multiplexed WebSocket streaming (slots, logs, accounts, programs) with auto-reconnect; DI + resilience
-- [x] `SolSharp.Programs` — System / Token / ATA / Compute Budget instructions, PDA/ATA, transaction builder
+- [x] `SolSharp.Rpc` — HTTP reads (`getAccountInfo` / `getMultipleAccounts` / `getProgramAccounts` / `getSignaturesForAddress`, balances, blockhash, token supply, ...) + `sendTransaction` / `simulateTransaction`; multiplexed WebSocket streaming (slots, logs, accounts, programs, signatures, blocks) with auto-reconnect; DI + resilience
+- [x] `SolSharp.Programs` — System / Token / ATA / Compute Budget / Memo instructions, PDA/ATA, transaction builder
 - [x] Versioned (v0) transactions + address lookup tables (compile / sign / fetch + decode / ALT program)
+- [x] Borsh reader + typed SPL account state (`Mint` / `TokenAccount`) and `Transaction.Deserialize`
+- [x] Live integration test suite (configurable RPC / WS endpoint)
 - [ ] Published NuGet packages
 
 ## Requirements
@@ -163,6 +169,23 @@ dotnet test
 dotnet format   # apply the enforced code style
 ```
 
+The suite includes a `SolSharp.IntegrationTests` project that exercises the read and streaming paths against a
+live cluster. It targets the public mainnet endpoint by default and is overridable via the `SOLSHARP_RPC_URL`
+and `SOLSHARP_WS_URL` environment variables; no credentials are committed. These tests hit the network, so they
+tolerate rate limits by reporting inconclusive rather than failing, and are tagged `Integration`. For a fast,
+offline-only run, exclude them:
+
+```bash
+dotnet test --filter "TestCategory!=Integration"
+```
+
+To point the integration tests at your own node, set the endpoints (the key stays in your shell, never the repo):
+
+```bash
+SOLSHARP_RPC_URL=https://your-node SOLSHARP_WS_URL=wss://your-node \
+  dotnet test --filter "TestCategory=Integration"
+```
+
 ## Layout
 
 ```
@@ -172,9 +195,11 @@ SolSharp/
   src/SolSharp.Wallet/ Keypair (+ parsing), ISigner, PublicKey.Verify / IsOnCurve
   src/SolSharp.Programs/ instructions, PDA/ATA, Message/Transaction, TransactionBuilder
   tests/               NUnit + FluentAssertions, mirroring each project
+                       (+ SolSharp.IntegrationTests: live-cluster read/streaming checks)
   .editorconfig        modern C# style, enforced on build
   Directory.Build.props
   CLAUDE.md            conventions and decisions for contributors/agents
+  docs/USAGE.md        task-oriented usage guide with runnable examples
 ```
 
 ## Design notes
