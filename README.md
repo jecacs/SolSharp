@@ -64,20 +64,22 @@ bool ok = PublicKey.TryParse(input, out var key);
 `SolSharp.Rpc`:
 
 - HTTP JSON-RPC reads — accounts (`getAccountInfo`, `getMultipleAccounts`, `getProgramAccounts` with
-  memcmp / data-size filters, `getTokenAccountsByOwner`, `getAddressLookupTable` fetch + decode),
-  transactions (`getTransaction`, `getSignaturesForAddress`, `getFeeForMessage`), and cluster state
-  (`getBalance`, `getLatestBlockhash`, `isBlockhashValid`, `getEpochInfo`, `getRecentPrioritizationFees`,
-  `getTokenSupply`, `requestAirdrop`, and more); each typed, fully documented, and tested.
+  memcmp / data-size filters, `getTokenAccountsByOwner`, `getTokenLargestAccounts`, `getAddressLookupTable`
+  fetch + decode), transactions and blocks (`getTransaction`, `getSignaturesForAddress`, `getBlock`,
+  `getFeeForMessage`), and cluster state (`getBalance`, `getLatestBlockhash`, `isBlockhashValid`,
+  `getEpochInfo`, `getSupply`, `getSlotLeaders`, `getRecentPrioritizationFees`, `getTokenSupply`,
+  `requestAirdrop`, and more); each typed, fully documented, and tested.
 - Account-state decoders — `Mint` and `TokenAccount` (SPL Token state, via `GetMintAsync` /
   `GetTokenAccountAsync`) and `AddressLookupTable`; for other programs, pair `getAccountInfo` with Core's
   `BorshReader`.
 - WebSocket streaming multiplexed over one connection: `SubscribeSlotsAsync` (`IAsyncEnumerable`),
-  `SubscribeLogsAsync`, `SubscribeAccountAsync`, and `SubscribeProgramAsync` (`ChannelReader`), with
-  automatic reconnect and resubscribe across dropped connections.
+  `SubscribeLogsAsync`, `SubscribeAccountAsync`, `SubscribeProgramAsync`, `SubscribeSignatureAsync`, and
+  `SubscribeBlocksAsync` (`ChannelReader`), with automatic reconnect and resubscribe across dropped connections.
 - DI registration with a built-in resilience pipeline (retry on transient errors and HTTP 429).
 - `SendTransactionAsync` / `SimulateTransactionAsync` — submit a signed transaction or dry-run it for logs and
   compute units; `SendAndConfirmTransactionAsync` sends and waits for confirmation (throwing if the transaction
-  lands but errors), and `GetSignatureStatusesAsync` / `ConfirmTransactionAsync` poll a signature's status.
+  lands but errors). Confirm by polling (`GetSignatureStatusesAsync` / `ConfirmTransactionAsync`) or over the
+  WebSocket (`SolanaWsClient.ConfirmSignatureAsync`).
 
 ```csharp
 using SolSharp.Rpc;
@@ -97,8 +99,8 @@ await foreach (var slot in ws.SubscribeSlotsAsync())
 
 `SolSharp.Wallet`:
 
-- `Keypair` — generate a key, or load one from a base58 export or a `solana-keygen` JSON array;
-  signs messages and zeroes its secret on dispose.
+- `Keypair` — generate a key, or load one with `Parse` (auto-detecting a base58 export, a `solana-keygen`
+  JSON array, hex, or base64); signs messages and zeroes its secret on dispose.
 - `ISigner` — the signing abstraction the transaction builder depends on, so the key stays swappable.
 - `PublicKey.Verify(message, signature)` — Ed25519 verification, kept in Wallet so Core stays crypto-free.
 
@@ -113,13 +115,14 @@ bool ok = keypair.PublicKey.Verify(message, signature);
 `SolSharp.Programs`:
 
 - Instruction builders: `SystemProgram` (transfer, create account), `ComputeBudgetProgram` (compute-unit
-  limit and priority fee), `TokenProgram` (transfer, transfer-checked), `AssociatedTokenAccount`, and
-  `AddressLookupTableProgram` (create / extend / deactivate / close).
+  limit and priority fee), `TokenProgram` (transfer / transfer-checked, mint / burn, approve / revoke,
+  freeze / thaw, initialize mint / account, close, sync-native), `AssociatedTokenAccount`,
+  `AddressLookupTableProgram` (create / extend / deactivate / close), and `MemoProgram`.
 - `ProgramDerivedAddress` (`FindProgramAddress` / `TryCreateProgramAddress`) and `PublicKey.IsOnCurve()`.
 - `Message` (legacy) and `MessageV0` (versioned, loading extra accounts from address lookup tables),
-  `Transaction`, and `TransactionBuilder` (`Build` / `BuildV0`) — compilation, wire serialization, signing,
-  and base64 output. Every encoding is checked byte-for-byte against the Rust `solana-sdk` (via solders)
-  and `solana-py`.
+  `Transaction`, and `TransactionBuilder` (`Build` / `BuildV0`) — compilation, wire serialization (with
+  `Transaction.Deserialize` to parse one back), signing, and base64 output. Every encoding is checked
+  byte-for-byte against the Rust `solana-sdk` (via solders) and `solana-py`.
 
 ```csharp
 using SolSharp.Programs;

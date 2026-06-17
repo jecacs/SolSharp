@@ -243,6 +243,60 @@ public static class SolanaWsClientTests
         }
     }
 
+    [TestFixture]
+    public sealed class SubscribeBlocks
+    {
+        [Test]
+        public async Task DeliversBlock_ThenUnsubscribesOnCancel()
+        {
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+
+            using var cts = new CancellationTokenSource();
+            var subscribe = client.SubscribeBlocksAsync(cancellationToken: cts.Token);
+
+            await WaitUntil(() => fake.Sent.Count > 0);
+            fake.Sent[0].Should().Contain("\"method\":\"blockSubscribe\"");
+            fake.Sent[0].Should().Contain("\"all\""); // no filter -> "all"
+            fake.Sent[0].Should().Contain("\"transactionDetails\":\"signatures\"");
+
+            fake.PushFromServer("""{"jsonrpc":"2.0","result":8,"id":1}""");
+            var reader = await subscribe;
+
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"blockNotification","params":{"subscription":8,"result":{"context":{"slot":100},"value":{"slot":100,"err":null,"block":{"blockhash":"Ckt","previousBlockhash":"Prev","parentSlot":99,"blockHeight":90,"blockTime":1700000000,"signatures":["sig1","sig2"]}}}}}""");
+
+            var message = await reader.ReadAsync();
+            message.Value!.Slot.Should().Be(100);
+            message.Value.IsError.Should().BeFalse();
+            message.Value.Block!.ParentSlot.Should().Be(99);
+            message.Value.Block.Signatures.Should().Equal("sig1", "sig2");
+
+            await cts.CancelAsync();
+            await WaitUntil(() => fake.Sent.Exists(entry => entry.Contains("blockUnsubscribe")));
+            fake.Sent.Should().Contain(entry => entry.Contains("\"method\":\"blockUnsubscribe\""));
+        }
+
+        [Test]
+        public async Task MentionsFilter_SendsAccount()
+        {
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+
+            using var cts = new CancellationTokenSource();
+            _ = client.SubscribeBlocksAsync(PublicKey.Parse(SolanaProgramIds.TokenProgram), cancellationToken: cts.Token);
+
+            await WaitUntil(() => fake.Sent.Count > 0);
+            fake.Sent[0].Should().Contain("\"method\":\"blockSubscribe\"");
+            fake.Sent[0].Should().Contain("\"mentionsAccountOrProgram\"");
+            fake.Sent[0].Should().Contain(SolanaProgramIds.TokenProgram); // program -> base58
+
+            await cts.CancelAsync();
+        }
+    }
+
     // A plain (non-interpolated) raw string so the four trailing literal braces stay content; the two
     // values are substituted afterwards (an interpolated raw string cannot mix {{ }} holes with }}}} here).
     private static string AccountNotification(long subscription, ulong lamports) =>

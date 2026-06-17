@@ -230,4 +230,36 @@ public static class RpcRequests
             Method = "getSignatureStatuses",
             Params = [signatures, new { searchTransactionHistory }]
         };
+
+    public static RpcRequest GetSlotLeaders(ulong startSlot, ulong limit) =>
+        new()
+        {
+            Method = "getSlotLeaders",
+            Params = [startSlot, limit]
+        };
+
+    public static RpcRequest GetSupply(Commitment commitment) =>
+        new()
+        {
+            Method = "getSupply",
+            Params = [new { commitment, excludeNonCirculatingAccountsList = true }]
+        };
+
+    public static RpcRequest GetTokenLargestAccounts(PublicKey mint, Commitment commitment) =>
+        new()
+        {
+            Method = "getTokenLargestAccounts",
+            Params = [mint, new { commitment }]
+        };
+
+    public static RpcRequest GetBlock(ulong slot, Commitment commitment) =>
+        new()
+        {
+            Method = "getBlock",
+            Params =
+            [
+                slot,
+                new { commitment, maxSupportedTransactionVersion = 0, transactionDetails = "signatures", rewards = false }
+            ]
+        };
 }
