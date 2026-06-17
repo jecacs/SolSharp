@@ -9,7 +9,7 @@ public static class MessageDecompileTests
     private static PublicKey Pk(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
 
     private static (PublicKey, bool, bool)[] Metas(Instruction instruction)
-        => instruction.Accounts.Select(a => (a.PublicKey, a.IsSigner, a.IsWritable)).ToArray();
+        => [.. instruction.Accounts.Select(a => (a.PublicKey, a.IsSigner, a.IsWritable))];
 
     [TestFixture]
     public sealed class Legacy

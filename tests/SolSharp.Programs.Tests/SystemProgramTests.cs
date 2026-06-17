@@ -62,7 +62,7 @@ public static class SystemProgramTests
     }
 
     private static (PublicKey, bool, bool)[] Metas(Instruction instruction)
-        => instruction.Accounts.Select(a => (a.PublicKey, a.IsSigner, a.IsWritable)).ToArray();
+        => [.. instruction.Accounts.Select(a => (a.PublicKey, a.IsSigner, a.IsWritable))];
 
     private static PublicKey RecentBlockhashes => PublicKey.Parse(Sysvars.RecentBlockhashes);
     private static PublicKey Rent => PublicKey.Parse(Sysvars.Rent);
