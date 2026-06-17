@@ -11,7 +11,6 @@ namespace SolSharp.Core.Converters;
 /// </summary>
 public static class SolanaJsonSerializer
 {
-    /// <summary>The shared, read-only serializer options for Solana JSON-RPC payloads.</summary>
     public static readonly JsonSerializerOptions Options = CreateOptions();
 
     private static JsonSerializerOptions CreateOptions()

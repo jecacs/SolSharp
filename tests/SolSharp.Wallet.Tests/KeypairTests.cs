@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using FluentAssertions;
 using NUnit.Framework;
 using SolSharp.Core.Primitives;
@@ -150,5 +151,27 @@ public static class KeypairTests
             Action act = keypair.Dispose;
             act.Should().NotThrow();
         }
+    }
+
+    [TestFixture]
+    public sealed class Finalizer
+    {
+        [Test]
+        public void OnUndisposedKeypair_FinalizesWithoutThrowing()
+        {
+            // A keypair the caller forgot to dispose must still finalize cleanly (the finalizer
+            // zeroes the seed). A throwing finalizer would crash the host, so the keypair being
+            // collected is the check.
+            var weak = CreateAbandonedKeypair();
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            weak.IsAlive.Should().BeFalse();
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static WeakReference CreateAbandonedKeypair() => new(Keypair.FromSeed(Hex(Test1Seed)));
     }
 }

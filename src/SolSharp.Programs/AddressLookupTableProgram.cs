@@ -20,11 +20,15 @@ public static class AddressLookupTableProgram
     /// <param name="payer">The account that funds the new table account (writable signer).</param>
     /// <param name="recentSlot">A recent slot; the table address is derived from it, so it must be current.</param>
     /// <returns>The create instruction and the derived lookup table address.</returns>
-    public static (Instruction Instruction, PublicKey LookupTable) CreateLookupTable(PublicKey authority, PublicKey payer, ulong recentSlot)
+    public static (Instruction Instruction, PublicKey LookupTable) CreateLookupTable(
+        PublicKey authority,
+        PublicKey payer,
+        ulong recentSlot)
     {
         Span<byte> slotBytes = stackalloc byte[sizeof(ulong)];
         BinaryPrimitives.WriteUInt64LittleEndian(slotBytes, recentSlot);
-        var (lookupTable, bump) = ProgramDerivedAddress.FindProgramAddress([authority.ToBytes(), slotBytes.ToArray()], ProgramId);
+        var (lookupTable, bump) = ProgramDerivedAddress
+            .FindProgramAddress([authority.ToBytes(), slotBytes.ToArray()], ProgramId);
 
         // Instruction 0 (CreateLookupTable): u32 discriminant, u64 recent slot, u8 bump seed.
         var data = new byte[sizeof(uint) + sizeof(ulong) + 1];
@@ -54,7 +58,11 @@ public static class AddressLookupTableProgram
     /// <param name="newAddresses">The addresses to append.</param>
     /// <returns>The extend instruction.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="newAddresses"/> is <c>null</c>.</exception>
-    public static Instruction ExtendLookupTable(PublicKey lookupTable, PublicKey authority, PublicKey? payer, IReadOnlyList<PublicKey> newAddresses)
+    public static Instruction ExtendLookupTable(
+        PublicKey lookupTable,
+        PublicKey authority,
+        PublicKey? payer,
+        IReadOnlyList<PublicKey> newAddresses)
     {
         ArgumentNullException.ThrowIfNull(newAddresses);
 

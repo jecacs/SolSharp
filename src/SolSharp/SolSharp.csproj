@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <PackageId>SolSharp</PackageId>
+    <IsPackable>true</IsPackable>
+    <Description>A lean, dependency-light .NET 8 SDK for Solana. JSON-RPC reads, send/simulate, and multiplexed WebSocket streaming; Ed25519 keys and signing; SPL Token, PDA, and ATA helpers; and spec-accurate legacy and v0 (versioned) transaction building, signing, and decoding — every wire format checked byte-for-byte against the Rust solana-sdk. Ships as one package bundling the Core, Wallet, Rpc, and Programs assemblies.</Description>
+    <PackageReleaseNotes>0.1.0-alpha — first public preview. The API is not yet stable; expect breaking changes. Release notes: https://github.com/jecacs/SolSharp/releases</PackageReleaseNotes>
+    <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);BundleProjectReferences</TargetsForTfmSpecificBuildOutput>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../SolSharp.Core/SolSharp.Core.csproj" PrivateAssets="all"/>
+    <ProjectReference Include="../SolSharp.Wallet/SolSharp.Wallet.csproj" PrivateAssets="all"/>
+    <ProjectReference Include="../SolSharp.Rpc/SolSharp.Rpc.csproj" PrivateAssets="all"/>
+    <ProjectReference Include="../SolSharp.Programs/SolSharp.Programs.csproj" PrivateAssets="all"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SimpleBase" Version="5.6.0"/>
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2"/>
+    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.1"/>
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="8.0.0"/>
+    <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" Version="8.0.0"/>
+  </ItemGroup>
+
+  <Target Name="BundleProjectReferences" DependsOnTargets="ResolveReferences">
+    <ItemGroup>
+      <BuildOutputInPackage Include="@(ReferenceCopyLocalPaths->WithMetadataValue('ReferenceSourceTarget', 'ProjectReference'))"/>
+    </ItemGroup>
+  </Target>
+
+</Project>

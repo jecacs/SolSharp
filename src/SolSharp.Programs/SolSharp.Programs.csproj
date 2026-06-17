@@ -1,17 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-    <PropertyGroup>
-        <TargetFramework>net8.0</TargetFramework>
-        <Description>Solana transaction building for .NET: instructions, legacy message compilation and wire serialization, transaction signing, and System / Compute Budget / SPL Token instruction builders.</Description>
-    </PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Description>Solana transaction building for .NET: instructions, legacy message compilation and wire serialization, transaction signing, and System / Compute Budget / SPL Token instruction builders.</Description>
+  </PropertyGroup>
 
-    <ItemGroup>
-        <InternalsVisibleTo Include="SolSharp.Programs.Tests" />
-    </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="SolSharp.Programs.Tests" />
+  </ItemGroup>
 
-    <ItemGroup>
-        <ProjectReference Include="../SolSharp.Core/SolSharp.Core.csproj" />
-        <ProjectReference Include="../SolSharp.Wallet/SolSharp.Wallet.csproj" />
-    </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../SolSharp.Core/SolSharp.Core.csproj" />
+    <ProjectReference Include="../SolSharp.Wallet/SolSharp.Wallet.csproj" />
+  </ItemGroup>
 
 </Project>

@@ -1,6 +1,5 @@
 <Project>
 
-  <!-- Shared build settings for every project in the solution. -->
   <PropertyGroup>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
@@ -19,27 +18,30 @@
 
   <PropertyGroup Label="Package metadata">
     <Version>0.1.0-alpha</Version>
-    <Authors>yevhen</Authors>
+    <Authors>Yevhen Koval</Authors>
     <Product>SolSharp</Product>
-    <Copyright>Copyright (c) 2026 yevhen</Copyright>
+    <Copyright>Copyright (c) 2026 Yevhen Koval</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>solana;web3;blockchain;rpc;crypto;defi</PackageTags>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/jecacs/SolSharp</RepositoryUrl>
     <PackageProjectUrl>https://github.com/jecacs/SolSharp</PackageProjectUrl>
-    <IncludeSymbols>true</IncludeSymbols>
-    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <DebugType>embedded</DebugType>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <IsPackable Condition="'$(MSBuildProjectName)' != 'SolSharp'">false</IsPackable>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(IsPackable)' != 'false'">
     <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" Visible="false" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(IsPackable)' != 'false'">
+  <ItemGroup Condition="'$(IsTestProject)' != 'true'">
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
   </ItemGroup>
 

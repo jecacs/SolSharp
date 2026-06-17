@@ -67,5 +67,25 @@ public static class BorshWriterTests
 
             Convert.ToHexString(writer.ToArray()).ToLowerInvariant().Should().Be("40420f0000000000");
         }
+
+        [Test]
+        public void WriteLength_WritesAU32Prefix()
+        {
+            var writer = new BorshWriter();
+            writer.WriteLength(300);
+
+            var reader = new BorshReader(writer.ToArray());
+            reader.ReadU32().Should().Be(300u);
+            reader.Remaining.Should().Be(0);
+        }
+
+        [Test]
+        public void WriteLength_NegativeThrows()
+        {
+            var writer = new BorshWriter();
+            Action act = () => writer.WriteLength(-1);
+
+            act.Should().Throw<ArgumentOutOfRangeException>();
+        }
     }
 }

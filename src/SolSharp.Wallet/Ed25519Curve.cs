@@ -12,8 +12,8 @@ internal static class Ed25519Curve
     private static readonly BigInteger P = BigInteger.Pow(2, 255) - 19;
     private static readonly BigInteger YMask = BigInteger.Pow(2, 255) - 1;
 
-    private static readonly BigInteger D =
-        BigInteger.Parse("37095705934669439343138083508754565189542113879843219016388785533085940283555");
+    private static readonly BigInteger D = BigInteger
+        .Parse("37095705934669439343138083508754565189542113879843219016388785533085940283555");
 
     private static readonly BigInteger SqrtExponent = (P + 3) / 8;
 

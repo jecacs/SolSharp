@@ -9,10 +9,10 @@ wire format and the signing path, without dragging in a large dependency graph. 
 writing bots, indexers, or backend services that talk to Solana from .NET and care about
 speed and control, this is aimed at you.
 
-> **Status: early / pre-release.** All four packages are in place — `SolSharp.Core`, `SolSharp.Rpc`
-> (HTTP reads + send/simulate + WebSocket streaming + DI), `SolSharp.Wallet` (Ed25519 keys, signing,
-> verification), and `SolSharp.Programs` (instructions + transaction building + signing). Nothing is on
-> NuGet yet and the public API is not stable — expect breaking changes.
+> **Status: early / pre-release.** SolSharp ships as a single NuGet package — `SolSharp` — bundling the
+> Core (primitives + encodings), Wallet (Ed25519 keys, signing, verification), Rpc (HTTP reads +
+> send/simulate + WebSocket streaming + DI), and Programs (instructions + transaction building + signing)
+> assemblies. Nothing is on NuGet yet and the public API is not stable — expect breaking changes.
 
 📖 **New here? Read the [usage guide](docs/USAGE.md)** — a task-oriented cookbook covering keys, reads,
 SPL token state, building/signing/sending transactions, v0 + address lookup tables, decoding transactions,
@@ -33,17 +33,22 @@ latency-sensitive workloads.
 - **Latency-minded.** Value types, allocation-free hot paths, span-based APIs.
 - **Modern .NET.** C# latest, nullable reference types, code style enforced on build.
 
-## Packages
+## Package
 
-| Package            | Purpose                                             | Status      |
-| ------------------ | --------------------------------------------------- | ----------- |
-| `SolSharp.Core`    | Primitives, encoding, JSON, program/sysvar constants | Usable      |
-| `SolSharp.Rpc`     | HTTP JSON-RPC reads + WebSocket streaming + DI       | Usable      |
-| `SolSharp.Wallet`  | Ed25519 keys, key parsing, signing and verification | Usable      |
+SolSharp ships as a **single NuGet package** — `SolSharp` — so one `dotnet add package SolSharp` pulls in
+everything. Internally it stays four layered assemblies, bundled into that one package (namespaces are
+unchanged: `SolSharp.Core.*`, `SolSharp.Rpc`, `SolSharp.Wallet`, `SolSharp.Programs`):
+
+| Assembly           | Purpose                                              | Status |
+| ------------------ | --------------------------------------------------- | ------ |
+| `SolSharp.Core`    | Primitives, encoding, JSON, program/sysvar constants | Usable |
+| `SolSharp.Wallet`  | Ed25519 keys, key parsing, signing and verification | Usable |
+| `SolSharp.Rpc`     | HTTP JSON-RPC reads + WebSocket streaming + DI       | Usable |
 | `SolSharp.Programs`| Instructions (System/Token/ATA/Memo/Compute Budget/ALT) + transaction building | Usable |
 
-Dependencies point downward only: `Rpc` and `Wallet` build on `Core`, and `Programs` builds on `Core`
-and `Wallet`. `Core` depends on nothing else in the solution and pulls no network or crypto package.
+Keeping the split in the source means the layering stays compiler-enforced — dependencies point downward
+only: `Rpc` and `Wallet` build on `Core`, and `Programs` builds on `Core` and `Wallet`. `Core` depends on
+nothing else in the solution and pulls no network or crypto package.
 
 ## What's here today
 
@@ -162,7 +167,7 @@ var signature = await rpc.SendTransactionAsync(tx.Serialize());
 - [x] Versioned (v0) transactions + address lookup tables (compile / sign / fetch + decode / ALT program)
 - [x] Borsh reader + writer, typed SPL account state (`Mint` / `TokenAccount`), `Transaction.Deserialize` + instruction decompilation, and typed `TransactionError`
 - [x] Live integration test suite (configurable RPC / WS endpoint)
-- [ ] Published NuGet packages
+- [ ] Published NuGet package (single `SolSharp` package bundling the four assemblies)
 
 ## Requirements
 
@@ -201,6 +206,7 @@ SolSharp/
   src/SolSharp.Rpc/    Protocol/  Models/  Streaming/  + client, options, DI
   src/SolSharp.Wallet/ Keypair (+ parsing), ISigner, PublicKey.Verify / IsOnCurve
   src/SolSharp.Programs/ instructions, PDA/ATA, Message/Transaction, TransactionBuilder
+  src/SolSharp/        packaging facade — bundles the four assemblies into the single NuGet package
   tests/               NUnit + FluentAssertions, mirroring each project
                        (+ SolSharp.IntegrationTests: live-cluster read/streaming checks)
   .editorconfig        modern C# style, enforced on build
@@ -226,4 +232,4 @@ but sign with your own signer and simulate before sending.
 
 ## License
 
-[MIT](LICENSE) © yevhen
+[MIT](LICENSE) © Yevhen Koval

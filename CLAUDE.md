@@ -45,6 +45,7 @@ SolSharp/
   src/SolSharp.Rpc/         Protocol/  Models/  Streaming/  + client, options, DI
   src/SolSharp.Wallet/      Keypair (+ parsing), ISigner, PublicKeyExtensions, Ed25519Curve
   src/SolSharp.Programs/    AccountMeta/Instruction, Message + MessageV0, Transaction, TransactionBuilder, program builders (System/Token/ATA/Compute Budget/Memo/ALT), PDA/ATA
+  src/SolSharp/             packaging facade: bundles the four assemblies into the single SolSharp NuGet package (no source of its own)
   tests/                    SolSharp.{Core,Rpc,Wallet,Programs}.Tests (nested fixtures, mirroring src) + SolSharp.IntegrationTests (live cluster)
 ```
 
@@ -76,3 +77,4 @@ SolSharp/
 - `PublicKey.IsOnCurve` is direct field arithmetic, not BouncyCastle: BC's public-key validation rejects non-canonical encodings (y ≥ p) that Solana's `curve25519-dalek` accepts after reducing mod p. It is fuzzed against solders so PDA/ATA derivation matches the network.
 - **SPL Token account state uses the fixed-size `Pack` layout, not Borsh.** `Mint` (82 bytes) and `TokenAccount` (165 bytes) read a `COption` as a 4-byte little-endian tag followed by an *always-present* value (the slot is reserved even when `None`) — unlike Borsh's 1-byte tag with the value present only when `Some`. So `BorshReader` / `BorshWriter` are for Anchor/Borsh data; the SPL decoders are hand-written against the Pack layout and KAT'd against `solders.token.state`. (The Token *instruction* data is different again: a minimal `COption` of a 1-byte tag plus the value only when `Some`.)
 - Money-critical encodings (message/transaction serialization, instruction data, PDA/ATA, on-curve) are checked byte-for-byte against `solana-sdk` (solders) and `solana-py`, not just round-trips.
+- **Ships as one NuGet package.** The source stays four layered projects (so the compiler keeps Core crypto/IO-free, Wallet owns Ed25519, etc.), but only the `src/SolSharp` facade is packable: it references the four with `PrivateAssets="all"` and an MSBuild target (`BundleProjectReferences`) folds their DLLs + XML docs into a single `SolSharp` package, re-declaring the real third-party deps (kept in sync by hand). PDBs are embedded (`DebugType=embedded`) so symbols ride inside the bundled DLLs rather than a near-empty `.snupkg`. Default-`false` `IsPackable` (overridden only for `MSBuildProjectName == SolSharp`) keeps every other project from emitting its own package.

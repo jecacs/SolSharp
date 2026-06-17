@@ -8,6 +8,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolSharp.Wallet", "src\SolS
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolSharp.Programs", "src\SolSharp.Programs\SolSharp.Programs.csproj", "{82887A79-230D-4FA0-B1CA-EDB3AC9E364D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolSharp", "src\SolSharp\SolSharp.csproj", "{A1B2C3D4-5E6F-4A1B-8C2D-3E4F5A6B7C8D}"
+EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{2FBB8251-E980-47E2-B617-30C32B636B21}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolSharp.Core.Tests", "tests\SolSharp.Core.Tests\SolSharp.Core.Tests.csproj", "{9DFA7CC8-551B-49D9-9631-52967B5901FA}"
@@ -54,6 +56,10 @@ Global
 		{82887A79-230D-4FA0-B1CA-EDB3AC9E364D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{82887A79-230D-4FA0-B1CA-EDB3AC9E364D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{82887A79-230D-4FA0-B1CA-EDB3AC9E364D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3D4-5E6F-4A1B-8C2D-3E4F5A6B7C8D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3D4-5E6F-4A1B-8C2D-3E4F5A6B7C8D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3D4-5E6F-4A1B-8C2D-3E4F5A6B7C8D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D4-5E6F-4A1B-8C2D-3E4F5A6B7C8D}.Release|Any CPU.Build.0 = Release|Any CPU
 		{ABF8B051-4DA3-4491-AAE5-61B222311F7C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{ABF8B051-4DA3-4491-AAE5-61B222311F7C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{ABF8B051-4DA3-4491-AAE5-61B222311F7C}.Release|Any CPU.ActiveCfg = Release|Any CPU

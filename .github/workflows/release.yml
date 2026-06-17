@@ -1,0 +1,50 @@
+name: release
+
+# Publishes the single SolSharp package to NuGet when a version tag (e.g. v0.1.0-alpha) is pushed.
+# Uses NuGet Trusted Publishing (OIDC) via the jecacs/SolSharp policy — no long-lived API key is stored.
+on:
+  push:
+    tags: [ 'v*' ]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # required for the OIDC token exchange with NuGet
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build
+        run: dotnet build --configuration Release -warnaserror
+
+      # Unlike CI (which stays offline), the release gate runs the FULL suite, including the live-cluster
+      # integration tests, so nothing is published without the real read/streaming paths passing. Rate
+      # limits report inconclusive (not failed), so a busy node will not block a release; a real regression
+      # will. Set SOLSHARP_RPC_URL / SOLSHARP_WS_URL secrets to use a private node instead of public mainnet.
+      - name: Test (full suite, including live integration)
+        run: dotnet test --no-build --configuration Release
+        env:
+          SOLSHARP_RPC_URL: ${{ secrets.SOLSHARP_RPC_URL }}
+          SOLSHARP_WS_URL: ${{ secrets.SOLSHARP_WS_URL }}
+
+      # No --no-build: packing rebuilds so the facade's bundling target (which folds the four
+      # assemblies into the single SolSharp package) runs against fully resolved references.
+      - name: Pack
+        run: dotnet pack src/SolSharp/SolSharp.csproj --configuration Release --output ./artifacts
+
+      # Trusted Publishing: exchange the GitHub OIDC token for a short-lived NuGet API key
+      # (the jecacs/SolSharp policy authorizes this repo + this workflow file), then push with it.
+      - name: NuGet login (OIDC)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: jecacs
+
+      - name: Push to NuGet
+        run: dotnet nuget push "./artifacts/*.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate

@@ -6,7 +6,8 @@ namespace SolSharp.Wallet;
 
 /// <summary>
 /// An in-memory Ed25519 keypair - the local <see cref="ISigner"/>, backed by a 32-byte secret seed.
-/// The secret is held in managed memory and zeroed on <see cref="Dispose"/>.
+/// The secret is held in managed memory and zeroed on <see cref="Dispose"/> - or, if disposal is
+/// missed, by the finalizer when the keypair is garbage-collected.
 /// </summary>
 public sealed partial class Keypair : ISigner, IDisposable
 {
@@ -96,5 +97,14 @@ public sealed partial class Keypair : ISigner, IDisposable
 
         CryptographicOperations.ZeroMemory(_seed);
         _disposed = true;
+        GC.SuppressFinalize(this);
+    }
+
+    // Backstop for a caller that forgets to dispose: the seed is still zeroed when the keypair is
+    // finalized. Deterministic Dispose() is preferred (and suppresses this).
+    ~Keypair()
+    {
+        if (!_disposed)
+            CryptographicOperations.ZeroMemory(_seed);
     }
 }
