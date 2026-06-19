@@ -1,5 +1,10 @@
 # SolSharp
 
+[![NuGet](https://img.shields.io/nuget/v/SolSharp.svg?logo=nuget)](https://www.nuget.org/packages/SolSharp)
+[![Downloads](https://img.shields.io/nuget/dt/SolSharp.svg?logo=nuget)](https://www.nuget.org/packages/SolSharp)
+[![build](https://github.com/jecacs/SolSharp/actions/workflows/ci.yml/badge.svg)](https://github.com/jecacs/SolSharp/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A lean, modern .NET SDK for Solana — RPC, WebSocket streaming, and wire-level
 transaction signing and building.
 
@@ -39,6 +44,16 @@ latency-sensitive workloads.
 SolSharp ships as a **single NuGet package** — `SolSharp` — so one `dotnet add package SolSharp` pulls in
 everything. Internally it stays four layered assemblies, bundled into that one package (namespaces are
 unchanged: `SolSharp.Core.*`, `SolSharp.Rpc`, `SolSharp.Wallet`, `SolSharp.Programs`):
+
+Install from [NuGet](https://www.nuget.org/packages/SolSharp):
+
+```bash
+dotnet add package SolSharp
+```
+
+```xml
+<PackageReference Include="SolSharp" Version="0.1.0" />
+```
 
 | Assembly           | Purpose                                              | Status |
 | ------------------ | --------------------------------------------------- | ------ |
