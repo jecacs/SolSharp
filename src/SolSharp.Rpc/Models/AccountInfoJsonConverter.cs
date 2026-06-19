@@ -8,7 +8,7 @@ namespace SolSharp.Rpc.Models;
 /// Reads and writes <see cref="AccountInfo"/> in the node's shape, where the account data is a
 /// <c>[base64String, "base64"]</c> pair rather than a plain value.
 /// </summary>
-public sealed class AccountInfoJsonConverter : JsonConverter<AccountInfo>
+internal sealed class AccountInfoJsonConverter : JsonConverter<AccountInfo>
 {
     public override AccountInfo Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {

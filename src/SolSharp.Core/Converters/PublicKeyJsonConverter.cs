@@ -7,7 +7,7 @@ namespace SolSharp.Core.Converters;
 /// <summary>
 /// Reads and writes <see cref="PublicKey"/> as its base58 string, the form Solana's JSON-RPC uses.
 /// </summary>
-public sealed class PublicKeyJsonConverter : JsonConverter<PublicKey>
+internal sealed class PublicKeyJsonConverter : JsonConverter<PublicKey>
 {
     public override PublicKey Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {

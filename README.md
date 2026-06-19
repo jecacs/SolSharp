@@ -9,10 +9,11 @@ wire format and the signing path, without dragging in a large dependency graph. 
 writing bots, indexers, or backend services that talk to Solana from .NET and care about
 speed and control, this is aimed at you.
 
-> **Status: early / pre-release.** SolSharp ships as a single NuGet package — `SolSharp` — bundling the
-> Core (primitives + encodings), Wallet (Ed25519 keys, signing, verification), Rpc (HTTP reads +
-> send/simulate + WebSocket streaming + DI), and Programs (instructions + transaction building + signing)
-> assemblies. Nothing is on NuGet yet and the public API is not stable — expect breaking changes.
+> **Status: 0.1.0 — first stable release.** SolSharp ships as a single NuGet package — `SolSharp` —
+> bundling the Core (primitives + encodings), Wallet (Ed25519 keys, signing, verification), Rpc (HTTP
+> reads + send/simulate + WebSocket streaming + DI), and Programs (instructions + transaction building +
+> signing) assemblies. Versioning follows semver; while on 0.x, minor releases may still carry breaking
+> changes.
 
 📖 **New here? Read the [usage guide](docs/USAGE.md)** — a task-oriented cookbook covering keys, reads,
 SPL token state, building/signing/sending transactions, v0 + address lookup tables, decoding transactions,
@@ -73,11 +74,13 @@ bool ok = PublicKey.TryParse(input, out var key);
 `SolSharp.Rpc`:
 
 - HTTP JSON-RPC reads — accounts (`getAccountInfo`, `getMultipleAccounts`, `getProgramAccounts` with
-  memcmp / data-size filters and data slices, `getTokenAccountsByOwner`, `getTokenLargestAccounts`, `getAddressLookupTable`
-  fetch + decode), transactions and blocks (`getTransaction`, `getSignaturesForAddress`, `getBlock`,
-  `getFeeForMessage`), and cluster state (`getBalance`, `getLatestBlockhash`, `isBlockhashValid`,
-  `getEpochInfo`, `getSupply`, `getSlotLeaders`, `getRecentPrioritizationFees`, `getTokenSupply`,
-  `requestAirdrop`, and more); each typed, fully documented, and tested.
+  memcmp / data-size filters and data slices, `getTokenAccountsByOwner`, `getTokenLargestAccounts`,
+  `getTokenAccountBalance`, `getAddressLookupTable` fetch + decode), transactions and blocks
+  (`getTransaction`, `getSignaturesForAddress`, `getSignatureStatuses`, `getBlock`, `getBlockHeight`,
+  `getTransactionCount`, `getFeeForMessage`), and cluster state (`getBalance`, `getSlot`,
+  `getLatestBlockhash`, `isBlockhashValid`, `getEpochInfo`, `getVersion`, `getHealth`, `getSupply`,
+  `getSlotLeaders`, `getRecentPrioritizationFees`, `getTokenSupply`, `getMinimumBalanceForRentExemption`,
+  `requestAirdrop`); each typed, fully documented, and tested.
 - Account-state decoders — `Mint` and `TokenAccount` (SPL Token state, via `GetMintAsync` /
   `GetTokenAccountAsync`) and `AddressLookupTable`; for other programs, pair `getAccountInfo` with Core's
   `BorshReader`.

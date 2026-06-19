@@ -7,7 +7,7 @@ namespace SolSharp.Rpc.Models;
 /// Reads and writes a <c>[base64String, "base64"]</c> pair - the shape the node uses for binary fields such
 /// as a transaction's wire bytes - as a plain <see cref="byte"/> array.
 /// </summary>
-public sealed class Base64TupleJsonConverter : JsonConverter<byte[]>
+internal sealed class Base64TupleJsonConverter : JsonConverter<byte[]>
 {
     public override byte[]? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {

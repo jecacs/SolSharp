@@ -16,7 +16,10 @@ public sealed record AccountInfo
     /// <summary>Whether the account holds an executable program.</summary>
     public bool Executable { get; init; }
 
-    /// <summary>The epoch at which the account next owes rent.</summary>
+    /// <summary>
+    /// The epoch at which the account will next owe rent. Rent-exempt accounts - effectively all
+    /// accounts today - report <c>ulong.MaxValue</c>, meaning rent is never collected.
+    /// </summary>
     public ulong RentEpoch { get; init; }
 
     /// <summary>The account's raw data, decoded from the node's base64 encoding.</summary>

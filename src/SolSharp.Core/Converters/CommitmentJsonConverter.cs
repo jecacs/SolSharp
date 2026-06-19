@@ -8,7 +8,7 @@ namespace SolSharp.Core.Converters;
 /// Maps <see cref="Commitment"/> to and from the lowercase wire strings Solana's JSON-RPC uses.
 /// Applied as a type attribute so the mapping holds regardless of the active JsonSerializerOptions.
 /// </summary>
-public sealed class CommitmentJsonConverter : JsonConverter<Commitment>
+internal sealed class CommitmentJsonConverter : JsonConverter<Commitment>
 {
     public override Commitment Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         => reader.GetString() switch
