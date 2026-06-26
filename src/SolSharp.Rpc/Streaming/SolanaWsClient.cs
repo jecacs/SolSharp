@@ -349,12 +349,19 @@ public sealed class SolanaWsClient : IAsyncDisposable
         var acked = new TaskCompletionSource<long>(TaskCreationOptions.RunContinuationsAsynchronously);
         _pending[requestId] = new PendingSubscribe(acked, subscription);
 
-        await SendAsync(
-            new RpcRequest { Id = requestId, Method = subscription.SubscribeMethod, Params = subscription.Params },
-            cancellationToken);
+        try
+        {
+            await SendAsync(
+                new RpcRequest { Id = requestId, Method = subscription.SubscribeMethod, Params = subscription.Params },
+                cancellationToken);
 
-        await using (cancellationToken.Register(() => acked.TrySetCanceled(cancellationToken)))
-            await acked.Task;
+            await using (cancellationToken.Register(() => acked.TrySetCanceled(cancellationToken)))
+                await acked.Task;
+        }
+        finally
+        {
+            _pending.TryRemove(requestId, out _);
+        }
     }
 
     private void Cancel(Subscription subscription, CancellationToken cancellationToken)

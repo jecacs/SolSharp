@@ -15,7 +15,7 @@
   </PropertyGroup>
 
   <PropertyGroup Label="Package metadata">
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Authors>Yevhen Koval</Authors>
     <Product>SolSharp</Product>
     <Copyright>Copyright (c) 2026 Yevhen Koval</Copyright>

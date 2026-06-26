@@ -4,7 +4,7 @@ A lean, modern .NET SDK for Solana: RPC + WebSocket streaming, wire-level transa
 signing/building. Optimised for low latency and a small dependency footprint — it is a
 deliberate, focused alternative to the heavier general-purpose SDKs, not a clone of them.
 
-Status: 0.1.0, first stable release. All four projects are in place: Core primitives (incl. a Borsh reader/writer), the Rpc client (reads + typed SPL account state via `Mint`/`TokenAccount`, send/simulate, typed transaction errors, multiplexed WebSocket streaming with auto-reconnect, DI + resilience), the Wallet (Ed25519 keys, signing, verification, key parsing), and Programs (System/Token/ATA/Compute Budget/Memo + the Address Lookup Table program, PDA/ATA, legacy + v0 transaction building/signing/parsing, and instruction decompilation). A separate live integration suite exercises the read and streaming paths against a real cluster.
+Status: 0.2.0, stable release. All four projects are in place: Core primitives (incl. a Borsh reader/writer), the Rpc client (reads + typed SPL account state via `Mint`/`TokenAccount`, send/simulate, typed transaction errors, multiplexed WebSocket streaming with auto-reconnect, DI + resilience), the Wallet (Ed25519 keys, signing, verification, key parsing), and Programs (System/Token/ATA/Compute Budget/Memo + the Address Lookup Table program, PDA/ATA, legacy + v0 transaction building/signing/parsing, and instruction decompilation). A separate live integration suite exercises the read and streaming paths against a real cluster.
 
 ## Commands
 
@@ -16,6 +16,7 @@ Run from the repo root (where `SolSharp.sln` lives):
 
 ## Hard rules
 
+- **Never use `ConfigureAwait`.** Do not write `.ConfigureAwait(false)` or `.ConfigureAwait(true)` anywhere — not in library code, not in tests. This is a deliberate, permanent project choice; do not suggest adding it.
 - **English only** — code, comments, identifiers, test names, docs.
 - **Comments earn their place.** Explain *why* — non-obvious rationale, wire-format quirks, gotchas — never restate what the code already says. No filler, decorative, or obvious comments. Public API carries full XML docs (summary, every `<param>`, `<returns>`, and thrown `<exception>`); inline noise does not.
 - **Attributes on their own line** — never inline with the member, e.g. `[JsonPropertyName("id")]` goes above the property, not beside it. `dotnet format` does not enforce this (only Rider does), so write it that way by hand.

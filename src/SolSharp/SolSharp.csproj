@@ -5,7 +5,7 @@
     <PackageId>SolSharp</PackageId>
     <IsPackable>true</IsPackable>
     <Description>A lean, dependency-light .NET 8 SDK for Solana. JSON-RPC reads, send/simulate, and multiplexed WebSocket streaming; Ed25519 keys and signing; SPL Token, PDA, and ATA helpers; and spec-accurate legacy and v0 (versioned) transaction building, signing, and decoding — every wire format checked byte-for-byte against the Rust solana-sdk. Ships as one package bundling the Core, Wallet, Rpc, and Programs assemblies.</Description>
-    <PackageReleaseNotes>0.1.0 — first stable release. Follows semantic versioning; while on 0.x, minor releases may still carry breaking changes. Release notes: https://github.com/jecacs/SolSharp/releases</PackageReleaseNotes>
+    <PackageReleaseNotes>0.2.0 — stable release. Follows semantic versioning; while on 0.x, minor releases may still carry breaking changes. Release notes: https://github.com/jecacs/SolSharp/releases</PackageReleaseNotes>
     <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);BundleProjectReferences</TargetsForTfmSpecificBuildOutput>
   </PropertyGroup>
 
