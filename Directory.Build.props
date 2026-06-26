@@ -5,8 +5,6 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
 
-    <!-- Surface the editorconfig style rules as build warnings, not just IDE hints. -->
-    <!-- Flip TreatWarningsAsErrors to true (e.g. in CI) for a hard gate. -->
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest</AnalysisLevel>
@@ -33,12 +31,17 @@
     <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
+  <PropertyGroup Condition="Exists('$(MSBuildThisFileDirectory)assets/icon.png')">
+    <PackageIcon>icon.png</PackageIcon>
+  </PropertyGroup>
+
   <PropertyGroup>
     <IsPackable Condition="'$(MSBuildProjectName)' != 'SolSharp'">false</IsPackable>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(IsPackable)' != 'false'">
     <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)assets/icon.png" Pack="true" PackagePath="\" Visible="false" Condition="Exists('$(MSBuildThisFileDirectory)assets/icon.png')" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(IsTestProject)' != 'true'">

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/jecacs/SolSharp/main/assets/logo.png" alt="SolSharp" width="180" />
+</p>
+
 # SolSharp
 
 [![NuGet](https://img.shields.io/nuget/v/SolSharp.svg?logo=nuget)](https://www.nuget.org/packages/SolSharp)
