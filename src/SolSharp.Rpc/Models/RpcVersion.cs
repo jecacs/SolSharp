@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 namespace SolSharp.Rpc.Models;
 
 /// <summary>The node's software version, as returned by <c>getVersion</c>.</summary>
+/// <seealso href="https://solana.com/docs/rpc/http/getversion">getVersion</seealso>
 public sealed record RpcVersion
 {
     /// <summary>The solana-core software version string (for example <c>"1.18.0"</c>).</summary>

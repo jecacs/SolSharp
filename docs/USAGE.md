@@ -3,8 +3,8 @@
 A task-oriented tour of SolSharp with copy-pasteable C# examples. For the high-level overview and design
 notes see the [README](../README.md); for conventions and architecture see [CLAUDE.md](../CLAUDE.md).
 
-Every snippet targets **.NET 8** and assumes these packages exist in the solution:
-`SolSharp.Core`, `SolSharp.Rpc`, `SolSharp.Wallet`, `SolSharp.Programs`.
+Every snippet targets **.NET 8** and uses the single `SolSharp` NuGet package, which bundles all four
+assemblies — the namespaces `SolSharp.Core.*`, `SolSharp.Rpc`, `SolSharp.Wallet`, and `SolSharp.Programs`.
 
 ## Contents
 
@@ -21,6 +21,7 @@ Every snippet targets **.NET 8** and assumes these packages exist in the solutio
 - [Attaching a memo](#attaching-a-memo)
 - [Versioned (v0) transactions and address lookup tables](#versioned-v0-transactions-and-address-lookup-tables)
 - [Decoding a transaction](#decoding-a-transaction)
+- [Reading parsed transactions](#reading-parsed-transactions)
 - [WebSocket subscriptions](#websocket-subscriptions)
 - [Confirming a transaction](#confirming-a-transaction)
 - [Program-derived addresses (PDAs)](#program-derived-addresses-pdas)
@@ -29,16 +30,14 @@ Every snippet targets **.NET 8** and assumes these packages exist in the solutio
 
 ## Installation
 
-SolSharp is pre-NuGet. Reference the projects directly until packages are published:
+SolSharp ships as one NuGet package that bundles all four assemblies:
 
 ```bash
-dotnet add reference path/to/SolSharp/src/SolSharp.Rpc/SolSharp.Rpc.csproj
-dotnet add reference path/to/SolSharp/src/SolSharp.Wallet/SolSharp.Wallet.csproj
-dotnet add reference path/to/SolSharp/src/SolSharp.Programs/SolSharp.Programs.csproj
+dotnet add package SolSharp
 ```
 
-`SolSharp.Core` comes in transitively. Use only what you need — a read-only indexer can reference just
-`SolSharp.Rpc`; a signer needs `SolSharp.Wallet` and `SolSharp.Programs`.
+That single reference brings in every namespace — `SolSharp.Core.*`, `SolSharp.Rpc`, `SolSharp.Wallet`, and
+`SolSharp.Programs` — so there's no juggling which project to add. Requires .NET 8 or later.
 
 ## Creating a client
 
@@ -442,6 +441,45 @@ static async Task<IReadOnlyList<AddressLookupTableAccount>> FetchTablesAsync(Sol
 
 `MessageV0.GetAccountKeys(tables)` gives the full resolved account list (static + lookup-loaded), so you can
 map a balance entry's `accountIndex` back to a public key.
+
+## Reading parsed transactions
+
+When you'd rather not Borsh-decode instructions yourself, ask the node to do it: the `jsonParsed` encoding
+returns recognized instructions, token balances and logs already decoded. SolSharp exposes this as a separate
+read path that sits alongside the raw one. Every instruction keeps both forms — a typed `Parsed` view when the
+node recognizes the program, and the raw `ProgramId` / `Accounts` / `Data` when it doesn't — so nothing is lost.
+
+```csharp
+var tx = await rpc.GetParsedTransactionAsync(signature);
+if (tx is not null)
+{
+    foreach (var ix in tx.Message.Instructions)
+    {
+        if (ix.Parsed is { } parsed)
+            Console.WriteLine($"{ix.Program} {parsed.Type}");        // recognized: typed action + decoded fields
+        else
+            Console.WriteLine($"{ix.ProgramId} over {ix.Accounts?.Count ?? 0} accounts");  // unrecognized: raw
+    }
+
+    foreach (var balance in tx.Meta?.PostTokenBalances ?? [])         // token balances, already decoded
+        Console.WriteLine($"{balance.Owner} holds {balance.UiTokenAmount.UiAmountString} of {balance.Mint}");
+
+    foreach (var log in tx.Meta?.LogMessages ?? [])
+        Console.WriteLine(log);
+}
+```
+
+`Parsed.Info` is a `JsonElement`, so you read whatever fields the specific instruction type carries:
+
+```csharp
+var transfer = tx.Message.Instructions.First(ix => ix.Parsed?.Type == "transfer");
+ulong lamports = transfer.Parsed!.Info.GetProperty("lamports").GetUInt64();
+```
+
+`GetParsedBlockAsync(slot)` returns a whole block of parsed transactions (each with its `Slot` and `BlockTime`
+filled in); over the WebSocket, `SubscribeParsedBlocksAsync` streams the same parsed blocks. As with the raw
+path, `GetParsedTransactionAsync` returns `null` when the signature isn't found and `GetParsedBlockAsync`
+returns `null` for a skipped slot.
 
 ## WebSocket subscriptions
 

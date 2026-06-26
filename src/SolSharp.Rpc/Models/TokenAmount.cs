@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 namespace SolSharp.Rpc.Models;
 
 /// <summary>An SPL token amount, as returned by token balance and supply queries.</summary>
+/// <seealso href="https://solana.com/docs/rpc/http/gettokenaccountbalance">getTokenAccountBalance</seealso>
 public sealed record TokenAmount
 {
     /// <summary>The raw amount in the token's base units.</summary>

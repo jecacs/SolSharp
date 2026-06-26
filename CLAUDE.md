@@ -4,7 +4,7 @@ A lean, modern .NET SDK for Solana: RPC + WebSocket streaming, wire-level transa
 signing/building. Optimised for low latency and a small dependency footprint — it is a
 deliberate, focused alternative to the heavier general-purpose SDKs, not a clone of them.
 
-Status: 0.2.0, stable release. All four projects are in place: Core primitives (incl. a Borsh reader/writer), the Rpc client (reads + typed SPL account state via `Mint`/`TokenAccount`, send/simulate, typed transaction errors, multiplexed WebSocket streaming with auto-reconnect, DI + resilience), the Wallet (Ed25519 keys, signing, verification, key parsing), and Programs (System/Token/ATA/Compute Budget/Memo + the Address Lookup Table program, PDA/ATA, legacy + v0 transaction building/signing/parsing, and instruction decompilation). A separate live integration suite exercises the read and streaming paths against a real cluster.
+Status: 0.2.0, stable release. All four projects are in place: Core primitives (incl. a Borsh reader/writer), the Rpc client (reads + typed SPL account state via `Mint`/`TokenAccount`, `jsonParsed` transaction/block reads, send/simulate, typed transaction errors, multiplexed WebSocket streaming with auto-reconnect, DI + resilience), the Wallet (Ed25519 keys, signing, verification, key parsing), and Programs (System/Token/ATA/Compute Budget/Memo + the Address Lookup Table program, PDA/ATA, legacy + v0 transaction building/signing/parsing, and instruction decompilation). A separate live integration suite exercises the read and streaming paths against a real cluster.
 
 ## Commands
 

@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 namespace SolSharp.Rpc.Models;
 
 /// <summary>One entry from <c>getSignaturesForAddress</c>: a confirmed transaction that touched the queried address.</summary>
+/// <seealso href="https://solana.com/docs/rpc/http/getsignaturesforaddress">getSignaturesForAddress</seealso>
 public sealed record SignatureInfo
 {
     /// <summary>The transaction signature, base58.</summary>

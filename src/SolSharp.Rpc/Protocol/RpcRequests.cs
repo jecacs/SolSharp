@@ -6,72 +6,34 @@ namespace SolSharp.Rpc.Protocol;
 public static class RpcRequests
 {
     public static RpcRequest GetLatestBlockhash(Commitment commitment) =>
-        new()
-        {
-            Method = "getLatestBlockhash",
-            Params = [new { commitment }]
-        };
+        new() { Method = RpcMethods.GetLatestBlockhash, Params = [new { commitment }] };
 
     public static RpcRequest GetBalance(PublicKey account, Commitment commitment) =>
-        new()
-        {
-            Method = "getBalance",
-            Params = [account, new { commitment }]
-        };
+        new() { Method = RpcMethods.GetBalance, Params = [account, new { commitment }] };
 
     public static RpcRequest GetSlot(Commitment commitment) =>
-        new()
-        {
-            Method = "getSlot",
-            Params = [new { commitment }]
-        };
+        new() { Method = RpcMethods.GetSlot, Params = [new { commitment }] };
 
     public static RpcRequest GetHealth() =>
-        new()
-        {
-            Method = "getHealth"
-        };
+        new() { Method = RpcMethods.GetHealth };
 
     public static RpcRequest GetVersion() =>
-        new()
-        {
-            Method = "getVersion"
-        };
+        new() { Method = RpcMethods.GetVersion };
 
     public static RpcRequest GetBlockHeight(Commitment commitment) =>
-        new()
-        {
-            Method = "getBlockHeight",
-            Params = [new { commitment }]
-        };
+        new() { Method = RpcMethods.GetBlockHeight, Params = [new { commitment }] };
 
     public static RpcRequest GetTransactionCount(Commitment commitment) =>
-        new()
-        {
-            Method = "getTransactionCount",
-            Params = [new { commitment }]
-        };
+        new() { Method = RpcMethods.GetTransactionCount, Params = [new { commitment }] };
 
     public static RpcRequest GetTokenAccountBalance(PublicKey account, Commitment commitment) =>
-        new()
-        {
-            Method = "getTokenAccountBalance",
-            Params = [account, new { commitment }]
-        };
+        new() { Method = RpcMethods.GetTokenAccountBalance, Params = [account, new { commitment }] };
 
     public static RpcRequest GetTokenSupply(PublicKey mint, Commitment commitment) =>
-        new()
-        {
-            Method = "getTokenSupply",
-            Params = [mint, new { commitment }]
-        };
+        new() { Method = RpcMethods.GetTokenSupply, Params = [mint, new { commitment }] };
 
     public static RpcRequest GetMinimumBalanceForRentExemption(long dataLength, Commitment commitment) =>
-        new()
-        {
-            Method = "getMinimumBalanceForRentExemption",
-            Params = [dataLength, new { commitment }]
-        };
+        new() { Method = RpcMethods.GetMinimumBalanceForRentExemption, Params = [dataLength, new { commitment }] };
 
     public static RpcRequest SendTransaction(
         string base64Transaction,
@@ -81,7 +43,7 @@ public static class RpcRequests
         ulong? minContextSlot) =>
         new()
         {
-            Method = "sendTransaction",
+            Method = RpcMethods.SendTransaction,
             Params =
             [
                 base64Transaction,
@@ -104,7 +66,7 @@ public static class RpcRequests
         ulong? minContextSlot) =>
         new()
         {
-            Method = "simulateTransaction",
+            Method = RpcMethods.SimulateTransaction,
             Params =
             [
                 base64Transaction,
@@ -122,7 +84,7 @@ public static class RpcRequests
     public static RpcRequest GetAccountInfo(PublicKey account, Commitment commitment, DataSlice? dataSlice = null) =>
         new()
         {
-            Method = "getAccountInfo",
+            Method = RpcMethods.GetAccountInfo,
             Params =
             [
                 account,
@@ -135,11 +97,15 @@ public static class RpcRequests
             ]
         };
 
-    public static RpcRequest GetMultipleAccounts(IReadOnlyList<PublicKey> accounts, Commitment commitment) =>
-        new()
+    public static RpcRequest GetMultipleAccounts(IReadOnlyList<PublicKey> accounts, Commitment commitment)
+        => new()
         {
-            Method = "getMultipleAccounts",
-            Params = [accounts, new { encoding = "base64", commitment }]
+            Method = RpcMethods.GetMultipleAccounts,
+            Params = [accounts, new
+            {
+                encoding = "base64",
+                commitment
+            }]
         };
 
     public static RpcRequest GetSignaturesForAddress(
@@ -151,11 +117,18 @@ public static class RpcRequests
         ulong? minContextSlot) =>
         new()
         {
-            Method = "getSignaturesForAddress",
+            Method = RpcMethods.GetSignaturesForAddress,
             Params =
             [
                 address,
-                new { limit, before, until, commitment, minContextSlot }
+                new
+                {
+                    limit,
+                    before,
+                    until,
+                    commitment,
+                    minContextSlot
+                }
             ]
         };
 
@@ -167,7 +140,7 @@ public static class RpcRequests
         ulong? minContextSlot) =>
         new()
         {
-            Method = "getProgramAccounts",
+            Method = RpcMethods.GetProgramAccounts,
             Params =
             [
                 programId,
@@ -176,58 +149,39 @@ public static class RpcRequests
                     encoding = "base64",
                     commitment,
                     minContextSlot,
-                    dataSlice = dataSlice is { } slice ? new { offset = slice.Offset, length = slice.Length } : null,
+                    dataSlice =
+                        dataSlice is { } slice ? new { offset = slice.Offset, length = slice.Length } : null,
                     filters = filters?.Select(filter => filter.Payload).ToArray()
                 }
             ]
         };
 
     public static RpcRequest GetEpochInfo(Commitment commitment) =>
-        new()
-        {
-            Method = "getEpochInfo",
-            Params = [new { commitment }]
-        };
+        new() { Method = RpcMethods.GetEpochInfo, Params = [new { commitment }] };
 
     public static RpcRequest IsBlockhashValid(string blockhash, Commitment commitment) =>
-        new()
-        {
-            Method = "isBlockhashValid",
-            Params = [blockhash, new { commitment }]
-        };
+        new() { Method = RpcMethods.IsBlockhashValid, Params = [blockhash, new { commitment }] };
 
     public static RpcRequest GetFeeForMessage(string base64Message, Commitment commitment) =>
-        new()
-        {
-            Method = "getFeeForMessage",
-            Params = [base64Message, new { commitment }]
-        };
+        new() { Method = RpcMethods.GetFeeForMessage, Params = [base64Message, new { commitment }] };
 
     public static RpcRequest RequestAirdrop(PublicKey account, ulong lamports, Commitment commitment) =>
-        new()
-        {
-            Method = "requestAirdrop",
-            Params = [account, lamports, new { commitment }]
-        };
+        new() { Method = RpcMethods.RequestAirdrop, Params = [account, lamports, new { commitment }] };
 
     public static RpcRequest GetTokenAccountsByOwner(PublicKey owner, PublicKey mint, Commitment commitment) =>
         new()
         {
-            Method = "getTokenAccountsByOwner",
+            Method = RpcMethods.GetTokenAccountsByOwner,
             Params = [owner, new { mint }, new { encoding = "base64", commitment }]
         };
 
     public static RpcRequest GetRecentPrioritizationFees(IReadOnlyList<PublicKey> accounts) =>
-        new()
-        {
-            Method = "getRecentPrioritizationFees",
-            Params = [accounts]
-        };
+        new() { Method = RpcMethods.GetRecentPrioritizationFees, Params = [accounts] };
 
     public static RpcRequest GetTransaction(string signature, Commitment commitment) =>
         new()
         {
-            Method = "getTransaction",
+            Method = RpcMethods.GetTransaction,
             Params =
             [
                 signature,
@@ -236,41 +190,92 @@ public static class RpcRequests
         };
 
     public static RpcRequest GetSignatureStatuses(IReadOnlyList<string> signatures, bool searchTransactionHistory) =>
-        new()
-        {
-            Method = "getSignatureStatuses",
-            Params = [signatures, new { searchTransactionHistory }]
-        };
+        new() { Method = RpcMethods.GetSignatureStatuses, Params = [signatures, new { searchTransactionHistory }] };
 
     public static RpcRequest GetSlotLeaders(ulong startSlot, ulong limit) =>
-        new()
-        {
-            Method = "getSlotLeaders",
-            Params = [startSlot, limit]
-        };
+        new() { Method = RpcMethods.GetSlotLeaders, Params = [startSlot, limit] };
 
     public static RpcRequest GetSupply(Commitment commitment) =>
-        new()
-        {
-            Method = "getSupply",
-            Params = [new { commitment, excludeNonCirculatingAccountsList = true }]
-        };
+        new() { Method = RpcMethods.GetSupply, Params = [new { commitment, excludeNonCirculatingAccountsList = true }] };
 
     public static RpcRequest GetTokenLargestAccounts(PublicKey mint, Commitment commitment) =>
-        new()
-        {
-            Method = "getTokenLargestAccounts",
-            Params = [mint, new { commitment }]
-        };
+        new() { Method = RpcMethods.GetTokenLargestAccounts, Params = [mint, new { commitment }] };
 
     public static RpcRequest GetBlock(ulong slot, Commitment commitment) =>
         new()
         {
-            Method = "getBlock",
+            Method = RpcMethods.GetBlock,
             Params =
             [
                 slot,
-                new { commitment, maxSupportedTransactionVersion = 0, transactionDetails = "signatures", rewards = false }
+                new
+                {
+                    commitment,
+                    maxSupportedTransactionVersion = 0,
+                    transactionDetails = "signatures",
+                    rewards = false
+                }
             ]
         };
+
+    public static RpcRequest GetParsedTransaction(string signature, Commitment commitment) =>
+        new()
+        {
+            Method = RpcMethods.GetTransaction,
+            Params =
+            [
+                signature,
+                new { commitment, maxSupportedTransactionVersion = 0, encoding = "jsonParsed" }
+            ]
+        };
+
+    public static RpcRequest GetParsedBlock(ulong slot, Commitment commitment) =>
+        new()
+        {
+            Method = RpcMethods.GetBlock,
+            Params =
+            [
+                slot,
+                new
+                {
+                    commitment,
+                    maxSupportedTransactionVersion = 0,
+                    encoding = "jsonParsed",
+                    transactionDetails = "full",
+                    rewards = false
+                }
+            ]
+        };
+}
+
+internal static class RpcMethods
+{
+    public const string GetLatestBlockhash = "getLatestBlockhash";
+    public const string GetBalance = "getBalance";
+    public const string GetSlot = "getSlot";
+    public const string GetHealth = "getHealth";
+    public const string GetVersion = "getVersion";
+    public const string GetBlockHeight = "getBlockHeight";
+    public const string GetTransactionCount = "getTransactionCount";
+    public const string GetTokenAccountBalance = "getTokenAccountBalance";
+    public const string GetTokenSupply = "getTokenSupply";
+    public const string GetMinimumBalanceForRentExemption = "getMinimumBalanceForRentExemption";
+    public const string SendTransaction = "sendTransaction";
+    public const string SimulateTransaction = "simulateTransaction";
+    public const string GetAccountInfo = "getAccountInfo";
+    public const string GetMultipleAccounts = "getMultipleAccounts";
+    public const string GetSignaturesForAddress = "getSignaturesForAddress";
+    public const string GetProgramAccounts = "getProgramAccounts";
+    public const string GetEpochInfo = "getEpochInfo";
+    public const string IsBlockhashValid = "isBlockhashValid";
+    public const string GetFeeForMessage = "getFeeForMessage";
+    public const string RequestAirdrop = "requestAirdrop";
+    public const string GetTokenAccountsByOwner = "getTokenAccountsByOwner";
+    public const string GetRecentPrioritizationFees = "getRecentPrioritizationFees";
+    public const string GetTransaction = "getTransaction";
+    public const string GetSignatureStatuses = "getSignatureStatuses";
+    public const string GetSlotLeaders = "getSlotLeaders";
+    public const string GetSupply = "getSupply";
+    public const string GetTokenLargestAccounts = "getTokenLargestAccounts";
+    public const string GetBlock = "getBlock";
 }

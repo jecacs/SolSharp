@@ -5,6 +5,7 @@ using SolSharp.Core.Primitives;
 namespace SolSharp.Rpc.Models;
 
 /// <summary>A confirmed transaction as returned by <c>getTransaction</c>: where it landed, its bytes, and how it executed.</summary>
+/// <seealso href="https://solana.com/docs/rpc/http/gettransaction">getTransaction</seealso>
 public sealed record TransactionResponse
 {
     /// <summary>The slot the transaction was processed in.</summary>
@@ -29,6 +30,7 @@ public sealed record TransactionResponse
 }
 
 /// <summary>The execution metadata attached to a confirmed transaction.</summary>
+/// <seealso href="https://solana.com/docs/rpc/http/gettransaction">getTransaction</seealso>
 public sealed record TransactionMeta
 {
     /// <summary>The transaction error, or <c>null</c> if it succeeded.</summary>
@@ -81,6 +83,7 @@ public sealed record TransactionMeta
 }
 
 /// <summary>A pre- or post-execution SPL token balance snapshot from a transaction's metadata.</summary>
+/// <seealso href="https://solana.com/docs/rpc/json-structures">Solana RPC JSON structures</seealso>
 public sealed record TokenBalance
 {
     /// <summary>The index, into the transaction's account list, of the token account this balance is for.</summary>
@@ -95,12 +98,17 @@ public sealed record TokenBalance
     [JsonPropertyName("owner")]
     public PublicKey? Owner { get; init; }
 
+    /// <summary>The token program that owns the account (SPL Token or Token-2022), if the node reported it.</summary>
+    [JsonPropertyName("programId")]
+    public PublicKey? ProgramId { get; init; }
+
     /// <summary>The balance, in base units and as a UI amount.</summary>
     [JsonPropertyName("uiTokenAmount")]
     public TokenAmount UiTokenAmount { get; init; } = new();
 }
 
 /// <summary>The inner (CPI) instructions invoked under one top-level instruction.</summary>
+/// <seealso href="https://solana.com/docs/rpc/json-structures">Solana RPC JSON structures</seealso>
 public sealed record InnerInstructionGroup
 {
     /// <summary>The index of the top-level instruction these inner instructions were invoked from.</summary>
@@ -113,6 +121,7 @@ public sealed record InnerInstructionGroup
 }
 
 /// <summary>One compiled inner instruction, as returned with base64 transaction encoding.</summary>
+/// <seealso href="https://solana.com/docs/rpc/json-structures">Solana RPC JSON structures</seealso>
 public sealed record InnerInstruction
 {
     /// <summary>The index, into the transaction's account list, of the invoked program.</summary>
@@ -133,6 +142,7 @@ public sealed record InnerInstruction
 }
 
 /// <summary>The accounts a versioned transaction loaded from address lookup tables.</summary>
+/// <seealso href="https://solana.com/docs/rpc/json-structures">Solana RPC JSON structures</seealso>
 public sealed record LoadedAddresses
 {
     /// <summary>The writable accounts loaded from lookup tables.</summary>

@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 namespace SolSharp.Rpc.Models;
 
 /// <summary>A per-slot prioritization fee observation from <c>getRecentPrioritizationFees</c>.</summary>
+/// <seealso href="https://solana.com/docs/rpc/http/getrecentprioritizationfees">getRecentPrioritizationFees</seealso>
 public sealed record PrioritizationFee
 {
     /// <summary>The slot the fee was observed in.</summary>

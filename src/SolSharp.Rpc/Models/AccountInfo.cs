@@ -4,6 +4,7 @@ using SolSharp.Core.Primitives;
 namespace SolSharp.Rpc.Models;
 
 /// <summary>A Solana account, as returned by <c>getAccountInfo</c> and <c>getMultipleAccounts</c>.</summary>
+/// <seealso href="https://solana.com/docs/rpc/http/getaccountinfo">getAccountInfo</seealso>
 [JsonConverter(typeof(AccountInfoJsonConverter))]
 public sealed record AccountInfo
 {

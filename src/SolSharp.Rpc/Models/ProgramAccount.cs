@@ -4,6 +4,7 @@ using SolSharp.Core.Primitives;
 namespace SolSharp.Rpc.Models;
 
 /// <summary>One entry from <c>getProgramAccounts</c>: an account paired with the program that owns it.</summary>
+/// <seealso href="https://solana.com/docs/rpc/http/getprogramaccounts">getProgramAccounts</seealso>
 public sealed record ProgramAccount
 {
     /// <summary>The account's address.</summary>

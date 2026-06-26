@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 namespace SolSharp.Rpc.Models;
 
 /// <summary>The most recent blockhash and the last block height at which it stays valid.</summary>
+/// <seealso href="https://solana.com/docs/rpc/http/getlatestblockhash">getLatestBlockhash</seealso>
 public sealed record LatestBlockhash
 {
     /// <summary>The base58-encoded recent blockhash to set on a transaction.</summary>

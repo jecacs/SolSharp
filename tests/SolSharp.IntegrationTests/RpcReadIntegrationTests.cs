@@ -62,6 +62,32 @@ public static class RpcReadIntegrationTests
 
     [TestFixture]
     [Category("Integration")]
+    public sealed class GetParsedTransactionAsync
+    {
+        [Test]
+        public async Task DecodesARecentMainnetTransaction()
+        {
+            using var provider = CreateProvider();
+            var client = provider.GetRequiredService<SolanaRpcClient>();
+
+            // A recent signature off a busy mint, then decode it via jsonParsed against the live node.
+            var signatures = await IntegrationEnvironment.CallAsync(
+                () => client.GetSignaturesForAddressAsync(UsdcMint));
+            signatures.Should().NotBeEmpty();
+
+            var parsed = await IntegrationEnvironment.CallAsync(
+                () => client.GetParsedTransactionAsync(signatures[0].Signature));
+
+            parsed.Should().NotBeNull();
+            parsed!.Message.AccountKeys.Should().NotBeEmpty();
+            parsed.Message.Instructions.Should().NotBeEmpty();
+            // Each instruction is either node-parsed or kept raw - never both null, never dropped.
+            parsed.Message.Instructions.Should().OnlyContain(ix => ix.Parsed != null || ix.Accounts != null);
+        }
+    }
+
+    [TestFixture]
+    [Category("Integration")]
     public sealed class GetSlotAsync
     {
         [Test]

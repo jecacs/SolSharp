@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 namespace SolSharp.Rpc.Models;
 
 /// <summary>Cluster epoch and slot information, as returned by <c>getEpochInfo</c>.</summary>
+/// <seealso href="https://solana.com/docs/rpc/http/getepochinfo">getEpochInfo</seealso>
 public sealed record EpochInfo
 {
     /// <summary>The current slot.</summary>

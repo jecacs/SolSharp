@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 namespace SolSharp.Rpc.Models;
 
 /// <summary>Cluster token supply totals (in lamports), as returned by <c>getSupply</c>.</summary>
+/// <seealso href="https://solana.com/docs/rpc/http/getsupply">getSupply</seealso>
 public sealed record Supply
 {
     /// <summary>The total supply.</summary>

@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 namespace SolSharp.Rpc.Models;
 
 /// <summary>The result of simulating a transaction.</summary>
+/// <seealso href="https://solana.com/docs/rpc/http/simulatetransaction">simulateTransaction</seealso>
 public sealed record SimulateTransactionResult
 {
     /// <summary>The transaction error, or <c>null</c> if the simulation succeeded.</summary>

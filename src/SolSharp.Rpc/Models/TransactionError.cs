@@ -7,6 +7,7 @@ namespace SolSharp.Rpc.Models;
 /// <see cref="InstructionError"/> at a specific instruction, which for a program failure carries the program's
 /// own <see cref="InstructionError.CustomCode"/> (for example an Anchor error or an AMM slippage code).
 /// </summary>
+/// <seealso href="https://solana.com/docs/rpc/json-structures">Solana RPC JSON structures</seealso>
 public sealed record TransactionError
 {
     /// <summary>The error variant, e.g. <c>InstructionError</c>, <c>AccountInUse</c>, <c>BlockhashNotFound</c>.</summary>
@@ -60,6 +61,7 @@ public sealed record TransactionError
 }
 
 /// <summary>An instruction-level error - a named runtime variant, or a program-defined <see cref="CustomCode"/>.</summary>
+/// <seealso href="https://solana.com/docs/rpc/json-structures">Solana RPC JSON structures</seealso>
 public sealed record InstructionError
 {
     /// <summary>The error variant, e.g. <c>Custom</c>, <c>InsufficientFunds</c>, <c>InvalidAccountData</c>.</summary>

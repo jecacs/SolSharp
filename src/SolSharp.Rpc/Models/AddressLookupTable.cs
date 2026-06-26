@@ -8,6 +8,7 @@ namespace SolSharp.Rpc.Models;
 /// <see cref="Addresses"/> into a v0 transaction (an <c>AddressLookupTableAccount</c> in SolSharp.Programs)
 /// to load those accounts without listing them in the message.
 /// </summary>
+/// <seealso href="https://solana.com/docs/rpc/http/getaccountinfo">getAccountInfo</seealso>
 public sealed record AddressLookupTable
 {
     private const int MetaSize = 56;

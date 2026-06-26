@@ -7,6 +7,7 @@ namespace SolSharp.Rpc.Streaming;
 /// A <c>signatureSubscribe</c> notification: delivered once, when the subscribed transaction reaches the
 /// requested commitment. The node unsubscribes automatically after sending it.
 /// </summary>
+/// <seealso href="https://solana.com/docs/rpc/websocket/signaturesubscribe">signatureSubscribe</seealso>
 public sealed record SignatureNotification
 {
     /// <summary>The transaction error, or <c>null</c> if it succeeded.</summary>

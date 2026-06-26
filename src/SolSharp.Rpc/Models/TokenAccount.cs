@@ -17,6 +17,7 @@ public enum TokenAccountState : byte
 }
 
 /// <summary>The decoded state of an SPL Token account (the fixed 165-byte SPL "Pack" layout).</summary>
+/// <seealso href="https://solana.com/docs/rpc/http/getaccountinfo">getAccountInfo</seealso>
 public sealed record TokenAccount
 {
     /// <summary>The serialized size of a token account, in bytes.</summary>

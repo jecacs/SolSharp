@@ -324,6 +324,46 @@ public static class SolanaWsClientTests
         }
     }
 
+    [TestFixture]
+    public sealed class SubscribeParsedBlocks
+    {
+        [Test]
+        public async Task DeliversParsedBlock_WithDecodedInstructions()
+        {
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+
+            using var cts = new CancellationTokenSource();
+            var subscribe = client.SubscribeParsedBlocksAsync(cancellationToken: cts.Token);
+
+            await WaitUntil(() => fake.Sent.Count > 0);
+            fake.Sent[0].Should().Contain("\"method\":\"blockSubscribe\"");
+            fake.Sent[0].Should().Contain("\"encoding\":\"jsonParsed\"");
+            fake.Sent[0].Should().Contain("\"transactionDetails\":\"full\"");
+
+            fake.PushFromServer("""{"jsonrpc":"2.0","result":9,"id":1}""");
+            var reader = await subscribe;
+
+            fake.PushFromServer(NotificationJson);
+
+            var message = await reader.ReadAsync();
+            message.Value!.Slot.Should().Be(120);
+            message.Value.IsError.Should().BeFalse();
+
+            var block = message.Value.Block!;
+            block.ParentSlot.Should().Be(119);
+            var tx = block.Transactions.Should().ContainSingle().Subject;
+            tx.Signatures.Should().ContainSingle().Which.Should().Be("psig1");
+            tx.Message.Instructions[0].Parsed!.Type.Should().Be("transfer");
+
+            await cts.CancelAsync();
+        }
+
+        private const string NotificationJson =
+            """{"jsonrpc":"2.0","method":"blockNotification","params":{"subscription":9,"result":{"context":{"slot":120},"value":{"slot":120,"err":null,"block":{"blockhash":"Pblk1111111111111111111111111111111111111111","previousBlockhash":"Pprev111111111111111111111111111111111111111","parentSlot":119,"blockHeight":100,"blockTime":1700000010,"transactions":[{"transaction":{"signatures":["psig1"],"message":{"accountKeys":[{"pubkey":"3x9az88Dkbxa6tkKByxqEn7jBTJCJCD4dVvou49L24ET","signer":true,"writable":true,"source":"transaction"},{"pubkey":"11111111111111111111111111111111","signer":false,"writable":false,"source":"transaction"}],"instructions":[{"program":"system","programId":"11111111111111111111111111111111","parsed":{"type":"transfer","info":{"lamports":7}},"stackHeight":null}],"recentBlockhash":"Prbh1111111111111111111111111111111111111111"}},"meta":null,"version":"legacy"}]}}}}}""";
+    }
+
     // A plain (non-interpolated) raw string so the four trailing literal braces stay content; the two
     // values are substituted afterwards (an interpolated raw string cannot mix {{ }} holes with }}}} here).
     private static string AccountNotification(long subscription, ulong lamports) =>

@@ -70,6 +70,8 @@ Keeping the split in the source means the layering stays compiler-enforced — d
 only: `Rpc` and `Wallet` build on `Core`, and `Programs` builds on `Core` and `Wallet`. `Core` depends on
 nothing else in the solution and pulls no network or crypto package.
 
+See the [changelog](CHANGELOG.md) for what changed in each release.
+
 ## What's here today
 
 `SolSharp.Core`:
@@ -107,10 +109,13 @@ bool ok = PublicKey.TryParse(input, out var key);
   metadata — pre/post SOL and token balances, inner (CPI) instructions, loaded lookup-table addresses, logs,
   and compute units. Failures decode to a typed `TransactionError` (exposing the program's `Custom` code) on
   `TransactionMeta`, `SignatureStatus`, and `SimulateTransactionResult`.
+- `GetParsedTransactionAsync` / `GetParsedBlockAsync` return the node's `jsonParsed` decoding — typed
+  instructions, token balances, and logs without local Borsh work — each instruction keeping both its parsed
+  form and its raw program id / accounts / data.
 - WebSocket streaming multiplexed over one connection: `SubscribeSlotsAsync` and `SubscribeRootsAsync`
   (`IAsyncEnumerable`), `SubscribeLogsAsync`, `SubscribeAccountAsync`, `SubscribeProgramAsync`,
-  `SubscribeSignatureAsync`, and `SubscribeBlocksAsync` (`ChannelReader`), with automatic reconnect and
-  resubscribe across dropped connections.
+  `SubscribeSignatureAsync`, `SubscribeBlocksAsync`, and `SubscribeParsedBlocksAsync` (`ChannelReader`), with
+  automatic reconnect and resubscribe across dropped connections.
 - DI registration with a built-in resilience pipeline (retry on transient errors and HTTP 429).
 - `SendTransactionAsync` / `SimulateTransactionAsync` — submit a signed transaction or dry-run it for logs and
   compute units; `SendAndConfirmTransactionAsync` sends and waits for confirmation (throwing if the transaction

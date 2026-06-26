@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 namespace SolSharp.Rpc.Streaming;
 
 /// <summary>A transaction-logs notification payload from <c>logsSubscribe</c>.</summary>
+/// <seealso href="https://solana.com/docs/rpc/websocket/logssubscribe">logsSubscribe</seealso>
 public sealed record LogInfo
 {
     /// <summary>The transaction signature these logs belong to.</summary>

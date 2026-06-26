@@ -1,13 +1,13 @@
 using System.Text.Json.Serialization;
 
-namespace SolSharp.Rpc.Models;
+namespace SolSharp.Rpc.Models.Parsed;
 
 /// <summary>
-/// A confirmed block, as returned by <c>getBlock</c> with transaction details set to signatures: its hashes,
-/// slots, time, and the signatures of the transactions it contains.
+/// A confirmed block with full <c>jsonParsed</c> transactions, as returned by <c>getBlock</c> with
+/// <c>transactionDetails=full</c> and <c>encoding=jsonParsed</c>.
 /// </summary>
 /// <seealso href="https://solana.com/docs/rpc/http/getblock">getBlock</seealso>
-public sealed record Block
+public sealed record ParsedBlock
 {
     /// <summary>The block's blockhash (base58).</summary>
     [JsonPropertyName("blockhash")]
@@ -29,7 +29,10 @@ public sealed record Block
     [JsonPropertyName("blockTime")]
     public long? BlockTime { get; init; }
 
-    /// <summary>The signatures of the transactions in the block, in order.</summary>
-    [JsonPropertyName("signatures")]
-    public IReadOnlyList<string>? Signatures { get; init; }
+    /// <summary>
+    /// The block's transactions, decoded. <see cref="ParsedTransaction.Slot"/> and
+    /// <see cref="ParsedTransaction.BlockTime"/> are filled in from the block by <c>GetParsedBlockAsync</c>.
+    /// </summary>
+    [JsonPropertyName("transactions")]
+    public IReadOnlyList<ParsedTransaction> Transactions { get; init; } = [];
 }

@@ -229,6 +229,59 @@ public sealed class SolanaWsClient : IAsyncDisposable
     }
 
     /// <summary>
+    /// Subscribes to every new block with its transactions decoded into <c>jsonParsed</c> form, delivered
+    /// through a channel. The node must be started with block subscriptions enabled
+    /// (<c>--rpc-pubsub-enable-block-subscription</c>); many providers disable them. Cancelling
+    /// <paramref name="cancellationToken"/> unsubscribes and completes the channel. See
+    /// <see href="https://solana.com/docs/rpc/websocket/blocksubscribe">blockSubscribe</see>.
+    /// </summary>
+    /// <param name="commitment">The commitment level to query at.</param>
+    /// <param name="cancellationToken">Unsubscribes and completes the channel when cancelled.</param>
+    /// <returns>A channel reader of parsed-block notifications, each carrying its slot context and the produced block.</returns>
+    /// <exception cref="InvalidOperationException">The node rejected the subscription, or the connection closed.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled before the subscription was confirmed.</exception>
+    public Task<ChannelReader<RpcContextValue<ParsedBlockNotification>>> SubscribeParsedBlocksAsync(
+        Commitment commitment = Commitment.Confirmed,
+        CancellationToken cancellationToken = default)
+        => SubscribeParsedBlocksCoreAsync("all", commitment, cancellationToken);
+
+    /// <summary>
+    /// Subscribes to new blocks that mention <paramref name="mentionsAccountOrProgram"/>, with their
+    /// transactions decoded into <c>jsonParsed</c> form, delivered through a channel. The node must be started
+    /// with block subscriptions enabled (<c>--rpc-pubsub-enable-block-subscription</c>). Cancelling
+    /// <paramref name="cancellationToken"/> unsubscribes and completes the channel. See
+    /// <see href="https://solana.com/docs/rpc/websocket/blocksubscribe">blockSubscribe</see>.
+    /// </summary>
+    /// <param name="mentionsAccountOrProgram">The account or program a block must mention to be delivered.</param>
+    /// <param name="commitment">The commitment level to query at.</param>
+    /// <param name="cancellationToken">Unsubscribes and completes the channel when cancelled.</param>
+    /// <returns>A channel reader of parsed-block notifications, each carrying its slot context and the produced block.</returns>
+    /// <exception cref="InvalidOperationException">The node rejected the subscription, or the connection closed.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled before the subscription was confirmed.</exception>
+    public Task<ChannelReader<RpcContextValue<ParsedBlockNotification>>> SubscribeParsedBlocksAsync(
+        PublicKey mentionsAccountOrProgram,
+        Commitment commitment = Commitment.Confirmed,
+        CancellationToken cancellationToken = default)
+        => SubscribeParsedBlocksCoreAsync(new { mentionsAccountOrProgram }, commitment, cancellationToken);
+
+    private async Task<ChannelReader<RpcContextValue<ParsedBlockNotification>>> SubscribeParsedBlocksCoreAsync(
+        object filter,
+        Commitment commitment,
+        CancellationToken cancellationToken)
+    {
+        var sink = new SubscriptionSink<RpcContextValue<ParsedBlockNotification>>();
+        object[] parameters =
+        [
+            filter,
+            new { commitment, encoding = "jsonParsed", transactionDetails = "full", showRewards = false, maxSupportedTransactionVersion = 0 }
+        ];
+        var subscription = await RegisterAsync("blockSubscribe", parameters, "blockUnsubscribe", sink, cancellationToken);
+
+        cancellationToken.Register(() => Cancel(subscription, cancellationToken));
+        return sink.Reader;
+    }
+
+    /// <summary>
     /// Subscribes to a single notification fired when <paramref name="signature"/> reaches
     /// <paramref name="commitment"/>; the node unsubscribes automatically afterward. Prefer
     /// <see cref="ConfirmSignatureAsync"/> for the common "await one confirmation" case. See

@@ -4,6 +4,7 @@ using SolSharp.Core.Primitives;
 namespace SolSharp.Rpc.Models;
 
 /// <summary>The decoded state of an SPL Token mint account (the fixed 82-byte SPL "Pack" layout).</summary>
+/// <seealso href="https://solana.com/docs/rpc/http/getaccountinfo">getAccountInfo</seealso>
 public sealed record Mint
 {
     /// <summary>The serialized size of a mint account, in bytes.</summary>

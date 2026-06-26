@@ -4,6 +4,7 @@ using SolSharp.Core.Primitives;
 namespace SolSharp.Rpc.Models;
 
 /// <summary>One of a mint's largest token accounts, as returned by <c>getTokenLargestAccounts</c>.</summary>
+/// <seealso href="https://solana.com/docs/rpc/http/gettokenlargestaccounts">getTokenLargestAccounts</seealso>
 public sealed record TokenLargestAccount
 {
     /// <summary>The token account's address.</summary>

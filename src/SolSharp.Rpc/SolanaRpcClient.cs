@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using SolSharp.Core.Converters;
 using SolSharp.Core.Primitives;
 using SolSharp.Rpc.Models;
+using SolSharp.Rpc.Models.Parsed;
 using SolSharp.Rpc.Protocol;
 
 namespace SolSharp.Rpc;
@@ -726,6 +727,56 @@ public class SolanaRpcClient(HttpClient httpClient)
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
         => SendAsync<Block?>(RpcRequests.GetBlock(slot, commitment), cancellationToken);
+
+    /// <summary>
+    /// Returns a confirmed transaction decoded by the node into <c>jsonParsed</c> form - recognized
+    /// instructions, token balances and logs without local Borsh decoding - or <c>null</c> if not found.
+    /// See <see href="https://solana.com/docs/rpc/http/gettransaction">getTransaction</see>.
+    /// </summary>
+    /// <param name="signature">The transaction signature (base58) to fetch.</param>
+    /// <param name="commitment">The commitment level to query at; defaults to <see cref="Commitment.Confirmed"/> when <c>null</c>.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The parsed transaction, or <c>null</c> if no transaction with that signature was found.</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<ParsedTransaction?> GetParsedTransactionAsync(
+        string signature,
+        Commitment? commitment = null,
+        CancellationToken cancellationToken = default)
+        => SendAsync<ParsedTransaction?>(
+            RpcRequests.GetParsedTransaction(signature, commitment ?? Commitment.Confirmed), cancellationToken);
+
+    /// <summary>
+    /// Returns a confirmed block whose transactions are decoded by the node into <c>jsonParsed</c> form, or
+    /// <c>null</c> if the slot was skipped. Each transaction's <see cref="ParsedTransaction.Slot"/> and
+    /// <see cref="ParsedTransaction.BlockTime"/> are filled in from the block.
+    /// See <see href="https://solana.com/docs/rpc/http/getblock">getBlock</see>.
+    /// </summary>
+    /// <param name="slot">The slot to fetch the block for.</param>
+    /// <param name="commitment">The commitment level to query at; defaults to <see cref="Commitment.Confirmed"/> when <c>null</c> (<c>processed</c> is not supported by the node).</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The block with parsed transactions, or <c>null</c> if the slot was skipped and produced no block.</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<ParsedBlock?> GetParsedBlockAsync(
+        ulong slot,
+        Commitment? commitment = null,
+        CancellationToken cancellationToken = default)
+    {
+        var block = await SendAsync<ParsedBlock?>(
+            RpcRequests.GetParsedBlock(slot, commitment ?? Commitment.Confirmed), cancellationToken);
+
+        if (block is null)
+            return null;
+
+        var transactions = block.Transactions
+            .Select(transaction => transaction with { Slot = slot, BlockTime = block.BlockTime })
+            .ToArray();
+
+        return block with { Transactions = transactions };
+    }
 
     private async Task<T> SendAsync<T>(RpcRequest request, CancellationToken cancellationToken)
     {

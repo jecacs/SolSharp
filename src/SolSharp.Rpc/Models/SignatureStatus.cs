@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 namespace SolSharp.Rpc.Models;
 
 /// <summary>The processing status of a transaction signature, as returned by <c>getSignatureStatuses</c>.</summary>
+/// <seealso href="https://solana.com/docs/rpc/http/getsignaturestatuses">getSignatureStatuses</seealso>
 public sealed record SignatureStatus
 {
     /// <summary>The slot the transaction was processed in.</summary>

@@ -1,15 +1,15 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using SolSharp.Rpc.Models;
+using SolSharp.Rpc.Models.Parsed;
 
 namespace SolSharp.Rpc.Streaming;
 
 /// <summary>
-/// A <c>blockSubscribe</c> notification: the block produced at <see cref="Slot"/>, or just the slot and an
-/// error when the block could not be produced.
+/// A <c>blockSubscribe</c> notification carrying a full <c>jsonParsed</c> block: the block produced at
+/// <see cref="Slot"/>, or just the slot and an error when the block could not be produced.
 /// </summary>
 /// <seealso href="https://solana.com/docs/rpc/websocket/blocksubscribe">blockSubscribe</seealso>
-public sealed record BlockNotification
+public sealed record ParsedBlockNotification
 {
     /// <summary>The slot this notification is for.</summary>
     [JsonPropertyName("slot")]
@@ -19,9 +19,9 @@ public sealed record BlockNotification
     [JsonPropertyName("err")]
     public JsonElement? Err { get; init; }
 
-    /// <summary>The produced block, or <c>null</c> when <see cref="Err"/> is set.</summary>
+    /// <summary>The produced block with parsed transactions, or <c>null</c> when <see cref="Err"/> is set.</summary>
     [JsonPropertyName("block")]
-    public Block? Block { get; init; }
+    public ParsedBlock? Block { get; init; }
 
     /// <summary>True when the block could not be produced (<see cref="Err"/> is present).</summary>
     [JsonIgnore]

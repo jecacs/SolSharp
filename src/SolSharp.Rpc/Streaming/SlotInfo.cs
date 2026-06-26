@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 namespace SolSharp.Rpc.Streaming;
 
 /// <summary>A slot-change notification payload from <c>slotSubscribe</c>.</summary>
+/// <seealso href="https://solana.com/docs/rpc/websocket/slotsubscribe">slotSubscribe</seealso>
 public sealed record SlotInfo
 {
     /// <summary>The parent slot.</summary>
