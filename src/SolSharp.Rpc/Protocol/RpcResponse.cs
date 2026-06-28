@@ -4,7 +4,7 @@ namespace SolSharp.Rpc.Protocol;
 
 /// <summary>A JSON-RPC 2.0 response envelope.</summary>
 /// <typeparam name="T">The type of the <see cref="Result"/> payload.</typeparam>
-public sealed record RpcResponse<T>
+internal sealed record RpcResponse<T>
 {
     /// <summary>The successful result, or <c>null</c> when the call returned an error.</summary>
     [JsonPropertyName("result")]

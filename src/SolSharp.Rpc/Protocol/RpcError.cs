@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace SolSharp.Rpc.Protocol;
 
 /// <summary>A JSON-RPC error object.</summary>
-public sealed record RpcError
+internal sealed record RpcError
 {
     /// <summary>The JSON-RPC error code.</summary>
     [JsonPropertyName("code")]

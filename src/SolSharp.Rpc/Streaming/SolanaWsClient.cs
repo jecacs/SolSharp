@@ -2,6 +2,8 @@ using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading.Channels;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using SolSharp.Core.Converters;
 using SolSharp.Core.Primitives;
 using SolSharp.Rpc.Models;
@@ -27,6 +29,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
     private readonly ConcurrentDictionary<long, Subscription> _byServerId = new();
     private readonly SemaphoreSlim _sendLock = new(1, 1);
     private readonly CancellationTokenSource _lifetimeCts = new();
+    private readonly ILogger _logger;
 
     private IWebSocketConnection? _connection;
     private Uri? _endpoint;
@@ -36,20 +39,24 @@ public sealed class SolanaWsClient : IAsyncDisposable
     private Task? _runLoop;
 
     /// <summary>Creates a client over a real <see cref="System.Net.WebSockets.ClientWebSocket"/> with default options.</summary>
-    public SolanaWsClient() : this(new SolanaWsClientOptions())
+    /// <param name="loggerFactory">Optional factory for connection/reconnection diagnostics; no logging when null.</param>
+    public SolanaWsClient(ILoggerFactory? loggerFactory = null) : this(new SolanaWsClientOptions(), loggerFactory)
     {
     }
 
     /// <summary>Creates a client over a real <see cref="System.Net.WebSockets.ClientWebSocket"/>.</summary>
     /// <param name="options">Connection options, including the auto-reconnect policy.</param>
-    public SolanaWsClient(SolanaWsClientOptions options) : this(() => new ClientWebSocketConnection(), options)
+    /// <param name="loggerFactory">Optional factory for connection/reconnection diagnostics; no logging when null.</param>
+    public SolanaWsClient(SolanaWsClientOptions options, ILoggerFactory? loggerFactory = null)
+        : this(() => new ClientWebSocketConnection(), options, loggerFactory)
     {
     }
 
-    internal SolanaWsClient(Func<IWebSocketConnection> connectionFactory, SolanaWsClientOptions options)
+    internal SolanaWsClient(Func<IWebSocketConnection> connectionFactory, SolanaWsClientOptions options, ILoggerFactory? loggerFactory = null)
     {
         _connectionFactory = connectionFactory;
         _options = options;
+        _logger = loggerFactory?.CreateLogger<SolanaWsClient>() ?? NullLogger<SolanaWsClient>.Instance;
     }
 
     internal SolanaWsClient(IWebSocketConnection connection)
@@ -463,8 +470,9 @@ public sealed class SolanaWsClient : IAsyncDisposable
             var requestId = Interlocked.Increment(ref _nextRequestId);
             await SendAsync(new RpcRequest { Id = requestId, Method = method, Params = [subscriptionId] }, CancellationToken.None);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogDebug(ex, "Solana WS unsubscribe '{Method}' (id {SubscriptionId}) failed", method, subscriptionId);
         }
     }
 
@@ -503,13 +511,18 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
             var reason = failure ?? new InvalidOperationException("The WebSocket connection was closed.");
 
+            _logger.LogWarning(reason, "Solana WS connection dropped: {Reason}", reason.Message);
+
             FaultPending(reason);
 
             if (!_options.AutoReconnect || !await TryReconnectAsync(token))
             {
+                _logger.LogError(reason, "Solana WS disconnected and not reconnected; completing {Count} subscription(s)", _active.Count);
                 CompleteAll(reason);
                 return;
             }
+
+            _logger.LogDebug("Solana WS reconnected; replaying {Count} subscription(s)", _active.Count);
 
             // Re-enter the receive loop below so it can route the acks; resubscribe off-thread to avoid a deadlock.
             _ = ResubscribeAllAsync(Volatile.Read(ref _connectionGeneration), token);
@@ -560,8 +573,9 @@ public sealed class SolanaWsClient : IAsyncDisposable
             {
                 return false;
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogDebug(ex, "Solana WS reconnect attempt {Attempt} failed; retrying in {Delay}", attempt + 1, delay);
                 delay = NextDelay(delay);
             }
         }
@@ -599,8 +613,9 @@ public sealed class SolanaWsClient : IAsyncDisposable
             {
                 return;
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogWarning(ex, "Solana WS failed to replay subscription '{Method}'", subscription.SubscribeMethod);
             }
         }
     }
@@ -657,14 +672,15 @@ public sealed class SolanaWsClient : IAsyncDisposable
         _byServerId.Clear();
     }
 
-    private static async Task SafeDisposeAsync(IWebSocketConnection connection)
+    private async Task SafeDisposeAsync(IWebSocketConnection connection)
     {
         try
         {
             await connection.DisposeAsync();
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogDebug(ex, "Solana WS connection dispose failed");
         }
     }
 

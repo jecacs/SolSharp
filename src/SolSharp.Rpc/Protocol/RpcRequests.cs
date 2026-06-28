@@ -3,7 +3,7 @@ using SolSharp.Core.Primitives;
 namespace SolSharp.Rpc.Protocol;
 
 /// <summary>Builds the JSON-RPC request for each supported method.</summary>
-public static class RpcRequests
+internal static class RpcRequests
 {
     public static RpcRequest GetLatestBlockhash(Commitment commitment) =>
         new() { Method = RpcMethods.GetLatestBlockhash, Params = [new { commitment }] };

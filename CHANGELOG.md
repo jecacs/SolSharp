@@ -4,6 +4,20 @@ All notable changes to SolSharp are documented here. The format is loosely based
 [Keep a Changelog](https://keepachangelog.com), and the project follows
 [semantic versioning](https://semver.org) — while on 0.x, minor releases may carry breaking changes.
 
+## [0.4.0]
+
+### Added
+
+- Optional `ILogger` diagnostics for `SolanaWsClient`: pass an `ILoggerFactory` to the constructor to surface
+  connection drops, reconnects, subscription replays, and unsubscribe/dispose failures that were previously
+  swallowed. Defaults to a no-op `NullLogger`, so behaviour is unchanged when no factory is supplied.
+
+### Changed
+
+- The JSON-RPC envelope plumbing — `RpcRequests`, `RpcRequest`, `RpcResponse<T>`, `RpcError` — is now
+  `internal`; it was never meant to be part of the public surface. Thrown exceptions (`RpcException`,
+  `TransactionFailedException`) and the streaming `RpcContextValue<T>` stay public.
+
 ## [0.3.0]
 
 ### Added
@@ -46,6 +60,7 @@ bundles four layered assemblies.
   transaction building, signing and serialization, `Transaction.Deserialize`, and instruction
   decompilation — every wire format validated byte-for-byte against the Rust `solana-sdk`.
 
+[0.4.0]: https://github.com/jecacs/SolSharp/releases/tag/v0.4.0
 [0.3.0]: https://github.com/jecacs/SolSharp/releases/tag/v0.3.0
 [0.2.0]: https://github.com/jecacs/SolSharp/releases/tag/v0.2.0
 [0.1.0]: https://github.com/jecacs/SolSharp/releases/tag/v0.1.0

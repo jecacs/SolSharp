@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace SolSharp.Rpc.Protocol;
 
 /// <summary>A JSON-RPC 2.0 request envelope.</summary>
-public sealed record RpcRequest
+internal sealed record RpcRequest
 {
     /// <summary>The JSON-RPC protocol version; always <c>"2.0"</c>.</summary>
     [JsonPropertyName("jsonrpc")]
