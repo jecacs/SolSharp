@@ -18,6 +18,7 @@ public static class MessageDecompileTests
         [Test]
         public void ReproducesAllFourAccountClasses()
         {
+            // Arrange
             var instruction = new Instruction
             {
                 ProgramId = Pk(9),
@@ -31,8 +32,10 @@ public static class MessageDecompileTests
                 Data = [7]
             };
 
+            // Act
             var message = Message.Compile(Pk(1), Pk(8).ToString(), [instruction]);
 
+            // Assert
             var decompiled = message.DecompileInstructions([]).Should().ContainSingle().Subject;
             decompiled.ProgramId.Should().Be(Pk(9));
             decompiled.Data.Should().Equal((byte)7);
@@ -54,6 +57,7 @@ public static class MessageDecompileTests
         [Test]
         public void ResolvesLookupTableAccounts()
         {
+            // Arrange
             var instruction = new Instruction
             {
                 ProgramId = Pk(9),
@@ -68,8 +72,10 @@ public static class MessageDecompileTests
             };
             var table = new AddressLookupTableAccount(Pk(5), [Pk(2), Pk(3), Pk(7)]);
 
+            // Act
             var message = MessageV0.Compile(Pk(1), Pk(8).ToString(), [instruction], [table]);
 
+            // Assert
             var decompiled = message.DecompileInstructions([table]).Should().ContainSingle().Subject;
             decompiled.ProgramId.Should().Be(Pk(9));
             decompiled.Data.Should().Equal((byte)1, 2);
@@ -86,6 +92,7 @@ public static class MessageDecompileTests
         [Test]
         public void WithoutTheTable_Throws()
         {
+            // Arrange
             var instruction = new Instruction
             {
                 ProgramId = Pk(9),
@@ -95,7 +102,10 @@ public static class MessageDecompileTests
             var table = new AddressLookupTableAccount(Pk(5), [Pk(2)]);
             var message = MessageV0.Compile(Pk(1), Pk(8).ToString(), [instruction], [table]);
 
+            // Act
             Action act = () => _ = message.DecompileInstructions([]);
+
+            // Assert
             act.Should().Throw<ArgumentException>();
         }
     }

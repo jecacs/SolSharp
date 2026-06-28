@@ -35,11 +35,14 @@ public static class RpcReadIntegrationTests
         [Test]
         public async Task ReportsHealthy()
         {
+            // Arrange
             using var provider = CreateProvider();
             var client = provider.GetRequiredService<SolanaRpcClient>();
 
+            // Act
             var healthy = await IntegrationEnvironment.CallAsync(() => client.GetHealthAsync());
 
+            // Assert
             healthy.Should().BeTrue();
         }
     }
@@ -51,11 +54,14 @@ public static class RpcReadIntegrationTests
         [Test]
         public async Task ReturnsCoreVersion()
         {
+            // Arrange
             using var provider = CreateProvider();
             var client = provider.GetRequiredService<SolanaRpcClient>();
 
+            // Act
             var version = await IntegrationEnvironment.CallAsync(() => client.GetVersionAsync());
 
+            // Assert
             version.SolanaCore.Should().NotBeNullOrEmpty();
         }
     }
@@ -67,9 +73,11 @@ public static class RpcReadIntegrationTests
         [Test]
         public async Task DecodesARecentMainnetTransaction()
         {
+            // Arrange
             using var provider = CreateProvider();
             var client = provider.GetRequiredService<SolanaRpcClient>();
 
+            // Act
             // A recent signature off a busy mint, then decode it via jsonParsed against the live node.
             var signatures = await IntegrationEnvironment.CallAsync(
                 () => client.GetSignaturesForAddressAsync(UsdcMint));
@@ -78,6 +86,7 @@ public static class RpcReadIntegrationTests
             var parsed = await IntegrationEnvironment.CallAsync(
                 () => client.GetParsedTransactionAsync(signatures[0].Signature));
 
+            // Assert
             parsed.Should().NotBeNull();
             parsed!.Message.AccountKeys.Should().NotBeEmpty();
             parsed.Message.Instructions.Should().NotBeEmpty();
@@ -88,16 +97,60 @@ public static class RpcReadIntegrationTests
 
     [TestFixture]
     [Category("Integration")]
+    public sealed class GetParsedAccountInfoAsync
+    {
+        [Test]
+        public async Task DecodesTheUsdcMintAsParsed()
+        {
+            // Arrange
+            using var provider = CreateProvider();
+            var client = provider.GetRequiredService<SolanaRpcClient>();
+
+            // Act
+            var account = await IntegrationEnvironment.CallAsync(() => client.GetParsedAccountInfoAsync(UsdcMint));
+
+            // Assert
+            account.Should().NotBeNull();
+            account!.Program.Should().Be("spl-token");
+            account.Parsed.Should().NotBeNull();
+            account.Parsed!.Type.Should().Be("mint");
+        }
+    }
+
+    [TestFixture]
+    [Category("Integration")]
+    public sealed class GetClusterNodesAsync
+    {
+        [Test]
+        public async Task ReturnsNodes()
+        {
+            // Arrange
+            using var provider = CreateProvider();
+            var client = provider.GetRequiredService<SolanaRpcClient>();
+
+            // Act
+            var nodes = await IntegrationEnvironment.CallAsync(() => client.GetClusterNodesAsync());
+
+            // Assert
+            nodes.Should().NotBeEmpty();
+        }
+    }
+
+    [TestFixture]
+    [Category("Integration")]
     public sealed class GetSlotAsync
     {
         [Test]
         public async Task IsPositive()
         {
+            // Arrange
             using var provider = CreateProvider();
             var client = provider.GetRequiredService<SolanaRpcClient>();
 
+            // Act
             var slot = await IntegrationEnvironment.CallAsync(() => client.GetSlotAsync());
 
+            // Assert
             slot.Should().BeGreaterThan(0);
         }
     }
@@ -109,11 +162,14 @@ public static class RpcReadIntegrationTests
         [Test]
         public async Task HasProgress()
         {
+            // Arrange
             using var provider = CreateProvider();
             var client = provider.GetRequiredService<SolanaRpcClient>();
 
+            // Act
             var epoch = await IntegrationEnvironment.CallAsync(() => client.GetEpochInfoAsync());
 
+            // Assert
             epoch.AbsoluteSlot.Should().BeGreaterThan(0);
             epoch.SlotsInEpoch.Should().BeGreaterThan(0);
         }
@@ -126,11 +182,14 @@ public static class RpcReadIntegrationTests
         [Test]
         public async Task IsPopulated()
         {
+            // Arrange
             using var provider = CreateProvider();
             var client = provider.GetRequiredService<SolanaRpcClient>();
 
+            // Act
             var blockhash = await IntegrationEnvironment.CallAsync(() => client.GetLatestBlockhashAsync());
 
+            // Assert
             blockhash.Blockhash.Should().NotBeNullOrEmpty();
             blockhash.LastValidBlockHeight.Should().BeGreaterThan(0);
         }
@@ -143,11 +202,14 @@ public static class RpcReadIntegrationTests
         [Test]
         public async Task HasCirculatingTotal()
         {
+            // Arrange
             using var provider = CreateProvider();
             var client = provider.GetRequiredService<SolanaRpcClient>();
 
+            // Act
             var supply = await IntegrationEnvironment.CallAsync(() => client.GetSupplyAsync());
 
+            // Assert
             supply.Total.Should().BeGreaterThan(0);
             supply.Circulating.Should().BeGreaterThan(0);
         }
@@ -160,11 +222,14 @@ public static class RpcReadIntegrationTests
         [Test]
         public async Task OfRentFundedAccount_IsPositive()
         {
+            // Arrange
             using var provider = CreateProvider();
             var client = provider.GetRequiredService<SolanaRpcClient>();
 
+            // Act
             var lamports = await IntegrationEnvironment.CallAsync(() => client.GetBalanceAsync(UsdcMint));
 
+            // Assert
             lamports.Should().BeGreaterThan(0);
         }
     }
@@ -176,11 +241,14 @@ public static class RpcReadIntegrationTests
         [Test]
         public async Task OfMint_IsOwnedByTokenProgram()
         {
+            // Arrange
             using var provider = CreateProvider();
             var client = provider.GetRequiredService<SolanaRpcClient>();
 
+            // Act
             var account = await IntegrationEnvironment.CallAsync(() => client.GetAccountInfoAsync(UsdcMint));
 
+            // Assert
             account.Should().NotBeNull();
             account!.Owner.Should().Be(TokenProgram);
             account.Data.Length.Should().Be(Mint.Length);
@@ -194,11 +262,14 @@ public static class RpcReadIntegrationTests
         [Test]
         public async Task DecodesUsdcState()
         {
+            // Arrange
             using var provider = CreateProvider();
             var client = provider.GetRequiredService<SolanaRpcClient>();
 
+            // Act
             var mint = await IntegrationEnvironment.CallAsync(() => client.GetMintAsync(UsdcMint));
 
+            // Assert
             mint.Should().NotBeNull();
             mint!.Decimals.Should().Be(6);
             mint.IsInitialized.Should().BeTrue();
@@ -213,11 +284,14 @@ public static class RpcReadIntegrationTests
         [Test]
         public async Task OfUsdc_HasSixDecimals()
         {
+            // Arrange
             using var provider = CreateProvider();
             var client = provider.GetRequiredService<SolanaRpcClient>();
 
+            // Act
             var supply = await IntegrationEnvironment.CallAsync(() => client.GetTokenSupplyAsync(UsdcMint));
 
+            // Assert
             supply.Decimals.Should().Be(6);
             supply.Amount.Should().NotBeNullOrEmpty();
             supply.UiAmount.Should().BeGreaterThan(0);
@@ -231,12 +305,15 @@ public static class RpcReadIntegrationTests
         [Test]
         public async Task IsPositive()
         {
+            // Arrange
             using var provider = CreateProvider();
             var client = provider.GetRequiredService<SolanaRpcClient>();
 
+            // Act
             var lamports = await IntegrationEnvironment.CallAsync(
                 () => client.GetMinimumBalanceForRentExemptionAsync(TokenAccountSize));
 
+            // Assert
             lamports.Should().BeGreaterThan(0);
         }
     }
@@ -248,9 +325,11 @@ public static class RpcReadIntegrationTests
         [Test]
         public async Task ThenFetchTransaction()
         {
+            // Arrange
             using var provider = CreateProvider();
             var client = provider.GetRequiredService<SolanaRpcClient>();
 
+            // Act
             var signatures = await IntegrationEnvironment.CallAsync(
                 () => client.GetSignaturesForAddressAsync(UsdcMint, new GetSignaturesForAddressOptions { Limit = 5 }));
 
@@ -265,6 +344,7 @@ public static class RpcReadIntegrationTests
             if (transaction is null)
                 Assert.Inconclusive("The referenced transaction was not available from the endpoint.");
 
+            // Assert
             transaction!.Slot.Should().BeGreaterThan(0);
         }
     }
@@ -276,9 +356,11 @@ public static class RpcReadIntegrationTests
         [Test]
         public async Task ReturnsRecentBlock()
         {
+            // Arrange
             using var provider = CreateProvider();
             var client = provider.GetRequiredService<SolanaRpcClient>();
 
+            // Act
             var slot = await IntegrationEnvironment.CallAsync(() => client.GetSlotAsync());
 
             // Step back from the tip: the most recent slots may be skipped or not yet available.
@@ -292,6 +374,7 @@ public static class RpcReadIntegrationTests
             if (block is null)
                 Assert.Inconclusive("No recent block was available from the endpoint.");
 
+            // Assert
             block!.Blockhash.Should().NotBeNullOrEmpty();
             block.ParentSlot.Should().BeGreaterThan(0);
         }

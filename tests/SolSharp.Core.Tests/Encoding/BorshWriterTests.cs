@@ -13,8 +13,10 @@ public static class BorshWriterTests
         [Test]
         public void RoundTripsThroughBorshReader()
         {
+            // Arrange
             var pubkey = new PublicKey(Enumerable.Repeat((byte)9, PublicKey.Length).ToArray());
 
+            // Act
             var writer = new BorshWriter();
             writer.WriteU8(42);
             writer.WriteI8(-5);
@@ -35,6 +37,7 @@ public static class BorshWriterTests
             writer.WriteBytes([0xAA, 0xBB]);   // raw, no length prefix
             writer.WriteByteVector([1, 2, 3]);
 
+            // Assert
             writer.Length.Should().Be(writer.ToArray().Length);
 
             var reader = new BorshReader(writer.ToArray());
@@ -62,18 +65,26 @@ public static class BorshWriterTests
         [Test]
         public void WritesLittleEndian()
         {
+            // Arrange
             var writer = new BorshWriter();
+
+            // Act
             writer.WriteU64(1_000_000);
 
+            // Assert
             Convert.ToHexString(writer.ToArray()).ToLowerInvariant().Should().Be("40420f0000000000");
         }
 
         [Test]
         public void WriteLength_WritesAU32Prefix()
         {
+            // Arrange
             var writer = new BorshWriter();
+
+            // Act
             writer.WriteLength(300);
 
+            // Assert
             var reader = new BorshReader(writer.ToArray());
             reader.ReadU32().Should().Be(300u);
             reader.Remaining.Should().Be(0);
@@ -82,9 +93,13 @@ public static class BorshWriterTests
         [Test]
         public void WriteLength_NegativeThrows()
         {
+            // Arrange
             var writer = new BorshWriter();
+
+            // Act
             Action act = () => writer.WriteLength(-1);
 
+            // Assert
             act.Should().Throw<ArgumentOutOfRangeException>();
         }
     }

@@ -45,11 +45,14 @@ public static class TransactionTests
         [Test]
         public void SystemTransfer_MatchesSolanaSdk()
         {
+            // Arrange
             var transaction = BuildTransfer(out var payer);
             using (payer)
             {
+                // Act
                 transaction.Sign(payer);
 
+                // Assert
                 transaction.Serialize().Should().Equal(Hex(SignedTransferHex));
                 transaction.ToBase64().Should().Be(Convert.ToBase64String(Hex(SignedTransferHex)));
             }
@@ -58,11 +61,15 @@ public static class TransactionTests
         [Test]
         public void NonRequiredSigner_Throws()
         {
+            // Arrange
             var transaction = BuildTransfer(out var payer);
             using var stranger = Keypair.Generate();
             using (payer)
             {
+                // Act
                 Action act = () => transaction.Sign(stranger);
+
+                // Assert
                 act.Should().Throw<ArgumentException>();
             }
         }
@@ -74,11 +81,14 @@ public static class TransactionTests
         [Test]
         public void Unsigned_LeavesSignatureSlotZeroed()
         {
+            // Arrange
             var transaction = BuildTransfer(out var payer);
             using (payer)
             {
+                // Act
                 var bytes = transaction.Serialize();
 
+                // Assert
                 bytes[0].Should().Be(1); // ShortVec(1): one signature slot
                 bytes.Skip(1).Take(Transaction.SignatureLength).Should().OnlyContain(b => b == 0);
             }

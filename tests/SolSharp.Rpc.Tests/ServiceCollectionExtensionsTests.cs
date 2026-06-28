@@ -16,10 +16,12 @@ public static class ServiceCollectionExtensionsTests
         [Test]
         public void EndpointOverload_ResolvesClientWithBaseAddress()
         {
+            // Arrange
             var services = new ServiceCollection();
             services.AddSolanaRpc("https://example.com/rpc");
             var provider = services.BuildServiceProvider();
 
+            // Act & Assert
             provider.GetRequiredService<SolanaRpcClient>().Should().NotBeNull();
 
             var http = provider.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(SolanaRpcClient));
@@ -29,10 +31,12 @@ public static class ServiceCollectionExtensionsTests
         [Test]
         public void ConfigureOverload_AppliesEndpointToOptions()
         {
+            // Arrange
             var services = new ServiceCollection();
             services.AddSolanaRpc(options => options.Endpoint = "https://node.example/rpc");
             var provider = services.BuildServiceProvider();
 
+            // Act & Assert
             provider.GetRequiredService<IOptions<SolanaRpcOptions>>().Value.Endpoint
                 .Should().Be("https://node.example/rpc");
         }
@@ -44,30 +48,39 @@ public static class ServiceCollectionExtensionsTests
         [Test]
         public void RejectsNonHttpEndpoint()
         {
+            // Arrange
             var provider = ProviderFor("ftp://example.com");
 
+            // Act
             Action act = () => _ = provider.GetRequiredService<IOptions<SolanaRpcOptions>>().Value;
 
+            // Assert
             act.Should().Throw<OptionsValidationException>();
         }
 
         [Test]
         public void RejectsEmptyEndpoint()
         {
+            // Arrange
             var provider = ProviderFor("");
 
+            // Act
             Action act = () => _ = provider.GetRequiredService<IOptions<SolanaRpcOptions>>().Value;
 
+            // Assert
             act.Should().Throw<OptionsValidationException>();
         }
 
         [Test]
         public void AcceptsValidHttpsEndpoint()
         {
+            // Arrange
             var provider = ProviderFor("https://api.devnet.solana.com");
 
+            // Act
             Action act = () => _ = provider.GetRequiredService<IOptions<SolanaRpcOptions>>().Value;
 
+            // Assert
             act.Should().NotThrow();
         }
 
@@ -85,6 +98,7 @@ public static class ServiceCollectionExtensionsTests
         [Test]
         public async Task RetriesTransientFailure()
         {
+            // Arrange
             var handler = new SequenceHandler(
                 new HttpResponseMessage(HttpStatusCode.ServiceUnavailable),
                 Json("""{"jsonrpc":"2.0","result":123,"id":1}"""));
@@ -104,6 +118,7 @@ public static class ServiceCollectionExtensionsTests
 
             var client = services.BuildServiceProvider().GetRequiredService<SolanaRpcClient>();
 
+            // Act & Assert
             (await client.GetSlotAsync()).Should().Be(123);
             handler.CallCount.Should().Be(2);
         }

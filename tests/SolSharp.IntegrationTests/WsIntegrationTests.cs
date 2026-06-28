@@ -18,6 +18,7 @@ public static class WsIntegrationTests
         [Test]
         public async Task ReceivesNotification()
         {
+            // Arrange & Act
             SlotInfo? observed = null;
             try
             {
@@ -37,6 +38,7 @@ public static class WsIntegrationTests
                 Assert.Inconclusive($"Skipped: the WebSocket endpoint was unavailable ({exception.GetType().Name}).");
             }
 
+            // Assert
             observed.Should().NotBeNull();
             observed!.Slot.Should().BeGreaterThan(0);
         }

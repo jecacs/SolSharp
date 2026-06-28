@@ -41,8 +41,10 @@ public static class SolanaRpcClientTokenStateTests
         [Test]
         public void DecodesMint_MatchingSolders()
         {
+            // Act
             var mint = Mint.Decode(Convert.FromBase64String(MintBase64));
 
+            // Assert
             mint.Should().NotBeNull();
             mint!.MintAuthority.Should().Be(Pk(1));
             mint.Supply.Should().Be(1_000_000ul);
@@ -58,8 +60,10 @@ public static class SolanaRpcClientTokenStateTests
         [Test]
         public void DecodesTokenAccount_MatchingSolders()
         {
+            // Act
             var account = TokenAccount.Decode(Convert.FromBase64String(TokenAccountBase64));
 
+            // Assert
             account.Should().NotBeNull();
             account!.Mint.Should().Be(Pk(2));
             account.Owner.Should().Be(Pk(3));
@@ -80,10 +84,13 @@ public static class SolanaRpcClientTokenStateTests
         [Test]
         public async Task FetchesAndDecodes()
         {
+            // Arrange
             var (client, handler) = Make(AccountEnvelope(MintBase64));
 
+            // Act
             var mint = await client.GetMintAsync(Pk(1));
 
+            // Assert
             mint.Should().NotBeNull();
             mint!.Decimals.Should().Be(6);
             handler.CapturedRequestBody.Should().Contain("\"getAccountInfo\"");
@@ -96,10 +103,13 @@ public static class SolanaRpcClientTokenStateTests
         [Test]
         public async Task FetchesAndDecodes()
         {
+            // Arrange
             var (client, _) = Make(AccountEnvelope(TokenAccountBase64));
 
+            // Act
             var account = await client.GetTokenAccountAsync(Pk(2));
 
+            // Assert
             account.Should().NotBeNull();
             account!.Amount.Should().Be(5_000_000ul);
         }

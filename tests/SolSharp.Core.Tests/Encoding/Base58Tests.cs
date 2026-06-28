@@ -35,8 +35,10 @@ public static class Base58Tests
         [Test]
         public void RealPubkey_RoundTripsBackToSameString()
         {
+            // Act
             var decoded = Base58.Decode(SolanaProgramIds.TokenProgram);
 
+            // Assert
             decoded.Should().HaveCount(32);
             Base58.Encode(decoded).Should().Be(SolanaProgramIds.TokenProgram);
         }
@@ -44,8 +46,10 @@ public static class Base58Tests
         [Test]
         public void RandomBytes_RoundTrip()
         {
+            // Arrange
             var rng = new Random(1234);
 
+            // Act & Assert
             for (var i = 0; i < 500; i++)
             {
                 var bytes = new byte[rng.Next(0, 64)];

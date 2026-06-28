@@ -18,11 +18,14 @@ public static class SystemProgramTests
         [Test]
         public void MatchesSolanaSdk()
         {
+            // Arrange
             var from = Key(1);
             var to = Key(2);
 
+            // Act
             var instruction = SystemProgram.Transfer(from, to, 1_000_000);
 
+            // Assert
             instruction.ProgramId.Should().Be(PublicKey.Parse(SolanaProgramIds.SystemProgram));
             instruction.Data.Should().Equal(Hex("0200000040420f0000000000"));
             instruction.Accounts.Should().HaveCount(2);
@@ -42,12 +45,15 @@ public static class SystemProgramTests
         [Test]
         public void MatchesSolanaSdk()
         {
+            // Arrange
             var from = Key(1);
             var newAccount = Key(2);
             var owner = Key(9);
 
+            // Act
             var instruction = SystemProgram.CreateAccount(from, newAccount, 2_039_280, 165, owner);
 
+            // Assert
             instruction.Data.Should().Equal(Hex(
                 "00000000f01d1f0000000000a500000000000000" +
                 "0909090909090909090909090909090909090909090909090909090909090909"));
@@ -74,8 +80,10 @@ public static class SystemProgramTests
         [Test]
         public void MatchesSolanaSdk()
         {
+            // Act
             var instruction = SystemProgram.Assign(Key(2), Key(9));
 
+            // Assert
             instruction.Data.Should().Equal(Hex("010000000909090909090909090909090909090909090909090909090909090909090909"));
             Metas(instruction).Should().Equal((Key(2), true, true));
         }
@@ -88,8 +96,10 @@ public static class SystemProgramTests
         [Test]
         public void MatchesSolanaSdk()
         {
+            // Act
             var instruction = SystemProgram.Allocate(Key(2), 200);
 
+            // Assert
             instruction.Data.Should().Equal(Hex("08000000c800000000000000"));
             Metas(instruction).Should().Equal((Key(2), true, true));
         }
@@ -102,8 +112,10 @@ public static class SystemProgramTests
         [Test]
         public void MatchesSolanaSdk()
         {
+            // Act
             var instruction = SystemProgram.CreateAccountWithSeed(Key(1), Key(8), Key(2), "hello", 42, 100, Key(9));
 
+            // Assert
             instruction.Data.Should().Equal(Hex(
                 "030000000202020202020202020202020202020202020202020202020202020202020202050000000000000068656c6c6f2a0000000000000064000000000000000909090909090909090909090909090909090909090909090909090909090909"));
             Metas(instruction).Should().Equal((Key(1), true, true), (Key(8), false, true), (Key(2), true, false));
@@ -117,8 +129,10 @@ public static class SystemProgramTests
         [Test]
         public void MatchesSolanaSdk()
         {
+            // Act
             var instruction = SystemProgram.InitializeNonceAccount(Key(2), Key(3));
 
+            // Assert
             instruction.Data.Should().Equal(Hex("060000000303030303030303030303030303030303030303030303030303030303030303"));
             Metas(instruction).Should().Equal((Key(2), false, true), (RecentBlockhashes, false, false), (Rent, false, false));
         }
@@ -131,8 +145,10 @@ public static class SystemProgramTests
         [Test]
         public void MatchesSolanaSdk()
         {
+            // Act
             var instruction = SystemProgram.AdvanceNonceAccount(Key(2), Key(3));
 
+            // Assert
             instruction.Data.Should().Equal(Hex("04000000"));
             Metas(instruction).Should().Equal((Key(2), false, true), (RecentBlockhashes, false, false), (Key(3), true, false));
         }
@@ -145,8 +161,10 @@ public static class SystemProgramTests
         [Test]
         public void MatchesSolanaSdk()
         {
+            // Act
             var instruction = SystemProgram.WithdrawNonceAccount(Key(2), Key(3), Key(5), 1000);
 
+            // Assert
             instruction.Data.Should().Equal(Hex("05000000e803000000000000"));
             Metas(instruction).Should().Equal(
                 (Key(2), false, true),
@@ -164,8 +182,10 @@ public static class SystemProgramTests
         [Test]
         public void MatchesSolanaSdk()
         {
+            // Act
             var instruction = SystemProgram.AuthorizeNonceAccount(Key(2), Key(3), Key(7));
 
+            // Assert
             instruction.Data.Should().Equal(Hex("070000000707070707070707070707070707070707070707070707070707070707070707"));
             Metas(instruction).Should().Equal((Key(2), false, true), (Key(3), true, false));
         }

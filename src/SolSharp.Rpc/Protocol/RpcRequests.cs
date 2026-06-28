@@ -246,6 +246,38 @@ public static class RpcRequests
                 }
             ]
         };
+
+    public static RpcRequest GetVoteAccounts(Commitment commitment) =>
+        new() { Method = RpcMethods.GetVoteAccounts, Params = [new { commitment }] };
+
+    public static RpcRequest GetInflationReward(IReadOnlyList<PublicKey> addresses, ulong? epoch, Commitment commitment) =>
+        new() { Method = RpcMethods.GetInflationReward, Params = [addresses, new { commitment, epoch }] };
+
+    public static RpcRequest GetLeaderSchedule(ulong? slot, Commitment commitment)
+    {
+        // The slot stays in position 0 even when absent: the node expects a u64-or-null there, so a bare
+        // [config] would be misread as the slot. null! puts a literal JSON null without the nullable warning.
+        object[] parameters = slot is { } s
+            ? [s, new { commitment }]
+            : [null!, new { commitment }];
+
+        return new RpcRequest { Method = RpcMethods.GetLeaderSchedule, Params = parameters };
+    }
+
+    public static RpcRequest GetBlocks(ulong startSlot, ulong? endSlot, Commitment commitment)
+    {
+        object[] parameters = endSlot is { } end
+            ? [startSlot, end, new { commitment }]
+            : [startSlot, new { commitment }];
+
+        return new RpcRequest { Method = RpcMethods.GetBlocks, Params = parameters };
+    }
+
+    public static RpcRequest GetClusterNodes() =>
+        new() { Method = RpcMethods.GetClusterNodes };
+
+    public static RpcRequest GetParsedAccountInfo(PublicKey account, Commitment commitment) =>
+        new() { Method = RpcMethods.GetAccountInfo, Params = [account, new { encoding = "jsonParsed", commitment }] };
 }
 
 internal static class RpcMethods
@@ -278,4 +310,9 @@ internal static class RpcMethods
     public const string GetSupply = "getSupply";
     public const string GetTokenLargestAccounts = "getTokenLargestAccounts";
     public const string GetBlock = "getBlock";
+    public const string GetVoteAccounts = "getVoteAccounts";
+    public const string GetInflationReward = "getInflationReward";
+    public const string GetLeaderSchedule = "getLeaderSchedule";
+    public const string GetBlocks = "getBlocks";
+    public const string GetClusterNodes = "getClusterNodes";
 }

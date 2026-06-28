@@ -19,11 +19,14 @@ public static class SolanaRpcClientGetTransactionTests
         [Test]
         public async Task ParsesSlotBlockTimeAndMeta()
         {
+            // Arrange
             var (client, handler) = Make(
                 """{"jsonrpc":"2.0","result":{"slot":100,"blockTime":1700000000,"transaction":["AQID","base64"],"meta":{"err":null,"fee":5000,"preBalances":[100,200],"postBalances":[95,205],"logMessages":["Program log: ok"],"computeUnitsConsumed":1234},"version":0},"id":1}""");
 
+            // Act
             var transaction = await client.GetTransactionAsync("Sig1111");
 
+            // Assert
             transaction.Should().NotBeNull();
             transaction!.Slot.Should().Be(100);
             transaction.BlockTime.Should().Be(1700000000);
@@ -46,21 +49,27 @@ public static class SolanaRpcClientGetTransactionTests
         [Test]
         public async Task ReturnsNullWhenNotFound()
         {
+            // Arrange
             var (client, _) = Make("""{"jsonrpc":"2.0","result":null,"id":1}""");
 
+            // Act
             var transaction = await client.GetTransactionAsync("Sig1111");
 
+            // Assert
             transaction.Should().BeNull();
         }
 
         [Test]
         public async Task SurfacesErrAsIsError()
         {
+            // Arrange
             var (client, _) = Make(
                 """{"jsonrpc":"2.0","result":{"slot":7,"blockTime":null,"meta":{"err":{"InstructionError":[0,"Custom"]},"fee":5000}},"id":1}""");
 
+            // Act
             var transaction = await client.GetTransactionAsync("Sig1111");
 
+            // Assert
             transaction!.Meta!.IsError.Should().BeTrue();
             var error = transaction.Meta!.Error!;
             error.Kind.Should().Be("InstructionError");
@@ -70,11 +79,14 @@ public static class SolanaRpcClientGetTransactionTests
         [Test]
         public async Task ParsesTokenBalancesInnerInstructionsAndLoadedAddresses()
         {
+            // Arrange
             var (client, _) = Make(
                 """{"jsonrpc":"2.0","result":{"slot":100,"transaction":["AQID","base64"],"meta":{"err":null,"fee":5000,"preTokenBalances":[{"accountIndex":1,"mint":"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v","owner":"11111111111111111111111111111111","uiTokenAmount":{"amount":"1000000","decimals":6,"uiAmount":1.0,"uiAmountString":"1"}}],"postTokenBalances":[{"accountIndex":1,"mint":"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v","owner":"11111111111111111111111111111111","uiTokenAmount":{"amount":"2000000","decimals":6,"uiAmount":2.0,"uiAmountString":"2"}}],"innerInstructions":[{"index":0,"instructions":[{"programIdIndex":5,"accounts":[1,2,3],"data":"3Bxs","stackHeight":2}]}],"loadedAddresses":{"writable":["So11111111111111111111111111111111111111112"],"readonly":["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"]}}},"id":1}""");
 
+            // Act
             var meta = (await client.GetTransactionAsync("Sig1111"))!.Meta!;
 
+            // Assert
             var pre = meta.PreTokenBalances.Should().ContainSingle().Subject;
             pre.AccountIndex.Should().Be(1);
             pre.Mint.Should().Be(PublicKey.Parse("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"));

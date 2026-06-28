@@ -5,7 +5,7 @@
     <PackageId>SolSharp</PackageId>
     <IsPackable>true</IsPackable>
     <Description>A lean, dependency-light .NET 8 SDK for Solana. JSON-RPC reads, send/simulate, and multiplexed WebSocket streaming; Ed25519 keys and signing; SPL Token, PDA, and ATA helpers; and spec-accurate legacy and v0 (versioned) transaction building, signing, and decoding — every wire format checked byte-for-byte against the Rust solana-sdk. Ships as one package bundling the Core, Wallet, Rpc, and Programs assemblies.</Description>
-    <PackageReleaseNotes>0.2.0 adds a jsonParsed read path - GetParsedTransactionAsync / GetParsedBlockAsync / SubscribeParsedBlocksAsync - returning node-decoded instructions, token balances and logs, with each instruction keeping both its parsed and raw form. Follows semantic versioning; while on 0.x, minor releases may carry breaking changes. Changelog: https://github.com/jecacs/SolSharp/blob/main/CHANGELOG.md</PackageReleaseNotes>
+    <PackageReleaseNotes>0.3.0 adds more cluster reads - GetVoteAccountsAsync, GetInflationRewardAsync, GetLeaderScheduleAsync, GetBlocksAsync and GetClusterNodesAsync - plus a jsonParsed account path: GetParsedAccountInfoAsync and SubscribeParsedAccountAsync, decoding a recognized account to a typed Parsed view and falling back to raw bytes when the owning program is unknown. Follows semantic versioning; while on 0.x, minor releases may carry breaking changes. Changelog: https://github.com/jecacs/SolSharp/blob/main/CHANGELOG.md</PackageReleaseNotes>
     <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);BundleProjectReferences</TargetsForTfmSpecificBuildOutput>
   </PropertyGroup>
 

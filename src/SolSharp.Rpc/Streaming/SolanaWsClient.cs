@@ -5,6 +5,7 @@ using System.Threading.Channels;
 using SolSharp.Core.Converters;
 using SolSharp.Core.Primitives;
 using SolSharp.Rpc.Models;
+using SolSharp.Rpc.Models.Parsed;
 using SolSharp.Rpc.Protocol;
 
 namespace SolSharp.Rpc.Streaming;
@@ -138,6 +139,30 @@ public sealed class SolanaWsClient : IAsyncDisposable
     {
         var sink = new SubscriptionSink<RpcContextValue<AccountInfo>>();
         object[] parameters = [account, new { encoding = "base64", commitment }];
+        var subscription = await RegisterAsync("accountSubscribe", parameters, "accountUnsubscribe", sink, cancellationToken);
+
+        cancellationToken.Register(() => Cancel(subscription, cancellationToken));
+        return sink.Reader;
+    }
+
+    /// <summary>
+    /// Subscribes to changes to <paramref name="account"/>, decoded with <c>jsonParsed</c> encoding, delivered
+    /// through a channel. Cancelling <paramref name="cancellationToken"/> unsubscribes and completes the channel.
+    /// See <see href="https://solana.com/docs/rpc/websocket/accountsubscribe">accountSubscribe</see>.
+    /// </summary>
+    /// <param name="account">The account to watch.</param>
+    /// <param name="commitment">The commitment level to query at.</param>
+    /// <param name="cancellationToken">Unsubscribes and completes the channel when cancelled.</param>
+    /// <returns>A channel reader of parsed account notifications, each carrying its slot context and the decoded account.</returns>
+    /// <exception cref="InvalidOperationException">The node rejected the subscription, or the connection closed.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled before the subscription was confirmed.</exception>
+    public async Task<ChannelReader<RpcContextValue<ParsedAccountInfo>>> SubscribeParsedAccountAsync(
+        PublicKey account,
+        Commitment commitment = Commitment.Confirmed,
+        CancellationToken cancellationToken = default)
+    {
+        var sink = new SubscriptionSink<RpcContextValue<ParsedAccountInfo>>();
+        object[] parameters = [account, new { encoding = "jsonParsed", commitment }];
         var subscription = await RegisterAsync("accountSubscribe", parameters, "accountUnsubscribe", sink, cancellationToken);
 
         cancellationToken.Register(() => Cancel(subscription, cancellationToken));

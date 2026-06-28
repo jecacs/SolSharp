@@ -32,8 +32,10 @@ public static class KeypairParsingTests
         [Test]
         public void SecretKey_DerivesPublicKeyAndSigns()
         {
+            // Act
             using var keypair = Keypair.FromBase58String(SecretBase58);
 
+            // Assert
             keypair.PublicKey.Should().Be(ExpectedPublicKey);
             keypair.Sign([]).Should().Equal(Convert.FromHexString(SignatureHex));
         }
@@ -41,21 +43,30 @@ public static class KeypairParsingTests
         [Test]
         public void Seed_DerivesPublicKey()
         {
+            // Act
             using var keypair = Keypair.FromBase58String(SeedBase58);
+
+            // Assert
             keypair.PublicKey.Should().Be(ExpectedPublicKey);
         }
 
         [Test]
         public void SurroundingWhitespace_IsTolerated()
         {
+            // Act
             using var keypair = Keypair.FromBase58String($"  {SecretBase58}\n");
+
+            // Assert
             keypair.PublicKey.Should().Be(ExpectedPublicKey);
         }
 
         [Test]
         public void NotBase58_Throws()
         {
+            // Act
             Action act = () => _ = Keypair.FromBase58String("O0Il");
+
+            // Assert
             act.Should().Throw<FormatException>();
         }
 
@@ -63,7 +74,10 @@ public static class KeypairParsingTests
         public void WrongDecodedLength_Throws()
         {
             // "1111111111" is base58 for ten zero bytes - a valid string of the wrong length.
+            // Act
             Action act = () => _ = Keypair.FromBase58String("1111111111");
+
+            // Assert
             act.Should().Throw<FormatException>();
         }
     }
@@ -74,8 +88,10 @@ public static class KeypairParsingTests
         [Test]
         public void SecretKeyArray_DerivesPublicKeyAndSigns()
         {
+            // Act
             using var keypair = Keypair.FromJsonArray(SecretJson);
 
+            // Assert
             keypair.PublicKey.Should().Be(ExpectedPublicKey);
             keypair.Sign([]).Should().Equal(Convert.FromHexString(SignatureHex));
         }
@@ -84,7 +100,10 @@ public static class KeypairParsingTests
         [TestCase("[-1]")]
         public void ValueOutOfByteRange_Throws(string json)
         {
+            // Act
             Action act = () => _ = Keypair.FromJsonArray(json);
+
+            // Assert
             act.Should().Throw<FormatException>();
         }
 
@@ -92,14 +111,20 @@ public static class KeypairParsingTests
         [TestCase("[1,2")]
         public void NotANumberArray_Throws(string json)
         {
+            // Act
             Action act = () => _ = Keypair.FromJsonArray(json);
+
+            // Assert
             act.Should().Throw<FormatException>();
         }
 
         [Test]
         public void WrongLength_Throws()
         {
+            // Act
             Action act = () => _ = Keypair.FromJsonArray("[1,2,3]");
+
+            // Assert
             act.Should().Throw<FormatException>();
         }
     }
@@ -110,8 +135,10 @@ public static class KeypairParsingTests
         [Test]
         public void SecretKey_DerivesPublicKeyAndSigns()
         {
+            // Act
             using var keypair = Keypair.FromHexString(SeedHex + PublicKeyHex);
 
+            // Assert
             keypair.PublicKey.Should().Be(ExpectedPublicKey);
             keypair.Sign([]).Should().Equal(Convert.FromHexString(SignatureHex));
         }
@@ -119,7 +146,10 @@ public static class KeypairParsingTests
         [Test]
         public void Seed_WithPrefix_DerivesPublicKey()
         {
+            // Act
             using var keypair = Keypair.FromHexString("0x" + SeedHex);
+
+            // Assert
             keypair.PublicKey.Should().Be(ExpectedPublicKey);
         }
 
@@ -146,8 +176,10 @@ public static class KeypairParsingTests
         [Test]
         public void SecretKey_DerivesPublicKeyAndSigns()
         {
+            // Act
             using var keypair = Keypair.FromBase64String(SecretBase64);
 
+            // Assert
             keypair.PublicKey.Should().Be(ExpectedPublicKey);
             keypair.Sign([]).Should().Equal(Convert.FromHexString(SignatureHex));
         }
@@ -155,16 +187,23 @@ public static class KeypairParsingTests
         [Test]
         public void Seed_DerivesPublicKey()
         {
+            // Arrange
             var seedBase64 = Convert.ToBase64String(Convert.FromHexString(SeedHex));
 
+            // Act
             using var keypair = Keypair.FromBase64String(seedBase64);
+
+            // Assert
             keypair.PublicKey.Should().Be(ExpectedPublicKey);
         }
 
         [Test]
         public void NotBase64_Throws()
         {
+            // Act
             Action act = () => _ = Keypair.FromBase64String("!!!!");
+
+            // Assert
             act.Should().Throw<FormatException>();
         }
 
@@ -172,7 +211,10 @@ public static class KeypairParsingTests
         public void WrongDecodedLength_Throws()
         {
             // "AQID" is base64 for the three bytes [1, 2, 3].
+            // Act
             Action act = () => _ = Keypair.FromBase64String("AQID");
+
+            // Assert
             act.Should().Throw<FormatException>();
         }
     }
@@ -183,44 +225,63 @@ public static class KeypairParsingTests
         [Test]
         public void Base58_IsDetected()
         {
+            // Act
             using var keypair = Keypair.Parse(SecretBase58);
+
+            // Assert
             keypair.PublicKey.Should().Be(ExpectedPublicKey);
         }
 
         [Test]
         public void Hex_IsDetected()
         {
+            // Act
             using var keypair = Keypair.Parse(SeedHex + PublicKeyHex);
+
+            // Assert
             keypair.PublicKey.Should().Be(ExpectedPublicKey);
         }
 
         [Test]
         public void HexWithPrefix_IsDetected()
         {
+            // Act
             using var keypair = Keypair.Parse("0x" + SeedHex);
+
+            // Assert
             keypair.PublicKey.Should().Be(ExpectedPublicKey);
         }
 
         [Test]
         public void Base64_IsDetected()
         {
+            // Arrange
             var secretBase64 = Convert.ToBase64String(Convert.FromHexString(SeedHex + PublicKeyHex));
 
+            // Act
             using var keypair = Keypair.Parse(secretBase64);
+
+            // Assert
             keypair.PublicKey.Should().Be(ExpectedPublicKey);
         }
 
         [Test]
         public void JsonArray_IsDetected()
         {
+            // Act
             using var keypair = Keypair.Parse(SecretJson);
+
+            // Assert
             keypair.PublicKey.Should().Be(ExpectedPublicKey);
         }
 
         [Test]
         public void LeadingWhitespaceBeforeJson_IsDetected()
         {
+            // Act
             using var keypair = Keypair.Parse($"  {SecretJson}");
+
+            // Assert
             keypair.PublicKey.Should().Be(ExpectedPublicKey);
         }
 
@@ -239,6 +300,7 @@ public static class KeypairParsingTests
         [Test]
         public void ValidKey_ReturnsTrueAndKeypair()
         {
+            // Act & Assert
             Keypair.TryParse(SecretBase58, out var keypair).Should().BeTrue();
 
             using (keypair)
@@ -249,6 +311,7 @@ public static class KeypairParsingTests
         [TestCase(null)]
         public void InvalidKey_ReturnsFalseAndNull(string? text)
         {
+            // Act & Assert
             Keypair.TryParse(text, out var keypair).Should().BeFalse();
             keypair.Should().BeNull();
         }

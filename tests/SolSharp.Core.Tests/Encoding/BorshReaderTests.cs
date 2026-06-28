@@ -20,6 +20,7 @@ public static class BorshReaderTests
         [Test]
         public void ReadsBorshPrimitivesInOrder()
         {
+            // Arrange
             var data = Convert.FromHexString(
                 "2a" +                      // u8 = 42
                 "78563412" +                // u32 = 0x12345678
@@ -31,8 +32,10 @@ public static class BorshReaderTests
                 "0909090909090909090909090909090909090909090909090909090909090909" + // pubkey [9]*32
                 "03000000" + "010203");     // Vec<u8> length 3, then 1, 2, 3
 
+            // Act
             var reader = new BorshReader(data);
 
+            // Assert
             reader.ReadU8().Should().Be(42);
             reader.ReadU32().Should().Be(0x12345678u);
             reader.ReadU64().Should().Be(1_000_000ul);
@@ -60,8 +63,10 @@ public static class BorshReaderTests
         [Test]
         public void ReadingPastEnd_Throws()
         {
+            // Act
             Action act = () => ReadU64From([1, 2]);
 
+            // Assert
             act.Should().Throw<FormatException>();
         }
 

@@ -31,7 +31,10 @@ public static class CommitmentTests
         [Test]
         public void UnknownValue_Throws()
         {
+            // Act
             Action act = () => JsonSerializer.Deserialize<Commitment>("\"bogus\"");
+
+            // Assert
             act.Should().Throw<JsonException>();
         }
     }

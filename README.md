@@ -18,7 +18,7 @@ wire format and the signing path, without dragging in a large dependency graph. 
 writing bots, indexers, or backend services that talk to Solana from .NET and care about
 speed and control, this is aimed at you.
 
-> **Status: 0.2.0 — stable release.** SolSharp ships as a single NuGet package — `SolSharp` —
+> **Status: 0.3.0 — stable release.** SolSharp ships as a single NuGet package — `SolSharp` —
 > bundling the Core (primitives + encodings), Wallet (Ed25519 keys, signing, verification), Rpc (HTTP
 > reads + send/simulate + WebSocket streaming + DI), and Programs (instructions + transaction building +
 > signing) assemblies. Versioning follows semver; while on 0.x, minor releases may still carry breaking
@@ -56,7 +56,7 @@ dotnet add package SolSharp
 ```
 
 ```xml
-<PackageReference Include="SolSharp" Version="0.2.0" />
+<PackageReference Include="SolSharp" Version="0.3.0" />
 ```
 
 | Assembly           | Purpose                                              | Status |
@@ -101,6 +101,7 @@ bool ok = PublicKey.TryParse(input, out var key);
   `getTransactionCount`, `getFeeForMessage`), and cluster state (`getBalance`, `getSlot`,
   `getLatestBlockhash`, `isBlockhashValid`, `getEpochInfo`, `getVersion`, `getHealth`, `getSupply`,
   `getSlotLeaders`, `getRecentPrioritizationFees`, `getTokenSupply`, `getMinimumBalanceForRentExemption`,
+  `getVoteAccounts`, `getInflationReward`, `getLeaderSchedule`, `getBlocks`, `getClusterNodes`,
   `requestAirdrop`); each typed, fully documented, and tested.
 - Account-state decoders — `Mint` and `TokenAccount` (SPL Token state, via `GetMintAsync` /
   `GetTokenAccountAsync`) and `AddressLookupTable`; for other programs, pair `getAccountInfo` with Core's
@@ -109,11 +110,11 @@ bool ok = PublicKey.TryParse(input, out var key);
   metadata — pre/post SOL and token balances, inner (CPI) instructions, loaded lookup-table addresses, logs,
   and compute units. Failures decode to a typed `TransactionError` (exposing the program's `Custom` code) on
   `TransactionMeta`, `SignatureStatus`, and `SimulateTransactionResult`.
-- `GetParsedTransactionAsync` / `GetParsedBlockAsync` return the node's `jsonParsed` decoding — typed
-  instructions, token balances, and logs without local Borsh work — each instruction keeping both its parsed
-  form and its raw program id / accounts / data.
+- `GetParsedTransactionAsync` / `GetParsedBlockAsync` / `GetParsedAccountInfoAsync` return the node's
+  `jsonParsed` decoding — typed instructions, token balances, account state, and logs without local Borsh
+  work — each instruction keeping both its parsed form and its raw program id / accounts / data.
 - WebSocket streaming multiplexed over one connection: `SubscribeSlotsAsync` and `SubscribeRootsAsync`
-  (`IAsyncEnumerable`), `SubscribeLogsAsync`, `SubscribeAccountAsync`, `SubscribeProgramAsync`,
+  (`IAsyncEnumerable`), `SubscribeLogsAsync`, `SubscribeAccountAsync`, `SubscribeParsedAccountAsync`, `SubscribeProgramAsync`,
   `SubscribeSignatureAsync`, `SubscribeBlocksAsync`, and `SubscribeParsedBlocksAsync` (`ChannelReader`), with
   automatic reconnect and resubscribe across dropped connections.
 - DI registration with a built-in resilience pipeline (retry on transient errors and HTTP 429).

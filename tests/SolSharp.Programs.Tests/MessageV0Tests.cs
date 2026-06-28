@@ -25,6 +25,7 @@ public static class MessageV0Tests
         [Test]
         public void DrainsAccountsIntoLookupTable_MatchesSolders()
         {
+            // Arrange
             var instruction = new Instruction
             {
                 ProgramId = Pk(9),
@@ -39,8 +40,10 @@ public static class MessageV0Tests
             };
             var table = new AddressLookupTableAccount(Pk(5), [Pk(2), Pk(3), Pk(7)]);
 
+            // Act
             var message = MessageV0.Compile(Pk(1), Blockhash(8), [instruction], [table]);
 
+            // Assert
             const string expected =
                 "8002000104010101010101010101010101010101010101010101010101010101010101010106060606060606060606060606060606060606060606060606060606060606060404040404040404040404040404040404040404040404040404040404040404090909090909090909090909090909090909090909090909090909090909090908080808080808080808080808080808080808080808080808080808080808080103040405020102010201050505050505050505050505050505050505050505050505050505050505050501000101";
             Convert.ToHexString(message.Serialize()).ToLowerInvariant().Should().Be(expected);
@@ -50,6 +53,7 @@ public static class MessageV0Tests
         [Test]
         public void WithNoLookupTables_MatchesSolders()
         {
+            // Arrange
             var instruction = new Instruction
             {
                 ProgramId = Pk(9),
@@ -61,8 +65,10 @@ public static class MessageV0Tests
                 Data = [2, 0, 0, 0, 0x40, 0x42, 0x0f, 0, 0, 0, 0, 0]
             };
 
+            // Act
             var message = MessageV0.Compile(Pk(1), Blockhash(8), [instruction], []);
 
+            // Assert
             const string expected =
                 "8001000103010101010101010101010101010101010101010101010101010101010101010102020202020202020202020202020202020202020202020202020202020202020909090909090909090909090909090909090909090909090909090909090909080808080808080808080808080808080808080808080808080808080808080801020200010c0200000040420f000000000000";
             Convert.ToHexString(message.Serialize()).ToLowerInvariant().Should().Be(expected);

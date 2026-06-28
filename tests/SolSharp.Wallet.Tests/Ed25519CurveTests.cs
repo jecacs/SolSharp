@@ -34,7 +34,10 @@ public static class Ed25519CurveTests
         {
             // The high bit of the last byte is the sign of x, not part of y, so flipping it must not
             // change the on-curve result (both encodings return true from solders).
+            // Arrange
             var key = Convert.FromHexString("c28a70a61c7510a1cd89216ca16cffcaea4987477e86dbccb97046fc2e18384e");
+
+            // Act & Assert
             Ed25519Curve.IsOnCurve(key).Should().BeTrue();
 
             key[31] |= 0x80;

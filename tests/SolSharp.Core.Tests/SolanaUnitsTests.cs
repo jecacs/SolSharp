@@ -19,7 +19,10 @@ public static class SolanaUnitsTests
         [Test]
         public void NegativeThrows()
         {
+            // Act
             Action act = () => SolanaUnits.SolToLamports(-1m);
+
+            // Assert
             act.Should().Throw<ArgumentOutOfRangeException>();
         }
     }

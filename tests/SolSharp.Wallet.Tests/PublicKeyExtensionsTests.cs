@@ -48,9 +48,11 @@ public static class PublicKeyExtensionsTests
         [Test]
         public void TamperedSignature_ReturnsFalse()
         {
+            // Arrange
             var signature = Hex(Test2Signature);
             signature[0] ^= 0x01;
 
+            // Act & Assert
             Key(Test2PublicKey).Verify(Hex(Test2Message), signature).Should().BeFalse();
         }
 
@@ -71,10 +73,12 @@ public static class PublicKeyExtensionsTests
         [Test]
         public void RoundTripsWithKeypairSignature()
         {
+            // Arrange
             using var keypair = Keypair.Generate();
             var message = "round-trip"u8;
             var signature = keypair.Sign(message);
 
+            // Act & Assert
             keypair.PublicKey.Verify(message, signature).Should().BeTrue();
             keypair.PublicKey.Verify("tampered"u8, signature).Should().BeFalse();
         }

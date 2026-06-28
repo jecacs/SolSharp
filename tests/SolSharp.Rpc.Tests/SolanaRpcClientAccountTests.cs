@@ -28,10 +28,13 @@ public static class SolanaRpcClientAccountTests
         [Test]
         public async Task ParsesTheAccountAndDecodesBase64Data()
         {
+            // Arrange
             var (client, handler) = Make(ContextEnvelope(AccountValueJson));
 
+            // Act
             var info = await client.GetAccountInfoAsync(PublicKey.Parse(OwnerBase58));
 
+            // Assert
             byte[] expectedData = [1, 2, 3];
             info.Should().NotBeNull();
             info!.Lamports.Should().Be(2039280);
@@ -48,20 +51,26 @@ public static class SolanaRpcClientAccountTests
         [Test]
         public async Task ReturnsNullWhenTheAccountDoesNotExist()
         {
+            // Arrange
             var (client, _) = Make(ContextEnvelope("null"));
 
+            // Act
             var info = await client.GetAccountInfoAsync(PublicKey.Parse(OwnerBase58));
 
+            // Assert
             info.Should().BeNull();
         }
 
         [Test]
         public async Task SendsDataSlice()
         {
+            // Arrange
             var (client, handler) = Make(ContextEnvelope(AccountValueJson));
 
+            // Act
             await client.GetAccountInfoAsync(PublicKey.Parse(OwnerBase58), dataSlice: new DataSlice(8, 32));
 
+            // Assert
             handler.CapturedRequestBody.Should().Contain("\"dataSlice\":{\"offset\":8,\"length\":32}");
         }
     }
@@ -72,11 +81,14 @@ public static class SolanaRpcClientAccountTests
         [Test]
         public async Task ParsesEachAccountAndPreservesNullSlots()
         {
+            // Arrange
             var (client, handler) = Make(ContextEnvelope($"[{AccountValueJson},null]"));
             PublicKey[] accounts = [PublicKey.Parse(OwnerBase58), PublicKey.Parse("11111111111111111111111111111111")];
 
+            // Act
             var infos = await client.GetMultipleAccountsAsync(accounts);
 
+            // Assert
             infos.Should().HaveCount(2);
             infos[0].Should().NotBeNull();
             infos[0]!.Lamports.Should().Be(2039280);
@@ -89,10 +101,13 @@ public static class SolanaRpcClientAccountTests
         [Test]
         public async Task ThrowsWhenAccountsIsNull()
         {
+            // Arrange
             var (client, _) = Make(ContextEnvelope("[]"));
 
+            // Act
             Func<Task> act = () => client.GetMultipleAccountsAsync(null!);
 
+            // Assert
             await act.Should().ThrowAsync<ArgumentNullException>();
         }
     }

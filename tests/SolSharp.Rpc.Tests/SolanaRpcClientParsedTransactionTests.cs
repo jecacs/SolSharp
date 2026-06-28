@@ -33,10 +33,13 @@ public static class SolanaRpcClientParsedTransactionTests
         [Test]
         public async Task ParsesSystemTransfer()
         {
+            // Arrange
             var (client, handler) = Make(Transfer);
 
+            // Act
             var tx = await client.GetParsedTransactionAsync("sig1aaaa");
 
+            // Assert
             tx.Should().NotBeNull();
             tx!.Slot.Should().Be(250000000);
             tx.BlockTime.Should().Be(1700000000);
@@ -72,10 +75,13 @@ public static class SolanaRpcClientParsedTransactionTests
         [Test]
         public async Task ParsesInnerInstructionsAndTokenBalances()
         {
+            // Arrange
             var (client, _) = Make(Inner);
 
+            // Act
             var tx = await client.GetParsedTransactionAsync("sig2bbbb");
 
+            // Assert
             var top = tx!.Message.Instructions.Should().ContainSingle().Subject;
             top.ProgramId.Should().Be(Key(Amm));
             top.Program.Should().BeNull();
@@ -104,10 +110,13 @@ public static class SolanaRpcClientParsedTransactionTests
         [Test]
         public async Task DecodesVersionedTransactionWithLoadedAddresses()
         {
+            // Arrange
             var (client, _) = Make(Versioned);
 
+            // Act
             var tx = await client.GetParsedTransactionAsync("sig3cccc");
 
+            // Assert
             tx.Should().NotBeNull();
             tx!.Meta!.LoadedAddresses.Should().NotBeNull();
             tx.Meta.LoadedAddresses!.Writable.Should().ContainSingle().Which.Should().Be(Key(V0Writable));
@@ -118,18 +127,23 @@ public static class SolanaRpcClientParsedTransactionTests
         [Test]
         public async Task ReturnsNullWhenNotFound()
         {
+            // Arrange
             var (client, _) = Make(NotFound);
 
+            // Act & Assert
             (await client.GetParsedTransactionAsync("missing")).Should().BeNull();
         }
 
         [Test]
         public async Task ToleratesMissingOptionalFields()
         {
+            // Arrange
             var (client, _) = Make(Malformed);
 
+            // Act
             var tx = await client.GetParsedTransactionAsync("sigX");
 
+            // Assert
             tx.Should().NotBeNull();
             tx!.Slot.Should().BeNull();
             tx.BlockTime.Should().BeNull();
@@ -145,10 +159,13 @@ public static class SolanaRpcClientParsedTransactionTests
         [Test]
         public async Task ParsesTransactionsAndFillsSlotAndBlockTime()
         {
+            // Arrange
             var (client, handler) = Make(BlockJson);
 
+            // Act
             var block = await client.GetParsedBlockAsync(250000000);
 
+            // Assert
             block.Should().NotBeNull();
             block!.Blockhash.Should().Be("BHash5block11111111111111111111111111111111");
             block.ParentSlot.Should().Be(249999999);

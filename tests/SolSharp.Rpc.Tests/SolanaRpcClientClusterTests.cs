@@ -22,11 +22,14 @@ public static class SolanaRpcClientClusterTests
         [Test]
         public async Task ParsesEpochInfo()
         {
+            // Arrange
             var (client, handler) = Make(
                 """{"jsonrpc":"2.0","result":{"absoluteSlot":200,"blockHeight":190,"epoch":5,"slotIndex":40,"slotsInEpoch":432000,"transactionCount":12345},"id":1}""");
 
+            // Act
             var info = await client.GetEpochInfoAsync();
 
+            // Assert
             info.AbsoluteSlot.Should().Be(200);
             info.Epoch.Should().Be(5);
             info.SlotsInEpoch.Should().Be(432000);
@@ -41,10 +44,13 @@ public static class SolanaRpcClientClusterTests
         [Test]
         public async Task ReturnsValueAndSendsBlockhash()
         {
+            // Arrange
             var (client, handler) = Make("""{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":true},"id":1}""");
 
+            // Act
             var valid = await client.IsBlockhashValidAsync(Blockhash);
 
+            // Assert
             valid.Should().BeTrue();
             handler.CapturedRequestBody.Should().Contain("\"isBlockhashValid\"");
             handler.CapturedRequestBody.Should().Contain(Blockhash);
@@ -57,11 +63,14 @@ public static class SolanaRpcClientClusterTests
         [Test]
         public async Task ReturnsFeeAndBase64EncodesMessage()
         {
+            // Arrange
             var (client, handler) = Make("""{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":5000},"id":1}""");
             byte[] message = [1, 2, 3];
 
+            // Act
             var fee = await client.GetFeeForMessageAsync(message);
 
+            // Assert
             fee.Should().Be(5000);
             handler.CapturedRequestBody.Should().Contain("\"getFeeForMessage\"");
             handler.CapturedRequestBody.Should().Contain(Convert.ToBase64String(message));
@@ -70,10 +79,13 @@ public static class SolanaRpcClientClusterTests
         [Test]
         public async Task ReturnsNullWhenBlockhashExpired()
         {
+            // Arrange
             var (client, _) = Make("""{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":null},"id":1}""");
 
+            // Act
             var fee = await client.GetFeeForMessageAsync([9]);
 
+            // Assert
             fee.Should().BeNull();
         }
     }
@@ -84,10 +96,13 @@ public static class SolanaRpcClientClusterTests
         [Test]
         public async Task ReturnsSignatureAndSendsLamports()
         {
+            // Arrange
             var (client, handler) = Make("""{"jsonrpc":"2.0","result":"AirdropSig111","id":1}""");
 
+            // Act
             var signature = await client.RequestAirdropAsync(PublicKey.Parse(Account), 1_000_000_000);
 
+            // Assert
             signature.Should().Be("AirdropSig111");
             handler.CapturedRequestBody.Should().Contain("\"requestAirdrop\"");
             handler.CapturedRequestBody.Should().Contain(Account);

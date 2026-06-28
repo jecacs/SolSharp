@@ -16,9 +16,11 @@ public static class PublicKeyTests
         [Test]
         public void ValidBytes_RoundTripToSameBytes()
         {
+            // Arrange
             var bytes = new byte[PublicKey.Length];
             Random.Shared.NextBytes(bytes);
 
+            // Act & Assert
             new PublicKey(bytes).ToBytes().Should().Equal(bytes);
         }
 
@@ -27,7 +29,10 @@ public static class PublicKeyTests
         [TestCase(33)]
         public void WrongLength_Throws(int length)
         {
+            // Act
             Action act = () => _ = new PublicKey(new byte[length]);
+
+            // Assert
             act.Should().Throw<ArgumentException>();
         }
     }
@@ -45,7 +50,10 @@ public static class PublicKeyTests
         [TestCase("abc")] // valid alphabet, wrong length
         public void Invalid_Throws(string input)
         {
+            // Act
             Action act = () => PublicKey.Parse(input);
+
+            // Assert
             act.Should().Throw<ArgumentException>();
         }
     }
@@ -77,9 +85,11 @@ public static class PublicKeyTests
         [Test]
         public void SameBytes_AreEqual()
         {
+            // Arrange
             var a = PublicKey.Parse(Sample);
             var b = new PublicKey(a.ToBytes());
 
+            // Assert
             a.Should().Be(b);
             (a == b).Should().BeTrue();
             a.GetHashCode().Should().Be(b.GetHashCode());
@@ -88,9 +98,11 @@ public static class PublicKeyTests
         [Test]
         public void DifferentBytes_AreNotEqual()
         {
+            // Arrange
             var a = PublicKey.Parse(SolanaProgramIds.TokenProgram);
             var b = PublicKey.Parse(SolanaProgramIds.SystemProgram);
 
+            // Assert
             a.Should().NotBe(b);
             (a != b).Should().BeTrue();
         }
@@ -106,21 +118,28 @@ public static class PublicKeyTests
         [Test]
         public void CopyTo_WritesAllBytes()
         {
+            // Arrange
             var key = PublicKey.Parse(Sample);
             var expected = key.ToBytes();
 
+            // Act
             var destination = new byte[PublicKey.Length];
             key.CopyTo(destination);
 
+            // Assert
             destination.Should().Equal(expected);
         }
 
         [Test]
         public void CopyTo_DestinationTooSmall_Throws()
         {
+            // Arrange
             var key = PublicKey.Parse(Sample);
 
+            // Act
             Action act = () => key.CopyTo(new byte[PublicKey.Length - 1]);
+
+            // Assert
             act.Should().Throw<ArgumentException>();
         }
     }

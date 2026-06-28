@@ -18,11 +18,14 @@ public static class SolanaRpcClientTransactionTests
         [Test]
         public async Task ReturnsSignatureAndBase64EncodesTheTransaction()
         {
+            // Arrange
             var (client, handler) = Make("""{"jsonrpc":"2.0","result":"Sig1111111111111111111111111111111111111111","id":1}""");
             byte[] transaction = [1, 2, 3, 4];
 
+            // Act
             var signature = await client.SendTransactionAsync(transaction);
 
+            // Assert
             signature.Should().Be("Sig1111111111111111111111111111111111111111");
             handler.CapturedRequestBody.Should().Contain("\"sendTransaction\"");
             handler.CapturedRequestBody.Should().Contain("\"base64\"");
@@ -39,11 +42,14 @@ public static class SolanaRpcClientTransactionTests
         [Test]
         public async Task ParsesLogsAndUnitsFromContextValue()
         {
+            // Arrange
             var (client, _) = Make(
                 """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"err":null,"logs":["Program log: ok"],"unitsConsumed":1234}},"id":1}""");
 
+            // Act
             var result = await client.SimulateTransactionAsync([1, 2, 3, 4]);
 
+            // Assert
             result.IsError.Should().BeFalse();
             result.Logs.Should().ContainSingle().Which.Should().Be("Program log: ok");
             result.UnitsConsumed.Should().Be(1234);
@@ -52,11 +58,14 @@ public static class SolanaRpcClientTransactionTests
         [Test]
         public async Task SurfacesErrAsIsError()
         {
+            // Arrange
             var (client, _) = Make(
                 """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"err":{"InstructionError":[0,"Custom"]},"logs":[],"unitsConsumed":0}},"id":1}""");
 
+            // Act
             var result = await client.SimulateTransactionAsync([9]);
 
+            // Assert
             result.IsError.Should().BeTrue();
         }
     }

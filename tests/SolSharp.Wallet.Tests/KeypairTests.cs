@@ -31,14 +31,20 @@ public static class KeypairTests
         [Test]
         public void Rfc8032Test1_DerivesExpectedPublicKey()
         {
+            // Act
             using var keypair = Keypair.FromSeed(Hex(Test1Seed));
+
+            // Assert
             keypair.PublicKey.Should().Be(new PublicKey(Hex(Test1PublicKey)));
         }
 
         [Test]
         public void Rfc8032Test2_DerivesExpectedPublicKey()
         {
+            // Act
             using var keypair = Keypair.FromSeed(Hex(Test2Seed));
+
+            // Assert
             keypair.PublicKey.Should().Be(new PublicKey(Hex(Test2PublicKey)));
         }
 
@@ -47,7 +53,10 @@ public static class KeypairTests
         [TestCase(33)]
         public void WrongLength_Throws(int length)
         {
+            // Act
             Action act = () => _ = Keypair.FromSeed(new byte[length]);
+
+            // Assert
             act.Should().Throw<ArgumentException>();
         }
     }
@@ -58,21 +67,30 @@ public static class KeypairTests
         [Test]
         public void Rfc8032Test1_EmptyMessage_MatchesVector()
         {
+            // Arrange
             using var keypair = Keypair.FromSeed(Hex(Test1Seed));
+
+            // Act & Assert
             keypair.Sign([]).Should().Equal(Hex(Test1Signature));
         }
 
         [Test]
         public void Rfc8032Test2_MatchesVector()
         {
+            // Arrange
             using var keypair = Keypair.FromSeed(Hex(Test2Seed));
+
+            // Act & Assert
             keypair.Sign(Hex(Test2Message)).Should().Equal(Hex(Test2Signature));
         }
 
         [Test]
         public void SameMessage_IsDeterministic()
         {
+            // Arrange
             using var keypair = Keypair.FromSeed(Hex(Test1Seed));
+
+            // Act & Assert
             keypair.Sign("solsharp"u8).Should().Equal(keypair.Sign("solsharp"u8));
         }
     }
@@ -83,14 +101,20 @@ public static class KeypairTests
         [Test]
         public void SeedPlusPublicKey_DerivesMatchingPublicKey()
         {
+            // Act
             using var keypair = Keypair.FromSecretKey(Hex(Test1Seed + Test1PublicKey));
+
+            // Assert
             keypair.PublicKey.Should().Be(new PublicKey(Hex(Test1PublicKey)));
         }
 
         [Test]
         public void SeedPlusPublicKey_SignsWithTheSeed()
         {
+            // Act
             using var keypair = Keypair.FromSecretKey(Hex(Test1Seed + Test1PublicKey));
+
+            // Assert
             keypair.Sign([]).Should().Equal(Hex(Test1Signature));
         }
 
@@ -98,14 +122,20 @@ public static class KeypairTests
         [TestCase(65)]
         public void WrongLength_Throws(int length)
         {
+            // Act
             Action act = () => _ = Keypair.FromSecretKey(new byte[length]);
+
+            // Assert
             act.Should().Throw<ArgumentException>();
         }
 
         [Test]
         public void PublicKeyHalfDoesNotMatchSeed_Throws()
         {
+            // Act
             Action act = () => _ = Keypair.FromSecretKey(Hex(Test1Seed + Test2PublicKey));
+
+            // Assert
             act.Should().Throw<ArgumentException>();
         }
     }
@@ -116,15 +146,21 @@ public static class KeypairTests
         [Test]
         public void ProducesDistinctKeypairs()
         {
+            // Act
             using var a = Keypair.Generate();
             using var b = Keypair.Generate();
+
+            // Assert
             a.PublicKey.Should().NotBe(b.PublicKey);
         }
 
         [Test]
         public void SignedMessage_Is64Bytes()
         {
+            // Arrange
             using var keypair = Keypair.Generate();
+
+            // Act & Assert
             keypair.Sign("hello"u8).Length.Should().Be(64);
         }
     }
@@ -135,20 +171,28 @@ public static class KeypairTests
         [Test]
         public void SignAfterDispose_Throws()
         {
+            // Arrange
             var keypair = Keypair.FromSeed(Hex(Test1Seed));
             keypair.Dispose();
 
+            // Act
             Action act = () => keypair.Sign("abc"u8);
+
+            // Assert
             act.Should().Throw<ObjectDisposedException>();
         }
 
         [Test]
         public void CalledTwice_DoesNotThrow()
         {
+            // Arrange
             var keypair = Keypair.FromSeed(Hex(Test1Seed));
             keypair.Dispose();
 
+            // Act
             Action act = keypair.Dispose;
+
+            // Assert
             act.Should().NotThrow();
         }
     }
@@ -162,12 +206,15 @@ public static class KeypairTests
             // A keypair the caller forgot to dispose must still finalize cleanly (the finalizer
             // zeroes the seed). A throwing finalizer would crash the host, so the keypair being
             // collected is the check.
+            // Arrange
             var weak = CreateAbandonedKeypair();
 
+            // Act
             GC.Collect();
             GC.WaitForPendingFinalizers();
             GC.Collect();
 
+            // Assert
             weak.IsAlive.Should().BeFalse();
         }
 

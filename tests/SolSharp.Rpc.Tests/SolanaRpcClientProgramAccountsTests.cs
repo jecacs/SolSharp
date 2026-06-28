@@ -26,10 +26,13 @@ public static class SolanaRpcClientProgramAccountsTests
         [Test]
         public async Task ParsesEntriesAndRequestsBase64()
         {
+            // Arrange
             var (client, handler) = Make($$"""{"jsonrpc":"2.0","result":[{{EntryJson}}],"id":1}""");
 
+            // Act
             var accounts = await client.GetProgramAccountsAsync(PublicKey.Parse(ProgramId));
 
+            // Assert
             byte[] expectedData = [1, 2, 3];
             accounts.Should().ContainSingle();
             accounts[0].PublicKey.Should().Be(PublicKey.Parse(AccountAddress));
@@ -45,14 +48,17 @@ public static class SolanaRpcClientProgramAccountsTests
         [Test]
         public async Task SendsMemcmpAndDataSizeFilters()
         {
+            // Arrange
             var (client, handler) = Make("""{"jsonrpc":"2.0","result":[],"id":1}""");
             var options = new GetProgramAccountsOptions
             {
                 Filters = [AccountFilter.MemoryCompare(0, "3Mc6vR"), AccountFilter.DataSize(165)]
             };
 
+            // Act
             var accounts = await client.GetProgramAccountsAsync(PublicKey.Parse(ProgramId), options);
 
+            // Assert
             accounts.Should().BeEmpty();
             handler.CapturedRequestBody.Should().Contain("\"filters\"");
             handler.CapturedRequestBody.Should().Contain("\"memcmp\"");
@@ -64,11 +70,14 @@ public static class SolanaRpcClientProgramAccountsTests
         [Test]
         public async Task SendsDataSlice()
         {
+            // Arrange
             var (client, handler) = Make("""{"jsonrpc":"2.0","result":[],"id":1}""");
             var options = new GetProgramAccountsOptions { DataSlice = new DataSlice(8, 32) };
 
+            // Act
             await client.GetProgramAccountsAsync(PublicKey.Parse(ProgramId), options);
 
+            // Assert
             handler.CapturedRequestBody.Should().Contain("\"dataSlice\":{\"offset\":8,\"length\":32}");
         }
     }

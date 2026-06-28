@@ -56,7 +56,10 @@ public static class ShortVecTests
         [TestCase(65536)]
         public void OutOfRange_Throws(int value)
         {
+            // Act
             Action act = () => ShortVec.Encode(value);
+
+            // Assert
             act.Should().Throw<ArgumentOutOfRangeException>();
         }
     }
@@ -67,8 +70,10 @@ public static class ShortVecTests
         [TestCaseSource(typeof(ShortVecTests), nameof(Vectors))]
         public void ReferenceVector_ReturnsValueAndLength(int value, byte[] encoded)
         {
+            // Act
             var result = ShortVec.Decode(encoded, out var bytesRead);
 
+            // Assert
             result.Should().Be(value);
             bytesRead.Should().Be(encoded.Length);
         }
@@ -76,8 +81,10 @@ public static class ShortVecTests
         [Test]
         public void TrailingBytes_AreIgnored()
         {
+            // Act
             var value = ShortVec.Decode([0x80, 0x01, 0xAA, 0xBB], out var bytesRead);
 
+            // Assert
             value.Should().Be(128);
             bytesRead.Should().Be(2);
         }
@@ -85,7 +92,10 @@ public static class ShortVecTests
         [TestCaseSource(typeof(ShortVecTests), nameof(MalformedInputs))]
         public void MalformedInput_ThrowsFormatException(byte[] input)
         {
+            // Act
             Action act = () => ShortVec.Decode(input, out _);
+
+            // Assert
             act.Should().Throw<FormatException>();
         }
     }

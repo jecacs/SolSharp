@@ -23,8 +23,10 @@ public static class MemoProgramTests
         [Test]
         public void WithSigner_MatchesSolanaPy()
         {
+            // Act
             var instruction = MemoProgram.Memo("hello", Pk(6));
 
+            // Assert
             instruction.ProgramId.Should().Be(PublicKey.Parse(MemoProgramId));
             Convert.ToHexString(instruction.Data).ToLowerInvariant().Should().Be("68656c6c6f");
             instruction.Accounts.Should().ContainSingle();
@@ -36,8 +38,10 @@ public static class MemoProgramTests
         [Test]
         public void WithoutSigners_HasNoAccounts()
         {
+            // Act
             var instruction = MemoProgram.Memo("hello");
 
+            // Assert
             instruction.Accounts.Should().BeEmpty();
             Convert.ToHexString(instruction.Data).ToLowerInvariant().Should().Be("68656c6c6f");
         }

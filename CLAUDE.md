@@ -4,7 +4,7 @@ A lean, modern .NET SDK for Solana: RPC + WebSocket streaming, wire-level transa
 signing/building. Optimised for low latency and a small dependency footprint — it is a
 deliberate, focused alternative to the heavier general-purpose SDKs, not a clone of them.
 
-Status: 0.2.0, stable release. All four projects are in place: Core primitives (incl. a Borsh reader/writer), the Rpc client (reads + typed SPL account state via `Mint`/`TokenAccount`, `jsonParsed` transaction/block reads, send/simulate, typed transaction errors, multiplexed WebSocket streaming with auto-reconnect, DI + resilience), the Wallet (Ed25519 keys, signing, verification, key parsing), and Programs (System/Token/ATA/Compute Budget/Memo + the Address Lookup Table program, PDA/ATA, legacy + v0 transaction building/signing/parsing, and instruction decompilation). A separate live integration suite exercises the read and streaming paths against a real cluster.
+Status: 0.3.0, stable release. All four projects are in place: Core primitives (incl. a Borsh reader/writer), the Rpc client (reads + typed SPL account state via `Mint`/`TokenAccount`, `jsonParsed` transaction/block/account reads, more cluster reads (vote accounts, inflation rewards, leader schedule, blocks, cluster nodes), send/simulate, typed transaction errors, multiplexed WebSocket streaming with auto-reconnect, DI + resilience), the Wallet (Ed25519 keys, signing, verification, key parsing), and Programs (System/Token/ATA/Compute Budget/Memo + the Address Lookup Table program, PDA/ATA, legacy + v0 transaction building/signing/parsing, and instruction decompilation). A separate live integration suite exercises the read and streaming paths against a real cluster.
 
 ## Commands
 
@@ -59,6 +59,7 @@ SolSharp/
 - Wire formats and crypto are money-critical: cover them with known vectors (RFC 8032 for signing, canonical compact-u16 / base58 vectors), not just round-trips.
 - `IDE1006` is disabled for `tests/**` so `Method_Scenario_Expectation` names are allowed.
 - For constructor-throws-only tests use an explicit discard: `Action act = () => _ = new T(...);`.
+- **Arrange / Act / Assert comments.** Mark the three phases with `// Arrange`, `// Act`, `// Assert`. When the call under test and its check are a single fluent statement (exception delegates, `(await …).Should()…`), use one `// Act & Assert`. Skip the labels on expression-bodied or single-statement `[TestCase]` tests where there is nothing to separate — never restructure a test body just to fit them.
 - **Integration tests** live in `SolSharp.IntegrationTests`, hit a real cluster, and run as part of `dotnet test`. They are tagged `[Category("Integration")]`; the endpoint defaults to public mainnet and is overridable via the `SOLSHARP_RPC_URL` / `SOLSHARP_WS_URL` environment variables (no key is ever committed). They report inconclusive — not failed — on rate limits or transport errors, so a busy node never reddens the suite. Skip them for a fast offline run with `dotnet test --filter "TestCategory!=Integration"`.
 
 ## Security (money-critical)

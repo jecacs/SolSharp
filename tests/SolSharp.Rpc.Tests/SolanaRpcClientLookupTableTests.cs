@@ -30,10 +30,13 @@ public static class SolanaRpcClientLookupTableTests
         [Test]
         public async Task DecodesActiveTable()
         {
+            // Arrange
             var (client, handler) = Make(AccountEnvelope(TableDataBase64));
 
+            // Act
             var table = await client.GetAddressLookupTableAsync(PublicKey.Parse(TableAddress));
 
+            // Assert
             table.Should().NotBeNull();
             table!.IsActive.Should().BeTrue();
             table.DeactivationSlot.Should().Be(ulong.MaxValue);
@@ -50,10 +53,13 @@ public static class SolanaRpcClientLookupTableTests
         [Test]
         public async Task ReturnsNullWhenAccountMissing()
         {
+            // Arrange
             var (client, _) = Make("""{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":null},"id":1}""");
 
+            // Act
             var table = await client.GetAddressLookupTableAsync(PublicKey.Parse(TableAddress));
 
+            // Assert
             table.Should().BeNull();
         }
 
@@ -61,10 +67,13 @@ public static class SolanaRpcClientLookupTableTests
         public async Task ReturnsNullWhenDataIsNotALookupTable()
         {
             // Four zero bytes: shorter than the metadata and discriminant 0, so not an initialized table.
+            // Arrange
             var (client, _) = Make(AccountEnvelope("AAAAAA=="));
 
+            // Act
             var table = await client.GetAddressLookupTableAsync(PublicKey.Parse(TableAddress));
 
+            // Assert
             table.Should().BeNull();
         }
     }

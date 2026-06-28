@@ -18,8 +18,10 @@ public static class TokenProgramTests
         [Test]
         public void MatchesSolanaSdk()
         {
+            // Act
             var instruction = TokenProgram.Transfer(Key(4), Key(5), Key(6), 1000);
 
+            // Assert
             instruction.ProgramId.Should().Be(TokenProgram.ProgramId);
             instruction.Data.Should().Equal(Hex("03e803000000000000"));
             instruction.Accounts.Select(a => (a.PublicKey, a.IsSigner, a.IsWritable)).Should().Equal(
@@ -36,8 +38,10 @@ public static class TokenProgramTests
         [Test]
         public void MatchesSolanaSdk()
         {
+            // Act
             var instruction = TokenProgram.TransferChecked(Key(4), Key(3), Key(5), Key(6), 1000, 6);
 
+            // Assert
             instruction.ProgramId.Should().Be(TokenProgram.ProgramId);
             instruction.Data.Should().Equal(Hex("0ce80300000000000006"));
             instruction.Accounts.Select(a => (a.PublicKey, a.IsSigner, a.IsWritable)).Should().Equal(
@@ -56,9 +60,11 @@ public static class TokenProgramTests
         [Test]
         public void TransferChecked_TargetsGivenProgram_WithIdenticalLayout()
         {
+            // Act
             var classic = TokenProgram.TransferChecked(Key(4), Key(3), Key(5), Key(6), 1000, 6);
             var extended = TokenProgram.TransferChecked(Key(4), Key(3), Key(5), Key(6), 1000, 6, Token2022);
 
+            // Assert
             classic.ProgramId.Should().Be(TokenProgram.ProgramId); // default stays classic SPL Token
             extended.ProgramId.Should().Be(Token2022);
             extended.Data.Should().Equal(classic.Data);
@@ -69,8 +75,10 @@ public static class TokenProgramTests
         [Test]
         public void MintTo_TargetsGivenProgram_WithIdenticalLayout()
         {
+            // Act
             var extended = TokenProgram.MintTo(Key(1), Key(2), Key(3), 500, Token2022);
 
+            // Assert
             extended.ProgramId.Should().Be(Token2022);
             extended.Data.Should().Equal(TokenProgram.MintTo(Key(1), Key(2), Key(3), 500).Data);
         }

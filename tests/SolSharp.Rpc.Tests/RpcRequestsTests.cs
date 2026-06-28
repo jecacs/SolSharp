@@ -19,10 +19,13 @@ public static class RpcRequestsTests
         [Test]
         public void BuildsMethodAddressAndCommitment()
         {
+            // Arrange
             var account = PublicKey.Parse(SolanaProgramIds.TokenProgram);
 
+            // Act
             var json = Serialize(RpcRequests.GetBalance(account, Commitment.Finalized));
 
+            // Assert
             json.Should().Contain("\"method\":\"getBalance\"");
             json.Should().Contain(SolanaProgramIds.TokenProgram);
             json.Should().Contain("\"finalized\"");
@@ -35,8 +38,10 @@ public static class RpcRequestsTests
         [Test]
         public void BuildsMethodAndCommitment()
         {
+            // Act
             var json = Serialize(RpcRequests.GetLatestBlockhash(Commitment.Processed));
 
+            // Assert
             json.Should().Contain("\"method\":\"getLatestBlockhash\"");
             json.Should().Contain("\"processed\"");
         }
@@ -64,10 +69,13 @@ public static class RpcRequestsTests
         [Test]
         public void BuildsMethodAndMint()
         {
+            // Arrange
             var mint = PublicKey.Parse(SolanaProgramIds.TokenProgram);
 
+            // Act
             var json = Serialize(RpcRequests.GetTokenSupply(mint, Commitment.Confirmed));
 
+            // Assert
             json.Should().Contain("\"method\":\"getTokenSupply\"");
             json.Should().Contain(SolanaProgramIds.TokenProgram);
         }
@@ -79,8 +87,10 @@ public static class RpcRequestsTests
         [Test]
         public void BuildsMethodAndDataLength()
         {
+            // Act
             var json = Serialize(RpcRequests.GetMinimumBalanceForRentExemption(165, Commitment.Confirmed));
 
+            // Assert
             json.Should().Contain("\"method\":\"getMinimumBalanceForRentExemption\"");
             json.Should().Contain("165");
         }

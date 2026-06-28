@@ -27,46 +27,61 @@ public static class TransactionBuilderTests
         [Test]
         public void SignedTransfer_InfersFeePayerFromSigner_MatchesSolanaSdk()
         {
+            // Arrange
             using var payer = Keypair.FromSeed(Fill(1));
             var recipient = new PublicKey(Fill(2));
 
+            // Act
             var transaction = new TransactionBuilder()
                 .SetRecentBlockhash(Blockhash)
                 .AddInstruction(SystemProgram.Transfer(payer.PublicKey, recipient, 1_000_000))
                 .Build(payer);
 
+            // Assert
             transaction.Serialize().Should().Equal(Convert.FromHexString(SignedTransferHex));
         }
 
         [Test]
         public void WithoutBlockhash_Throws()
         {
+            // Arrange
             using var payer = Keypair.FromSeed(Fill(1));
             var builder = new TransactionBuilder()
                 .AddInstruction(SystemProgram.Transfer(payer.PublicKey, new PublicKey(Fill(2)), 1));
 
+            // Act
             Action act = () => builder.Build(payer);
+
+            // Assert
             act.Should().Throw<InvalidOperationException>();
         }
 
         [Test]
         public void WithoutInstructions_Throws()
         {
+            // Arrange
             using var payer = Keypair.FromSeed(Fill(1));
             var builder = new TransactionBuilder().SetRecentBlockhash(Blockhash);
 
+            // Act
             Action act = () => builder.Build(payer);
+
+            // Assert
             act.Should().Throw<InvalidOperationException>();
         }
 
         [Test]
         public void WithoutFeePayerOrSigner_Throws()
         {
+            // Arrange
             var builder = new TransactionBuilder()
                 .SetRecentBlockhash(Blockhash)
                 .AddInstruction(SystemProgram.Transfer(new PublicKey(Fill(1)), new PublicKey(Fill(2)), 1));
 
+            // Act
             Action act = () => builder.Build();
+
+            // Assert
             act.Should().Throw<InvalidOperationException>();
         }
     }
@@ -81,16 +96,19 @@ public static class TransactionBuilderTests
         [Test]
         public void SignedV0Transfer_WithLookupTable_MatchesSolders()
         {
+            // Arrange
             using var payer = Keypair.FromSeed(Fill(1));
             var recipient = new PublicKey(Fill(2));
             var table = new AddressLookupTableAccount(new PublicKey(Fill(5)), [recipient, new PublicKey(Fill(7))]);
 
+            // Act
             var transaction = new TransactionBuilder()
                 .SetRecentBlockhash(Blockhash)
                 .AddInstruction(SystemProgram.Transfer(payer.PublicKey, recipient, 1_000_000))
                 .SetAddressLookupTables(table)
                 .BuildV0(payer);
 
+            // Assert
             transaction.Serialize().Should().Equal(Convert.FromHexString(SignedV0Hex));
         }
     }

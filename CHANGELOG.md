@@ -4,6 +4,16 @@ All notable changes to SolSharp are documented here. The format is loosely based
 [Keep a Changelog](https://keepachangelog.com), and the project follows
 [semantic versioning](https://semver.org) — while on 0.x, minor releases may carry breaking changes.
 
+## [0.3.0]
+
+### Added
+
+- More cluster reads: `GetVoteAccountsAsync`, `GetInflationRewardAsync`, `GetLeaderScheduleAsync`,
+  `GetBlocksAsync`, and `GetClusterNodesAsync`.
+- A `jsonParsed` account path: `GetParsedAccountInfoAsync` and `SubscribeParsedAccountAsync`
+  (`accountSubscribe`), decoding a recognized account to a typed `Parsed` view and falling back to raw bytes
+  when the owning program is unknown.
+
 ## [0.2.0]
 
 ### Added
@@ -36,5 +46,6 @@ bundles four layered assemblies.
   transaction building, signing and serialization, `Transaction.Deserialize`, and instruction
   decompilation — every wire format validated byte-for-byte against the Rust `solana-sdk`.
 
+[0.3.0]: https://github.com/jecacs/SolSharp/releases/tag/v0.3.0
 [0.2.0]: https://github.com/jecacs/SolSharp/releases/tag/v0.2.0
 [0.1.0]: https://github.com/jecacs/SolSharp/releases/tag/v0.1.0

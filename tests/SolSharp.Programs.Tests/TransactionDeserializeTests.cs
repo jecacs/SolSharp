@@ -25,10 +25,13 @@ public static class TransactionDeserializeTests
         [Test]
         public void LegacyTransfer_RoundTripsAndParsesFields()
         {
+            // Arrange
             var bytes = Convert.FromHexString(SignedTransferHex);
 
+            // Act
             var transaction = Transaction.Deserialize(bytes);
 
+            // Assert
             transaction.Serialize().Should().Equal(bytes);
             transaction.Message.Should().BeOfType<Message>();
             transaction.Message.RequiredSignatures.Should().Be(1);
@@ -38,10 +41,13 @@ public static class TransactionDeserializeTests
         [Test]
         public void V0Transfer_RoundTripsAndIsVersioned()
         {
+            // Arrange
             var bytes = Convert.FromHexString(SignedV0Hex);
 
+            // Act
             var transaction = Transaction.Deserialize(bytes);
 
+            // Assert
             transaction.Serialize().Should().Equal(bytes);
             transaction.Message.Should().BeOfType<MessageV0>();
 

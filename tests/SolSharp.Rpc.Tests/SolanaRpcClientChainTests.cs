@@ -22,11 +22,14 @@ public static class SolanaRpcClientChainTests
         [Test]
         public async Task ParsesLeadersAndSendsRange()
         {
+            // Arrange
             var (client, handler) = Make(
                 $$"""{"jsonrpc":"2.0","result":["{{TokenProgram}}","{{SystemProgram}}"],"id":1}""");
 
+            // Act
             var leaders = await client.GetSlotLeadersAsync(100, 2);
 
+            // Assert
             leaders.Should().HaveCount(2);
             leaders[0].Should().Be(PublicKey.Parse(TokenProgram));
             leaders[1].Should().Be(PublicKey.Parse(SystemProgram));
@@ -41,11 +44,14 @@ public static class SolanaRpcClientChainTests
         [Test]
         public async Task ParsesSupply()
         {
+            // Arrange
             var (client, _) = Make(
                 """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"total":1000,"circulating":800,"nonCirculating":200,"nonCirculatingAccounts":[]}},"id":1}""");
 
+            // Act
             var supply = await client.GetSupplyAsync();
 
+            // Assert
             supply.Total.Should().Be(1000);
             supply.Circulating.Should().Be(800);
             supply.NonCirculating.Should().Be(200);
@@ -58,11 +64,14 @@ public static class SolanaRpcClientChainTests
         [Test]
         public async Task ParsesAccounts()
         {
+            // Arrange
             var (client, handler) = Make(
                 """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":[{"address":"11111111111111111111111111111111","amount":"500","decimals":6,"uiAmountString":"0.0005"}]},"id":1}""");
 
+            // Act
             var accounts = await client.GetTokenLargestAccountsAsync(PublicKey.Parse(TokenProgram));
 
+            // Assert
             accounts.Should().ContainSingle();
             accounts[0].Address.Should().Be(PublicKey.Parse(SystemProgram));
             accounts[0].Amount.Should().Be("500");
@@ -77,11 +86,14 @@ public static class SolanaRpcClientChainTests
         [Test]
         public async Task ParsesBlock()
         {
+            // Arrange
             var (client, handler) = Make(
                 """{"jsonrpc":"2.0","result":{"blockhash":"Ckt","previousBlockhash":"Prev","parentSlot":99,"blockHeight":90,"blockTime":1700000000,"signatures":["sig1","sig2"]},"id":1}""");
 
+            // Act
             var block = await client.GetBlockAsync(100);
 
+            // Assert
             block.Should().NotBeNull();
             block!.ParentSlot.Should().Be(99);
             block.BlockHeight.Should().Be(90);
@@ -94,10 +106,13 @@ public static class SolanaRpcClientChainTests
         [Test]
         public async Task ReturnsNullForSkippedSlot()
         {
+            // Arrange
             var (client, _) = Make("""{"jsonrpc":"2.0","result":null,"id":1}""");
 
+            // Act
             var block = await client.GetBlockAsync(100);
 
+            // Assert
             block.Should().BeNull();
         }
     }

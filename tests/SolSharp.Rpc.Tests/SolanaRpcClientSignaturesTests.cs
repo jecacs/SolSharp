@@ -21,11 +21,14 @@ public static class SolanaRpcClientSignaturesTests
         [Test]
         public async Task ParsesEntriesAndRequestsTheAddress()
         {
+            // Arrange
             var (client, handler) = Make(
                 """{"jsonrpc":"2.0","result":[{"signature":"sig11","slot":100,"err":null,"memo":null,"blockTime":1700000000,"confirmationStatus":"finalized"}],"id":1}""");
 
+            // Act
             var signatures = await client.GetSignaturesForAddressAsync(PublicKey.Parse(Address));
 
+            // Assert
             signatures.Should().ContainSingle();
             signatures[0].Signature.Should().Be("sig11");
             signatures[0].Slot.Should().Be(100);
@@ -43,22 +46,28 @@ public static class SolanaRpcClientSignaturesTests
         [Test]
         public async Task SurfacesErrAsIsError()
         {
+            // Arrange
             var (client, _) = Make(
                 """{"jsonrpc":"2.0","result":[{"signature":"sigErr","slot":5,"err":{"InstructionError":[0,"Custom"]}}],"id":1}""");
 
+            // Act
             var signatures = await client.GetSignaturesForAddressAsync(PublicKey.Parse(Address));
 
+            // Assert
             signatures[0].IsError.Should().BeTrue();
         }
 
         [Test]
         public async Task SendsLimitAndBeforeWhenProvided()
         {
+            // Arrange
             var (client, handler) = Make("""{"jsonrpc":"2.0","result":[],"id":1}""");
             var options = new GetSignaturesForAddressOptions { Limit = 5, Before = "cursorSig" };
 
+            // Act
             var signatures = await client.GetSignaturesForAddressAsync(PublicKey.Parse(Address), options);
 
+            // Assert
             signatures.Should().BeEmpty();
             handler.CapturedRequestBody.Should().Contain("\"limit\":5");
             handler.CapturedRequestBody.Should().Contain("\"before\":\"cursorSig\"");

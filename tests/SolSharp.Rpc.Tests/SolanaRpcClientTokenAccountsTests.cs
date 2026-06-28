@@ -29,10 +29,13 @@ public static class SolanaRpcClientTokenAccountsTests
         [Test]
         public async Task ParsesAccountsAndFiltersByMint()
         {
+            // Arrange
             var (client, handler) = Make(ContextArray($"[{EntryJson}]"));
 
+            // Act
             var accounts = await client.GetTokenAccountsByOwnerAsync(PublicKey.Parse(Owner), PublicKey.Parse(Mint));
 
+            // Assert
             accounts.Should().ContainSingle();
             accounts[0].Account.Lamports.Should().Be(2039280);
             handler.CapturedRequestBody.Should().Contain("\"getTokenAccountsByOwner\"");
@@ -48,11 +51,14 @@ public static class SolanaRpcClientTokenAccountsTests
         [Test]
         public async Task ParsesFees()
         {
+            // Arrange
             var (client, handler) = Make(
                 """{"jsonrpc":"2.0","result":[{"slot":100,"prioritizationFee":5000},{"slot":101,"prioritizationFee":0}],"id":1}""");
 
+            // Act
             var fees = await client.GetRecentPrioritizationFeesAsync();
 
+            // Assert
             fees.Should().HaveCount(2);
             fees[0].Slot.Should().Be(100);
             fees[0].Fee.Should().Be(5000);

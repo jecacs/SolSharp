@@ -21,8 +21,10 @@ public static class AddressLookupTableProgramTests
         [Test]
         public void DerivesTableAddress_MatchesSolders_AndEncodesData()
         {
+            // Act
             var (instruction, lookupTable) = AddressLookupTableProgram.CreateLookupTable(Pk(1), Pk(2), 123);
 
+            // Assert
             // derive_lookup_table_address(authority=[1]*32, recent_slot=123) from solders: bump 255.
             lookupTable.Should().Be(PublicKey.Parse("2KUourxM9uBoUQRxhbEPBsjoeFkRtjymMhZoHftxifMh"));
             // discriminant 0, recent_slot 123 (u64 LE), bump 255.
@@ -49,8 +51,10 @@ public static class AddressLookupTableProgramTests
         [Test]
         public void EncodesAddresses_AndIncludesPayerAccounts()
         {
+            // Act
             var instruction = AddressLookupTableProgram.ExtendLookupTable(Pk(5), Pk(1), Pk(2), [Pk(3), Pk(4)]);
 
+            // Assert
             // discriminant 2, u64 count 2, then [3]*32 and [4]*32.
             const string expected =
                 "020000000200000000000000" +
@@ -72,8 +76,10 @@ public static class AddressLookupTableProgramTests
         [Test]
         public void WithoutPayer_OmitsPayerAndSystemAccounts()
         {
+            // Act
             var instruction = AddressLookupTableProgram.ExtendLookupTable(Pk(5), Pk(1), payer: null, [Pk(3)]);
 
+            // Assert
             instruction.Accounts.Should().HaveCount(2);
             instruction.Accounts[0].PublicKey.Should().Be(Pk(5));
             instruction.Accounts[1].PublicKey.Should().Be(Pk(1));
@@ -86,8 +92,10 @@ public static class AddressLookupTableProgramTests
         [Test]
         public void EncodesDiscriminator_AndAccounts()
         {
+            // Act
             var instruction = AddressLookupTableProgram.DeactivateLookupTable(Pk(5), Pk(1));
 
+            // Assert
             DataHex(instruction).Should().Be("03000000");
             instruction.Accounts.Should().HaveCount(2);
             instruction.Accounts[0].IsWritable.Should().BeTrue();
@@ -101,8 +109,10 @@ public static class AddressLookupTableProgramTests
         [Test]
         public void EncodesDiscriminator_AndAccounts()
         {
+            // Act
             var instruction = AddressLookupTableProgram.CloseLookupTable(Pk(5), Pk(1), Pk(6));
 
+            // Assert
             DataHex(instruction).Should().Be("04000000");
             instruction.Accounts.Should().HaveCount(3);
             instruction.Accounts[0].PublicKey.Should().Be(Pk(5));

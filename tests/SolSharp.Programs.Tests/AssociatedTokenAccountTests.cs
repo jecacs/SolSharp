@@ -15,7 +15,10 @@ public static class AssociatedTokenAccountTests
         [Test]
         public void MatchesSolanaSdk()
         {
+            // Act
             var ata = AssociatedTokenAccount.GetAddress(Key(1), Key(2));
+
+            // Assert
             ata.Should().Be(PublicKey.Parse("CsYkfSfTUTWwnoeRkGchtai5kkYz2SC33kKJwA99wVr3"));
         }
     }
@@ -29,13 +32,16 @@ public static class AssociatedTokenAccountTests
         [Test]
         public void ProducesExpectedAccountsAndAddress()
         {
+            // Arrange
             var payer = Key(1);
             var owner = Key(2);
             var mint = Key(3);
             var ata = PublicKey.Parse("BKbxqhBJfLZNgac5dEUesF1V5xRZSzxDkcpQBAy4c8sw");
 
+            // Act
             var instruction = AssociatedTokenAccount.Create(payer, owner, mint);
 
+            // Assert
             instruction.ProgramId.Should().Be(AssociatedTokenAccount.ProgramId);
             instruction.Data.Should().BeEmpty();
             instruction.Accounts.Should().HaveCount(6);

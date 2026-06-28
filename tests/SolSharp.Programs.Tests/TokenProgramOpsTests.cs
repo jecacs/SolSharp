@@ -31,8 +31,10 @@ public static class TokenProgramOpsTests
         [Test]
         public void MintTo_MatchesSolanaPy()
         {
+            // Act
             var ix = TokenProgram.MintTo(Pk(3), Pk(5), Pk(6), 1000);
 
+            // Assert
             DataHex(ix).Should().Be("07e803000000000000");
             ix.Accounts.Should().HaveCount(3);
             Check(ix.Accounts[0], Pk(3), signer: false, writable: true);
@@ -43,8 +45,10 @@ public static class TokenProgramOpsTests
         [Test]
         public void Burn_MatchesSolanaPy()
         {
+            // Act
             var ix = TokenProgram.Burn(Pk(2), Pk(3), Pk(6), 1000);
 
+            // Assert
             DataHex(ix).Should().Be("08e803000000000000");
             Check(ix.Accounts[0], Pk(2), signer: false, writable: true);
             Check(ix.Accounts[1], Pk(3), signer: false, writable: true);
@@ -54,8 +58,10 @@ public static class TokenProgramOpsTests
         [Test]
         public void Approve_MatchesSolanaPy()
         {
+            // Act
             var ix = TokenProgram.Approve(Pk(2), Pk(4), Pk(6), 1000);
 
+            // Assert
             DataHex(ix).Should().Be("04e803000000000000");
             Check(ix.Accounts[0], Pk(2), signer: false, writable: true);
             Check(ix.Accounts[1], Pk(4), signer: false, writable: false);
@@ -69,8 +75,10 @@ public static class TokenProgramOpsTests
         [Test]
         public void Revoke_MatchesSolanaPy()
         {
+            // Act
             var ix = TokenProgram.Revoke(Pk(2), Pk(6));
 
+            // Assert
             DataHex(ix).Should().Be("05");
             ix.Accounts.Should().HaveCount(2);
             Check(ix.Accounts[0], Pk(2), signer: false, writable: true);
@@ -80,8 +88,10 @@ public static class TokenProgramOpsTests
         [Test]
         public void CloseAccount_MatchesSolanaPy()
         {
+            // Act
             var ix = TokenProgram.CloseAccount(Pk(2), Pk(5), Pk(6));
 
+            // Assert
             DataHex(ix).Should().Be("09");
             Check(ix.Accounts[0], Pk(2), signer: false, writable: true);
             Check(ix.Accounts[1], Pk(5), signer: false, writable: true);
@@ -91,8 +101,10 @@ public static class TokenProgramOpsTests
         [Test]
         public void SyncNative_MatchesSolanaPy()
         {
+            // Act
             var ix = TokenProgram.SyncNative(Pk(2));
 
+            // Assert
             DataHex(ix).Should().Be("11");
             ix.Accounts.Should().ContainSingle();
             Check(ix.Accounts[0], Pk(2), signer: false, writable: true);
@@ -101,12 +113,14 @@ public static class TokenProgramOpsTests
         [Test]
         public void FreezeAndThaw_MatchSolanaPy()
         {
+            // Act & Assert: freeze
             var freeze = TokenProgram.FreezeAccount(Pk(2), Pk(3), Pk(6));
             DataHex(freeze).Should().Be("0a");
             Check(freeze.Accounts[0], Pk(2), signer: false, writable: true);
             Check(freeze.Accounts[1], Pk(3), signer: false, writable: false);
             Check(freeze.Accounts[2], Pk(6), signer: true, writable: false);
 
+            // Act & Assert: thaw
             var thaw = TokenProgram.ThawAccount(Pk(2), Pk(3), Pk(6));
             DataHex(thaw).Should().Be("0b");
         }
@@ -118,8 +132,10 @@ public static class TokenProgramOpsTests
         [Test]
         public void InitializeAccount_MatchesSolanaPy()
         {
+            // Act
             var ix = TokenProgram.InitializeAccount(Pk(2), Pk(3), Pk(6));
 
+            // Assert
             DataHex(ix).Should().Be("01");
             ix.Accounts.Should().HaveCount(4);
             Check(ix.Accounts[0], Pk(2), signer: false, writable: true);
@@ -131,8 +147,10 @@ public static class TokenProgramOpsTests
         [Test]
         public void InitializeMint_WithFreezeAuthority_MatchesSolanaPy()
         {
+            // Act
             var ix = TokenProgram.InitializeMint(Pk(3), 6, Pk(6), Pk(7));
 
+            // Assert
             DataHex(ix).Should().Be(
                 "0006" + "0606060606060606060606060606060606060606060606060606060606060606" +
                 "01" + "0707070707070707070707070707070707070707070707070707070707070707");
@@ -145,8 +163,10 @@ public static class TokenProgramOpsTests
         {
             // Minimal spl-token form: a None freeze authority is a single 0 byte (35 bytes total), not the
             // 67-byte zero-padded form some encoders emit (which the program tolerates as trailing data).
+            // Act
             var ix = TokenProgram.InitializeMint(Pk(3), 6, Pk(6));
 
+            // Assert
             DataHex(ix).Should().Be(
                 "0006" + "0606060606060606060606060606060606060606060606060606060606060606" + "00");
         }

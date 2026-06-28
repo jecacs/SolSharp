@@ -19,6 +19,7 @@ public static class MessageTests
         [Test]
         public void SystemTransfer_MatchesSolanaSdk()
         {
+            // Arrange
             var payer = PublicKey.Parse("AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9");
             var recipient = PublicKey.Parse("8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR");
             var system = PublicKey.Parse(SolanaProgramIds.SystemProgram);
@@ -31,8 +32,10 @@ public static class MessageTests
                 Data = Hex("0200000040420f0000000000")
             };
 
+            // Act
             var message = Message.Compile(payer, blockhash, [transfer]);
 
+            // Assert
             message.RequiredSignatures.Should().Be(1);
             message.ReadonlySignedAccounts.Should().Be(0);
             message.ReadonlyUnsignedAccounts.Should().Be(1);
@@ -51,6 +54,7 @@ public static class MessageTests
         [Test]
         public void DedupMergeAndOrdering_MatchesSolanaSdk()
         {
+            // Arrange
             PublicKey payer = Key(1), readonlySigner = Key(2), writableNonSigner = Key(3);
             PublicKey readonlyNonSigner = Key(4), shared = Key(5), programOne = Key(10), programTwo = Key(11);
             const string blockhash = "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8";
@@ -74,8 +78,10 @@ public static class MessageTests
                 Data = [0xAA]
             };
 
+            // Act
             var message = Message.Compile(payer, blockhash, [first, second]);
 
+            // Assert
             message.RequiredSignatures.Should().Be(2);
             message.ReadonlySignedAccounts.Should().Be(1);
             message.ReadonlyUnsignedAccounts.Should().Be(3);
@@ -101,11 +107,15 @@ public static class MessageTests
         [Test]
         public void InvalidBlockhash_Throws()
         {
+            // Arrange
             var system = PublicKey.Parse(SolanaProgramIds.SystemProgram);
             var instruction = new Instruction { ProgramId = system, Accounts = [], Data = [] };
             var message = Message.Compile(Key(1), "not-a-blockhash", [instruction]);
 
+            // Act
             Action act = () => message.Serialize();
+
+            // Assert
             act.Should().Throw<FormatException>();
         }
     }
