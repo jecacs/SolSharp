@@ -22,6 +22,7 @@ assemblies — the namespaces `SolSharp.Core.*`, `SolSharp.Rpc`, `SolSharp.Walle
 - [Versioned (v0) transactions and address lookup tables](#versioned-v0-transactions-and-address-lookup-tables)
 - [Decoding a transaction](#decoding-a-transaction)
 - [Reading parsed transactions](#reading-parsed-transactions)
+- [Cluster and validator info](#cluster-and-validator-info)
 - [WebSocket subscriptions](#websocket-subscriptions)
 - [Confirming a transaction](#confirming-a-transaction)
 - [Program-derived addresses (PDAs)](#program-derived-addresses-pdas)
@@ -481,6 +482,34 @@ filled in); over the WebSocket, `SubscribeParsedBlocksAsync` streams the same pa
 path, `GetParsedTransactionAsync` returns `null` when the signature isn't found and `GetParsedBlockAsync`
 returns `null` for a skipped slot.
 
+The same `jsonParsed` encoding decodes **account** state too: `GetParsedAccountInfoAsync` returns the node's
+typed view of a recognized account (an SPL token account or mint, a stake account, …) and falls back to raw
+bytes when the owning program is unknown. `SubscribeParsedAccountAsync` streams that same parsed view over the
+WebSocket.
+
+```csharp
+var account = await rpc.GetParsedAccountInfoAsync(usdcMint);
+if (account?.Parsed is { } parsed)
+    Console.WriteLine($"{account.Program} {parsed.Type}");                  // recognized, e.g. "spl-token" "mint"
+else if (account is not null)
+    Console.WriteLine($"{account.Owner}: {account.RawData?.Length ?? 0} raw bytes"); // unrecognized program
+```
+
+## Cluster and validator info
+
+Beyond accounts and transactions, the client reads the cluster's own state:
+
+```csharp
+var epoch = await rpc.GetEpochInfoAsync();                  // current epoch + slot progress
+var votes = await rpc.GetVoteAccountsAsync();               // active + delinquent validators
+var schedule = await rpc.GetLeaderScheduleAsync();          // leader slots by validator (current epoch)
+var nodes = await rpc.GetClusterNodesAsync();               // gossip / TPU / RPC addresses + versions
+var blocks = await rpc.GetBlocksAsync(startSlot, endSlot);  // confirmed slots in a range
+
+// Staking rewards paid to a set of addresses for a given epoch (null per address when there were none):
+var rewards = await rpc.GetInflationRewardAsync([voteAccount], epoch: 600);
+```
+
 ## WebSocket subscriptions
 
 All subscriptions share one connection and survive dropped connections (auto-reconnect + resubscribe).
@@ -510,8 +539,9 @@ await foreach (var note in accounts.ReadAllAsync())
 ```
 
 Also available: `SubscribeRootsAsync` (rooted slots, like `SubscribeSlotsAsync`), `SubscribeProgramAsync`
-(with memcmp / data-size filters), `SubscribeSignatureAsync`, and
-`SubscribeBlocksAsync`. Cancel any channel subscription by cancelling the `CancellationToken` you pass in.
+(with memcmp / data-size filters), `SubscribeSignatureAsync`, `SubscribeBlocksAsync`, and the `jsonParsed`
+streams `SubscribeParsedBlocksAsync` / `SubscribeParsedAccountAsync`. Cancel any channel subscription by
+cancelling the `CancellationToken` you pass in.
 
 ## Confirming a transaction
 
