@@ -4,6 +4,14 @@ All notable changes to SolSharp are documented here. The format is loosely based
 [Keep a Changelog](https://keepachangelog.com), and the project follows
 [semantic versioning](https://semver.org) — while on 0.x, minor releases may carry breaking changes.
 
+## [0.4.1]
+
+### Fixed
+
+- `jsonParsed` transactions no longer fail to decode when an instruction's `parsed` field is a bare value
+  instead of a `{ type, info }` object (spl-memo returns the memo string); the value is preserved on
+  `ParsedInstructionInfo.Info` with an empty `Type`.
+
 ## [0.4.0]
 
 ### Added
@@ -60,6 +68,7 @@ bundles four layered assemblies.
   transaction building, signing and serialization, `Transaction.Deserialize`, and instruction
   decompilation — every wire format validated byte-for-byte against the Rust `solana-sdk`.
 
+[0.4.1]: https://github.com/jecacs/SolSharp/releases/tag/v0.4.1
 [0.4.0]: https://github.com/jecacs/SolSharp/releases/tag/v0.4.0
 [0.3.0]: https://github.com/jecacs/SolSharp/releases/tag/v0.3.0
 [0.2.0]: https://github.com/jecacs/SolSharp/releases/tag/v0.2.0

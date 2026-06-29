@@ -5,6 +5,7 @@ namespace SolSharp.Rpc.Models.Parsed;
 
 /// <summary>The node's parsed view of an instruction it recognized: an action type and its decoded fields.</summary>
 /// <seealso href="https://solana.com/docs/rpc/json-structures">Solana RPC JSON structures</seealso>
+[JsonConverter(typeof(ParsedInstructionInfoJsonConverter))]
 public sealed record ParsedInstructionInfo
 {
     /// <summary>The instruction's action type, as named by the node's parser (for example <c>"transfer"</c>).</summary>

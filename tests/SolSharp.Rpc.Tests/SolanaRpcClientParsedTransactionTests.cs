@@ -151,6 +151,58 @@ public static class SolanaRpcClientParsedTransactionTests
             tx.Message.Instructions.Should().BeEmpty();
             tx.Message.AccountKeys.Should().ContainSingle().Which.Source.Should().BeNull();
         }
+
+        [Test]
+        public async Task ParsesMemoInstructionWhoseParsedIsAString()
+        {
+            // Arrange
+            var (client, _) = Make(Memo);
+
+            // Act
+            var tx = await client.GetParsedTransactionAsync("sigMemo");
+
+            // Assert
+            var ix = tx!.Message.Instructions.Should().ContainSingle().Subject;
+            ix.Program.Should().Be("spl-memo");
+            ix.Parsed.Should().NotBeNull();
+            ix.Parsed!.Type.Should().BeEmpty();                 // spl-memo carries no action type
+            ix.Parsed.Info.GetString().Should().Be("gm wagmi"); // the memo text rides on Info, not dropped
+            ix.Accounts.Should().BeNull();
+        }
+
+        [Test]
+        public async Task SurfacesTypedErrorForFailedTransaction()
+        {
+            // Arrange
+            var (client, _) = Make(Failed);
+
+            // Act
+            var tx = await client.GetParsedTransactionAsync("sigFail");
+
+            // Assert
+            tx!.Meta!.IsError.Should().BeTrue();
+            var error = tx.Meta.Error!;
+            error.Kind.Should().Be("InstructionError");
+            error.InstructionIndex.Should().Be(0);
+            error.InstructionError!.CustomCode.Should().Be(6001);
+        }
+
+        [Test]
+        public async Task ParsesMemoInvokedAsInnerInstruction()
+        {
+            // Arrange
+            var (client, _) = Make(InnerMemo);
+
+            // Act
+            var tx = await client.GetParsedTransactionAsync("sigInnerMemo");
+
+            // Assert - the string-shaped parsed is tolerated at the inner (CPI) level too
+            var inner = tx!.Meta!.InnerInstructions.Should().ContainSingle().Subject;
+            var cpi = inner.Instructions.Should().ContainSingle().Subject;
+            cpi.Program.Should().Be("spl-memo");
+            cpi.Parsed!.Type.Should().BeEmpty();
+            cpi.Parsed.Info.GetString().Should().Be("cpi memo");
+        }
     }
 
     [TestFixture]
@@ -194,6 +246,15 @@ public static class SolanaRpcClientParsedTransactionTests
 
     private const string Versioned =
         """{"jsonrpc":"2.0","result":{"slot":250000002,"blockTime":1700000002,"transaction":{"signatures":["sig3cccc"],"message":{"accountKeys":[{"pubkey":"3x9az88Dkbxa6tkKByxqEn7jBTJCJCD4dVvou49L24ET","signer":true,"writable":true,"source":"transaction"},{"pubkey":"7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67","signer":false,"writable":false,"source":"transaction"},{"pubkey":"5CTyWy6H2GiE3mNp8aJjUVqu7eH2JRXbDqNhpVPkRBvo","signer":false,"writable":true,"source":"lookupTable"},{"pubkey":"Fydr76JtKYEyFnzTvoEJbKpfgfaWC29XSPWibA4SzEFu","signer":false,"writable":false,"source":"lookupTable"}],"instructions":[{"programId":"7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67","accounts":["5CTyWy6H2GiE3mNp8aJjUVqu7eH2JRXbDqNhpVPkRBvo","Fydr76JtKYEyFnzTvoEJbKpfgfaWC29XSPWibA4SzEFu"],"data":"ABCD","stackHeight":null}],"recentBlockhash":"RBh3v01111111111111111111111111111111111111"}},"meta":{"err":null,"fee":5000,"preBalances":[1,1,1,1],"postBalances":[1,1,1,1],"innerInstructions":[],"logMessages":[],"preTokenBalances":[],"postTokenBalances":[],"loadedAddresses":{"writable":["5CTyWy6H2GiE3mNp8aJjUVqu7eH2JRXbDqNhpVPkRBvo"],"readonly":["Fydr76JtKYEyFnzTvoEJbKpfgfaWC29XSPWibA4SzEFu"]}},"version":0},"id":1}""";
+
+    private const string Memo =
+        """{"jsonrpc":"2.0","result":{"slot":250000003,"blockTime":1700000003,"transaction":{"signatures":["sigMemo"],"message":{"accountKeys":[{"pubkey":"3x9az88Dkbxa6tkKByxqEn7jBTJCJCD4dVvou49L24ET","signer":true,"writable":true,"source":"transaction"},{"pubkey":"MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr","signer":false,"writable":false,"source":"transaction"}],"instructions":[{"program":"spl-memo","programId":"MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr","parsed":"gm wagmi","stackHeight":null}],"recentBlockhash":"RBhMemo1111111111111111111111111111111111111"}},"meta":{"err":null,"fee":5000,"preBalances":[1,1],"postBalances":[1,1],"innerInstructions":[],"logMessages":[],"preTokenBalances":[],"postTokenBalances":[],"loadedAddresses":{"writable":[],"readonly":[]}},"version":"legacy"},"id":1}""";
+
+    private const string Failed =
+        """{"jsonrpc":"2.0","result":{"slot":250000004,"blockTime":1700000004,"transaction":{"signatures":["sigFail"],"message":{"accountKeys":[{"pubkey":"3x9az88Dkbxa6tkKByxqEn7jBTJCJCD4dVvou49L24ET","signer":true,"writable":true,"source":"transaction"},{"pubkey":"11111111111111111111111111111111","signer":false,"writable":false,"source":"transaction"}],"instructions":[{"program":"system","programId":"11111111111111111111111111111111","parsed":{"type":"transfer","info":{"lamports":1}},"stackHeight":null}],"recentBlockhash":"RBhFail1111111111111111111111111111111111111"}},"meta":{"err":{"InstructionError":[0,{"Custom":6001}]},"fee":5000,"preBalances":[1,1],"postBalances":[1,1],"innerInstructions":[],"logMessages":["Program failed"],"preTokenBalances":[],"postTokenBalances":[],"loadedAddresses":{"writable":[],"readonly":[]}},"version":"legacy"},"id":1}""";
+
+    private const string InnerMemo =
+        """{"jsonrpc":"2.0","result":{"slot":250000005,"blockTime":1700000005,"transaction":{"signatures":["sigInnerMemo"],"message":{"accountKeys":[{"pubkey":"67vHA8qZGCJKw1UNGUJZME4MwEWDRGWzp7MGvsut43A8","signer":true,"writable":true,"source":"transaction"},{"pubkey":"7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67","signer":false,"writable":false,"source":"transaction"}],"instructions":[{"programId":"7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67","accounts":["67vHA8qZGCJKw1UNGUJZME4MwEWDRGWzp7MGvsut43A8"],"data":"3Bxs","stackHeight":null}],"recentBlockhash":"RBhInner111111111111111111111111111111111111"}},"meta":{"err":null,"fee":5000,"preBalances":[1,1],"postBalances":[1,1],"innerInstructions":[{"index":0,"instructions":[{"program":"spl-memo","programId":"MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr","parsed":"cpi memo","stackHeight":2}]}],"logMessages":[],"preTokenBalances":[],"postTokenBalances":[],"loadedAddresses":{"writable":[],"readonly":[]}},"version":0},"id":1}""";
 
     private const string NotFound = """{"jsonrpc":"2.0","result":null,"id":1}""";
 

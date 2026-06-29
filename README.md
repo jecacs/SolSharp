@@ -18,7 +18,7 @@ wire format and the signing path, without dragging in a large dependency graph. 
 writing bots, indexers, or backend services that talk to Solana from .NET and care about
 speed and control, this is aimed at you.
 
-> **Status: 0.4.0 — stable release.** SolSharp ships as a single NuGet package — `SolSharp` —
+> **Status: 0.4.1 — stable release.** SolSharp ships as a single NuGet package — `SolSharp` —
 > bundling the Core (primitives + encodings), Wallet (Ed25519 keys, signing, verification), Rpc (HTTP
 > reads + send/simulate + WebSocket streaming + DI), and Programs (instructions + transaction building +
 > signing) assemblies. Versioning follows semver; while on 0.x, minor releases may still carry breaking
@@ -56,7 +56,7 @@ dotnet add package SolSharp
 ```
 
 ```xml
-<PackageReference Include="SolSharp" Version="0.4.0" />
+<PackageReference Include="SolSharp" Version="0.4.1" />
 ```
 
 | Assembly           | Purpose                                              | Status |
