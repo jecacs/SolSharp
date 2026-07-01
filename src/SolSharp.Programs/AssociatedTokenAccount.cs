@@ -30,6 +30,22 @@ public static class AssociatedTokenAccount
     /// <param name="tokenProgram">The token program; SPL Token by default, or pass Token-2022 for its mints.</param>
     /// <returns>The create-account instruction.</returns>
     public static Instruction Create(PublicKey payer, PublicKey owner, PublicKey mint, PublicKey? tokenProgram = null)
+        => Build(payer, owner, mint, tokenProgram, data: []);
+
+    /// <summary>
+    /// Builds the idempotent create instruction: like <see cref="Create"/>, but succeeds as a no-op when the
+    /// associated token account already exists instead of failing the transaction.
+    /// </summary>
+    /// <param name="payer">The account that funds the new token account; signs the transaction.</param>
+    /// <param name="owner">The wallet that will own the token account.</param>
+    /// <param name="mint">The token mint.</param>
+    /// <param name="tokenProgram">The token program; SPL Token by default, or pass Token-2022 for its mints.</param>
+    /// <returns>The createIdempotent instruction.</returns>
+    public static Instruction CreateIdempotent(PublicKey payer, PublicKey owner, PublicKey mint, PublicKey? tokenProgram = null)
+        => Build(payer, owner, mint, tokenProgram, data: [1]);
+
+    // Create and CreateIdempotent differ only in the instruction tag: empty data is Create, [1] is CreateIdempotent.
+    private static Instruction Build(PublicKey payer, PublicKey owner, PublicKey mint, PublicKey? tokenProgram, byte[] data)
     {
         var program = tokenProgram ?? DefaultTokenProgram;
         var address = GetAddress(owner, mint, program);
@@ -46,7 +62,7 @@ public static class AssociatedTokenAccount
                 AccountMeta.Readonly(SystemProgram.ProgramId),
                 AccountMeta.Readonly(program)
             ],
-            Data = []
+            Data = data
         };
     }
 }

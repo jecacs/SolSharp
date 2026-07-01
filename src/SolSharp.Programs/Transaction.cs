@@ -46,26 +46,34 @@ public sealed class Transaction
     /// <summary>Parses a transaction from its wire bytes: the signatures followed by a legacy or v0 message.</summary>
     /// <param name="data">The serialized transaction.</param>
     /// <returns>The parsed transaction, carrying its signatures.</returns>
-    /// <exception cref="FormatException">A compact-u16 length in the data is malformed.</exception>
+    /// <exception cref="FormatException">The data is truncated, a compact-u16 length in it is malformed, or the message is invalid.</exception>
     public static Transaction Deserialize(ReadOnlySpan<byte> data)
     {
-        var offset = 0;
-        var signatureCount = ShortVec.Decode(data[offset..], out var read);
-        offset += read;
-
-        var signatures = new byte[signatureCount][];
-        for (var i = 0; i < signatureCount; i++)
+        try
         {
-            signatures[i] = data.Slice(offset, SignatureLength).ToArray();
-            offset += SignatureLength;
+            var offset = 0;
+            var signatureCount = ShortVec.Decode(data[offset..], out var read);
+            offset += read;
+
+            var signatures = new byte[signatureCount][];
+            for (var i = 0; i < signatureCount; i++)
+            {
+                signatures[i] = data.Slice(offset, SignatureLength).ToArray();
+                offset += SignatureLength;
+            }
+
+            var messageBytes = data[offset..];
+            ITransactionMessage message = messageBytes.Length > 0 && (messageBytes[0] & MessageV0.VersionPrefix) != 0
+                ? MessageV0.Deserialize(messageBytes)
+                : global::SolSharp.Programs.Message.Deserialize(messageBytes);
+
+            return new Transaction(message, signatures);
         }
-
-        var messageBytes = data[offset..];
-        ITransactionMessage message = messageBytes.Length > 0 && (messageBytes[0] & MessageV0.VersionPrefix) != 0
-            ? MessageV0.Deserialize(messageBytes)
-            : global::SolSharp.Programs.Message.Deserialize(messageBytes);
-
-        return new Transaction(message, signatures);
+        catch (Exception exception) when (exception is IndexOutOfRangeException or ArgumentOutOfRangeException)
+        {
+            // Span indexing and slicing throw index errors on short input; surface the documented type.
+            throw new FormatException("The transaction data is truncated.", exception);
+        }
     }
 
     /// <summary>

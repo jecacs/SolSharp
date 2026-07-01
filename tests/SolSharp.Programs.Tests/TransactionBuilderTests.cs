@@ -112,4 +112,87 @@ public static class TransactionBuilderTests
             transaction.Serialize().Should().Equal(Convert.FromHexString(SignedV0Hex));
         }
     }
+
+    [TestFixture]
+    public sealed class AddInstructions
+    {
+        [Test]
+        public void AppendsInOrder()
+        {
+            // Arrange
+            using var payer = Keypair.FromSeed(Fill(1));
+            var first = SystemProgram.Transfer(payer.PublicKey, new PublicKey(Fill(2)), 1);
+            var second = SystemProgram.Transfer(payer.PublicKey, new PublicKey(Fill(3)), 2);
+
+            // Act
+            var message = new TransactionBuilder()
+                .SetFeePayer(payer.PublicKey)
+                .SetRecentBlockhash(Blockhash)
+                .AddInstructions(first, second)
+                .BuildMessage();
+
+            // Assert
+            var instructions = message.DecompileInstructions([]);
+            instructions.Should().HaveCount(2);
+            instructions[0].Data.Should().Equal(first.Data);
+            instructions[1].Data.Should().Equal(second.Data);
+        }
+    }
+
+    [TestFixture]
+    public sealed class BuildMessageV0
+    {
+        // The message portion of the solders-KAT'd signed v0 transfer above (the bytes after the
+        // 1-signature prefix), so the unsigned compile path is checked against the same reference.
+        private const string V0MessageHex =
+            "80010001028a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0000000000000000000000000000000000000000000000000000000000000000030303030303030303030303030303030303030303030303030303030303030301010200020c0200000040420f0000000000010505050505050505050505050505050505050505050505050505050505050505010000";
+
+        [Test]
+        public void CompilesTheMessageInsideTheSignedV0Transaction_MatchesSolders()
+        {
+            // Arrange
+            using var payer = Keypair.FromSeed(Fill(1));
+            var recipient = new PublicKey(Fill(2));
+            var table = new AddressLookupTableAccount(new PublicKey(Fill(5)), [recipient, new PublicKey(Fill(7))]);
+
+            // Act
+            var message = new TransactionBuilder()
+                .SetFeePayer(payer.PublicKey)
+                .SetRecentBlockhash(Blockhash)
+                .AddInstruction(SystemProgram.Transfer(payer.PublicKey, recipient, 1_000_000))
+                .SetAddressLookupTables(table)
+                .BuildMessageV0();
+
+            // Assert
+            Convert.ToHexString(message.Serialize()).ToLowerInvariant().Should().Be(V0MessageHex);
+        }
+    }
+
+    [TestFixture]
+    public sealed class SetDurableNonce
+    {
+        [Test]
+        public void PrependsAdvanceNonce_AndUsesNonceAsTheBlockhash()
+        {
+            // Arrange
+            using var payer = Keypair.FromSeed(Fill(1));
+            var nonceAccount = new PublicKey(Fill(5));
+            var recipient = new PublicKey(Fill(2));
+
+            // Act
+            var message = new TransactionBuilder()
+                .SetFeePayer(payer.PublicKey)
+                .SetDurableNonce(nonceAccount, payer.PublicKey, Blockhash)
+                .AddInstruction(SystemProgram.Transfer(payer.PublicKey, recipient, 1))
+                .BuildMessage();
+
+            // Assert: the nonce value anchors the message, and AdvanceNonceAccount runs first.
+            message.RecentBlockhash.Should().Be(Blockhash);
+            var instructions = message.DecompileInstructions([]);
+            instructions.Should().HaveCount(2);
+            instructions[0].ProgramId.Should().Be(SystemProgram.ProgramId);
+            instructions[0].Data.Should().Equal(Convert.FromHexString("04000000"));
+            instructions[0].Accounts[0].PublicKey.Should().Be(nonceAccount);
+        }
+    }
 }

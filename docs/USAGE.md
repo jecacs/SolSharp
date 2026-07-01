@@ -25,6 +25,7 @@ assemblies — the namespaces `SolSharp.Core.*`, `SolSharp.Rpc`, `SolSharp.Walle
 - [Cluster and validator info](#cluster-and-validator-info)
 - [WebSocket subscriptions](#websocket-subscriptions)
 - [Confirming a transaction](#confirming-a-transaction)
+- [Durable nonces](#durable-nonces)
 - [Program-derived addresses (PDAs)](#program-derived-addresses-pdas)
 - [Rate limits, custom endpoints, and headers](#rate-limits-custom-endpoints-and-headers)
 - [Error handling](#error-handling)
@@ -103,6 +104,21 @@ using var k1 = Keypair.FromBase58String(base58Export);
 using var k2 = Keypair.FromSecretKey(sixtyFourBytes);  // 32-byte seed + 32-byte public key
 ```
 
+Import a wallet from a BIP-39 mnemonic. Two schemes exist in the wild — pick the one your source wallet
+uses:
+
+```csharp
+// solana-keygen style (no derivation path):
+using var cli = Keypair.FromMnemonic("abandon abandon … about");
+
+// Phantom / Solflare style (SLIP-0010, m/44'/501'/account'/0'):
+using var account0 = Keypair.FromMnemonicAtPath("abandon abandon … about", "m/44'/501'/0'/0'");
+using var account1 = Keypair.FromMnemonicAtPath("abandon abandon … about", "m/44'/501'/1'/0'");
+```
+
+The building blocks are public too: `Bip39.ToSeed(mnemonic, passphrase)` and
+`Slip10.DeriveEd25519(seed, path)`.
+
 Sign and verify:
 
 ```csharp
@@ -154,7 +170,14 @@ IReadOnlyList<AccountInfo?> many = await rpc.GetMultipleAccountsAsync([accountA,
 var head = await rpc.GetAccountInfoAsync(account, dataSlice: new DataSlice(0, 8));
 ```
 
-`getProgramAccounts` takes the same `DataSlice` (via `GetProgramAccountsOptions.DataSlice`) to trim large result sets.
+`GetProgramAccountsAsync` scans every account a program owns, narrowed by memcmp / data-size filters, and
+takes the same `DataSlice` (via `GetProgramAccountsOptions.DataSlice`) to trim large result sets:
+
+```csharp
+var accounts = await rpc.GetProgramAccountsAsync(
+    programId,
+    new GetProgramAccountsOptions { Filters = [AccountFilter.DataSize(165)] });
+```
 
 For a program that uses Anchor / Borsh layout, pair `getAccountInfo` with Core's `BorshReader`:
 
@@ -294,6 +317,10 @@ Or set the two knobs individually:
 .AddInstruction(ComputeBudgetProgram.SetComputeUnitPrice(50_000)) // micro-lamports per CU
 ```
 
+Two more compute-budget knobs exist: `RequestHeapFrame(bytes)` requests a larger transaction heap (a
+multiple of 1024, up to 256 KiB), and `SetLoadedAccountsDataSizeLimit(bytes)` caps the account data the
+transaction may load, lowering its loaded-accounts cost.
+
 ## SPL token transfers
 
 Token balances live in associated token accounts (ATAs). Derive them, optionally create the recipient's,
@@ -308,16 +335,20 @@ var destination = AssociatedTokenAccount.GetAddress(recipient, mint);
 
 var tx = new TransactionBuilder()
     .SetRecentBlockhash(blockhash)
-    // Create the recipient's ATA if it might not exist yet:
-    .AddInstruction(AssociatedTokenAccount.Create(payer.PublicKey, recipient, mint))
+    // Create the recipient's ATA if it does not exist yet - a no-op when it already does.
+    // (Plain Create would fail the transaction on an existing account.)
+    .AddInstruction(AssociatedTokenAccount.CreateIdempotent(payer.PublicKey, recipient, mint))
     .AddInstruction(TokenProgram.TransferChecked(source, mint, destination, payer.PublicKey, 1_000_000, decimals))
     .Build(payer);
 
 await rpc.SendAndConfirmTransactionAsync(tx.Serialize());
 ```
 
-The full op set is available: `Transfer`, `TransferChecked`, `MintTo`, `Burn`, `Approve` / `Revoke`,
-`FreezeAccount` / `ThawAccount`, `InitializeMint`, `InitializeAccount`, `CloseAccount`, `SyncNative`.
+The full op set is available: `Transfer` / `TransferChecked`, `MintTo` / `MintToChecked`,
+`Burn` / `BurnChecked`, `Approve` / `ApproveChecked`, `Revoke`, `SetAuthority` (pick the authority with
+`AuthorityType`; pass no new authority to remove it permanently), `FreezeAccount` / `ThawAccount`,
+`InitializeMint`, `InitializeAccount`, `CloseAccount`, `SyncNative` — plus `AssociatedTokenAccount.Create`
+and `CreateIdempotent`.
 
 ```csharp
 TokenProgram.MintTo(mint, destination, mintAuthority, amount: 500_000);
@@ -543,6 +574,14 @@ Also available: `SubscribeRootsAsync` (rooted slots, like `SubscribeSlotsAsync`)
 streams `SubscribeParsedBlocksAsync` / `SubscribeParsedAccountAsync`. Cancel any channel subscription by
 cancelling the `CancellationToken` you pass in.
 
+The reconnect policy is tunable through `SolanaWsClientOptions`: `AutoReconnect` (on by default), the
+`ReconnectInitialDelay` → `ReconnectMaxDelay` exponential backoff, and `MaxReconnectAttempts` (`0` retries
+forever). When the attempts are exhausted — or auto-reconnect is off — every subscription completes with the
+connection error. Failure semantics are per-subscription otherwise: a subscribe the node rejects throws
+`InvalidOperationException` carrying the node's error code and message, and a notification that fails to
+decode faults only its own subscription while the connection and the other subscriptions keep going.
+Disposing the client completes every channel and stream.
+
 ## Confirming a transaction
 
 Two ways to wait for a signature to reach a commitment level — poll, or get pushed over the WebSocket.
@@ -561,6 +600,38 @@ if (result.IsError)
 `SendAndConfirmTransactionAsync` wraps the send-then-poll flow and throws `TransactionFailedException` if the
 transaction lands but errors.
 
+## Durable nonces
+
+A blockhash expires after roughly a minute; a durable nonce lets a transaction be signed now and submitted
+later. Create the nonce account once, then anchor transactions to its current nonce value.
+
+```csharp
+using SolSharp.Programs;
+
+// One-time setup: create + initialize the nonce account (80 bytes, rent-exempt).
+using var nonceKeypair = Keypair.Generate();
+var rent = await rpc.GetMinimumBalanceForRentExemptionAsync(SystemProgram.NonceAccountLength);
+var setup = new TransactionBuilder()
+    .SetRecentBlockhash((await rpc.GetLatestBlockhashAsync()).Blockhash)
+    .AddInstructions(SystemProgram.CreateNonceAccount(payer.PublicKey, nonceKeypair.PublicKey, payer.PublicKey, rent))
+    .Build(payer, nonceKeypair);
+await rpc.SendAndConfirmTransactionAsync(setup.Serialize());
+
+// Later — sign a transaction that stays valid until the nonce is advanced:
+var nonce = await rpc.GetNonceAccountAsync(nonceKeypair.PublicKey)
+    ?? throw new InvalidOperationException("nonce account not found");
+
+var tx = new TransactionBuilder()
+    .SetDurableNonce(nonceKeypair.PublicKey, payer.PublicKey, nonce.Nonce) // prepends AdvanceNonceAccount
+    .AddInstruction(SystemProgram.Transfer(payer.PublicKey, recipient, lamports))
+    .Build(payer);
+
+await rpc.SendTransactionAsync(tx.Serialize());
+```
+
+`SetDurableNonce` uses the nonce value as the recent blockhash and prepends the required
+`AdvanceNonceAccount` instruction, so each submission consumes the nonce exactly once.
+
 ## Program-derived addresses (PDAs)
 
 ```csharp
@@ -575,6 +646,9 @@ var (pda, bump) = ProgramDerivedAddress.FindProgramAddress(
 // Check whether a key is a valid Ed25519 point (PDAs are off-curve):
 bool onCurve = somePublicKey.IsOnCurve();
 ```
+
+A derivation accepts at most `MaxSeeds` (16) seeds — the bump counts toward the limit — of up to
+`MaxSeedLength` (32) bytes each, matching the runtime's rules.
 
 ## Rate limits, custom endpoints, and headers
 

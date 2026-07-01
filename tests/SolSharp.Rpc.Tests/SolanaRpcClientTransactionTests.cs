@@ -1,5 +1,6 @@
 using FluentAssertions;
 using NUnit.Framework;
+using SolSharp.Core.Primitives;
 
 namespace SolSharp.Rpc.Tests;
 
@@ -34,6 +35,29 @@ public static class SolanaRpcClientTransactionTests
             handler.CapturedRequestBody.Should().NotContain("maxRetries");
             handler.CapturedRequestBody.Should().NotContain("minContextSlot");
         }
+
+        [Test]
+        public async Task SendsOptionsWhenProvided()
+        {
+            // Arrange
+            var (client, handler) = Make("""{"jsonrpc":"2.0","result":"SigOpt111111111111111111111111111111111111","id":1}""");
+            var options = new SendTransactionOptions
+            {
+                SkipPreflight = true,
+                PreflightCommitment = Commitment.Processed,
+                MaxRetries = 3,
+                MinContextSlot = 42
+            };
+
+            // Act
+            await client.SendTransactionAsync([1, 2, 3], options);
+
+            // Assert
+            handler.CapturedRequestBody.Should().Contain("\"skipPreflight\":true");
+            handler.CapturedRequestBody.Should().Contain("\"preflightCommitment\":\"processed\"");
+            handler.CapturedRequestBody.Should().Contain("\"maxRetries\":3");
+            handler.CapturedRequestBody.Should().Contain("\"minContextSlot\":42");
+        }
     }
 
     [TestFixture]
@@ -67,6 +91,30 @@ public static class SolanaRpcClientTransactionTests
 
             // Assert
             result.IsError.Should().BeTrue();
+        }
+
+        [Test]
+        public async Task SendsOptionsWhenProvided()
+        {
+            // Arrange
+            var (client, handler) = Make(
+                """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"err":null,"logs":[],"unitsConsumed":0}},"id":1}""");
+            var options = new SimulateTransactionOptions
+            {
+                SigVerify = true,
+                ReplaceRecentBlockhash = true,
+                Commitment = Commitment.Processed,
+                MinContextSlot = 7
+            };
+
+            // Act
+            await client.SimulateTransactionAsync([1, 2, 3], options);
+
+            // Assert
+            handler.CapturedRequestBody.Should().Contain("\"sigVerify\":true");
+            handler.CapturedRequestBody.Should().Contain("\"replaceRecentBlockhash\":true");
+            handler.CapturedRequestBody.Should().Contain("\"commitment\":\"processed\"");
+            handler.CapturedRequestBody.Should().Contain("\"minContextSlot\":7");
         }
     }
 }

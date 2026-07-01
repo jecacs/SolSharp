@@ -100,8 +100,10 @@ public sealed partial class Keypair : ISigner, IDisposable
         GC.SuppressFinalize(this);
     }
 
-    // Backstop for a caller that forgets to dispose: the seed is still zeroed when the keypair is
-    // finalized. Deterministic Dispose() is preferred (and suppresses this).
+    /// <summary>
+    /// Backstop for a caller that forgets to dispose: the seed is still zeroed when the keypair is
+    /// finalized. Deterministic <see cref="Dispose"/> is preferred (and suppresses this).
+    /// </summary>
     ~Keypair()
     {
         if (!_disposed)

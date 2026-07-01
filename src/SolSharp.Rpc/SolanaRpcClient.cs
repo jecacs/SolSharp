@@ -635,6 +635,27 @@ public class SolanaRpcClient(HttpClient httpClient)
     }
 
     /// <summary>
+    /// Fetches and decodes a durable nonce account, or returns <c>null</c> if nothing exists at
+    /// <paramref name="nonceAccount"/> or the account is not an initialized nonce. The result's
+    /// <see cref="NonceAccount.Nonce"/> is the recent-blockhash value for a nonce-anchored transaction.
+    /// </summary>
+    /// <param name="nonceAccount">The nonce account's address.</param>
+    /// <param name="commitment">The commitment level to query at.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The decoded nonce account, or <c>null</c> if it does not exist or is not an initialized nonce.</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<NonceAccount?> GetNonceAccountAsync(
+        PublicKey nonceAccount,
+        Commitment commitment = Commitment.Confirmed,
+        CancellationToken cancellationToken = default)
+    {
+        var account = await GetAccountInfoAsync(nonceAccount, commitment, cancellationToken: cancellationToken);
+        return account is null ? null : NonceAccount.Decode(account.Data);
+    }
+
+    /// <summary>
     /// Fetches and decodes an SPL Token account, or returns <c>null</c> if nothing exists at
     /// <paramref name="tokenAccount"/> or the account is too short to be a token account.
     /// </summary>

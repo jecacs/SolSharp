@@ -15,17 +15,52 @@ public static class TokenProgram
     /// <summary>The SPL Token program's address.</summary>
     public static readonly PublicKey ProgramId = PublicKey.Parse(SolanaProgramIds.TokenProgram);
 
+    /// <summary>The instruction-data discriminator (first data byte) of InitializeMint.</summary>
     public const byte InitializeMintDiscriminator = 0;
+
+    /// <summary>The instruction-data discriminator (first data byte) of InitializeAccount.</summary>
     public const byte InitializeAccountDiscriminator = 1;
+
+    /// <summary>The instruction-data discriminator (first data byte) of Transfer.</summary>
     public const byte TransferDiscriminator = 3;
+
+    /// <summary>The instruction-data discriminator (first data byte) of Approve.</summary>
     public const byte ApproveDiscriminator = 4;
+
+    /// <summary>The instruction-data discriminator (first data byte) of Revoke.</summary>
     public const byte RevokeDiscriminator = 5;
+
+    /// <summary>The instruction-data discriminator (first data byte) of SetAuthority.</summary>
+    public const byte SetAuthorityDiscriminator = 6;
+
+    /// <summary>The instruction-data discriminator (first data byte) of MintTo.</summary>
     public const byte MintToDiscriminator = 7;
+
+    /// <summary>The instruction-data discriminator (first data byte) of Burn.</summary>
     public const byte BurnDiscriminator = 8;
+
+    /// <summary>The instruction-data discriminator (first data byte) of CloseAccount.</summary>
     public const byte CloseAccountDiscriminator = 9;
+
+    /// <summary>The instruction-data discriminator (first data byte) of FreezeAccount.</summary>
     public const byte FreezeAccountDiscriminator = 10;
+
+    /// <summary>The instruction-data discriminator (first data byte) of ThawAccount.</summary>
     public const byte ThawAccountDiscriminator = 11;
+
+    /// <summary>The instruction-data discriminator (first data byte) of TransferChecked.</summary>
     public const byte TransferCheckedDiscriminator = 12;
+
+    /// <summary>The instruction-data discriminator (first data byte) of ApproveChecked.</summary>
+    public const byte ApproveCheckedDiscriminator = 13;
+
+    /// <summary>The instruction-data discriminator (first data byte) of MintToChecked.</summary>
+    public const byte MintToCheckedDiscriminator = 14;
+
+    /// <summary>The instruction-data discriminator (first data byte) of BurnChecked.</summary>
+    public const byte BurnCheckedDiscriminator = 15;
+
+    /// <summary>The instruction-data discriminator (first data byte) of SyncNative.</summary>
     public const byte SyncNativeDiscriminator = 17;
 
     private static readonly PublicKey RentSysvar = PublicKey.Parse(Sysvars.Rent);
@@ -264,11 +299,130 @@ public static class TokenProgram
         };
     }
 
+    /// <summary>
+    /// Changes one of an account's authorities: a mint's mint or freeze authority, or a token account's
+    /// owner or close authority.
+    /// </summary>
+    /// <param name="account">The mint or token account whose authority changes (writable).</param>
+    /// <param name="currentAuthority">The authority being replaced; signs.</param>
+    /// <param name="authorityType">Which authority to change.</param>
+    /// <param name="newAuthority">The new authority, or <c>null</c> to remove the authority permanently.</param>
+    /// <param name="tokenProgram">The token program to target; defaults to the classic SPL Token program. Pass <c>SolanaProgramIds.Token2022Program</c> for Token-2022.</param>
+    /// <returns>The setAuthority instruction.</returns>
+    public static Instruction SetAuthority(
+        PublicKey account,
+        PublicKey currentAuthority,
+        AuthorityType authorityType,
+        PublicKey? newAuthority = null,
+        PublicKey? tokenProgram = null)
+    {
+        // The new authority is a compact instruction COption (a 1-byte tag, plus the key only when present) -
+        // the form the Rust spl-token builder packs. (solana-py pads None with 32 zero bytes; both unpack.)
+        var data = new byte[newAuthority is null ? 3 : 35];
+        data[0] = SetAuthorityDiscriminator;
+        data[1] = (byte)authorityType;
+        if (newAuthority is { } authority)
+        {
+            data[2] = 1;
+            authority.CopyTo(data.AsSpan(3));
+        }
+
+        return new Instruction
+        {
+            ProgramId = tokenProgram ?? ProgramId,
+            Accounts = [AccountMeta.Writable(account), AccountMeta.ReadonlySigner(currentAuthority)],
+            Data = data
+        };
+    }
+
+    /// <summary>Approves a delegate for up to <paramref name="amount"/> base units, also verifying the mint and its decimals - the recommended form.</summary>
+    /// <param name="source">The token account to delegate from (writable).</param>
+    /// <param name="mint">The token mint; verified by the program.</param>
+    /// <param name="delegate">The delegate authorized to transfer.</param>
+    /// <param name="owner">The account's owner; signs.</param>
+    /// <param name="amount">The maximum amount the delegate may transfer, in base units.</param>
+    /// <param name="decimals">The mint's decimals; must match the on-chain mint.</param>
+    /// <param name="tokenProgram">The token program to target; defaults to the classic SPL Token program. Pass <c>SolanaProgramIds.Token2022Program</c> for Token-2022.</param>
+    /// <returns>The approveChecked instruction.</returns>
+    public static Instruction ApproveChecked(
+        PublicKey source,
+        PublicKey mint,
+        PublicKey @delegate,
+        PublicKey owner,
+        ulong amount,
+        byte decimals,
+        PublicKey? tokenProgram = null)
+        => new()
+        {
+            ProgramId = tokenProgram ?? ProgramId,
+            Accounts =
+            [
+                AccountMeta.Writable(source),
+                AccountMeta.Readonly(mint),
+                AccountMeta.Readonly(@delegate),
+                AccountMeta.ReadonlySigner(owner)
+            ],
+            Data = CheckedData(ApproveCheckedDiscriminator, amount, decimals)
+        };
+
+    /// <summary>Mints new base units to a token account, also verifying the mint's decimals - the recommended form.</summary>
+    /// <param name="mint">The mint to mint from (writable).</param>
+    /// <param name="destination">The token account to credit (writable).</param>
+    /// <param name="authority">The mint authority; signs.</param>
+    /// <param name="amount">The amount to mint, in base units.</param>
+    /// <param name="decimals">The mint's decimals; must match the on-chain mint.</param>
+    /// <param name="tokenProgram">The token program to target; defaults to the classic SPL Token program. Pass <c>SolanaProgramIds.Token2022Program</c> for Token-2022.</param>
+    /// <returns>The mintToChecked instruction.</returns>
+    public static Instruction MintToChecked(
+        PublicKey mint,
+        PublicKey destination,
+        PublicKey authority,
+        ulong amount,
+        byte decimals,
+        PublicKey? tokenProgram = null)
+        => new()
+        {
+            ProgramId = tokenProgram ?? ProgramId,
+            Accounts = [AccountMeta.Writable(mint), AccountMeta.Writable(destination), AccountMeta.ReadonlySigner(authority)],
+            Data = CheckedData(MintToCheckedDiscriminator, amount, decimals)
+        };
+
+    /// <summary>Burns base units from a token account, also verifying the mint's decimals - the recommended form.</summary>
+    /// <param name="account">The token account to debit (writable).</param>
+    /// <param name="mint">The token mint (writable).</param>
+    /// <param name="authority">The account's owner or delegate; signs.</param>
+    /// <param name="amount">The amount to burn, in base units.</param>
+    /// <param name="decimals">The mint's decimals; must match the on-chain mint.</param>
+    /// <param name="tokenProgram">The token program to target; defaults to the classic SPL Token program. Pass <c>SolanaProgramIds.Token2022Program</c> for Token-2022.</param>
+    /// <returns>The burnChecked instruction.</returns>
+    public static Instruction BurnChecked(
+        PublicKey account,
+        PublicKey mint,
+        PublicKey authority,
+        ulong amount,
+        byte decimals,
+        PublicKey? tokenProgram = null)
+        => new()
+        {
+            ProgramId = tokenProgram ?? ProgramId,
+            Accounts = [AccountMeta.Writable(account), AccountMeta.Writable(mint), AccountMeta.ReadonlySigner(authority)],
+            Data = CheckedData(BurnCheckedDiscriminator, amount, decimals)
+        };
+
     private static byte[] AmountData(byte discriminator, ulong amount)
     {
         var data = new byte[9];
         data[0] = discriminator;
         BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(1), amount);
+        return data;
+    }
+
+    private static byte[] CheckedData(byte discriminator, ulong amount, byte decimals)
+    {
+        var data = new byte[10];
+        data[0] = discriminator;
+        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(1), amount);
+        data[9] = decimals;
         return data;
     }
 }

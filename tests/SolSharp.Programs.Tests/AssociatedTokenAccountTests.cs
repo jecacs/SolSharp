@@ -61,4 +61,28 @@ public static class AssociatedTokenAccountTests
             instruction.Accounts.Skip(2).Should().OnlyContain(a => !a.IsSigner && !a.IsWritable);
         }
     }
+
+    [TestFixture]
+    public sealed class CreateIdempotent
+    {
+        // Reference from solana-py create_idempotent_associated_token_account: identical accounts to Create,
+        // with the one-byte instruction tag 1.
+        [Test]
+        public void MatchesCreateWithIdempotentTag()
+        {
+            // Arrange
+            var payer = Key(1);
+            var owner = Key(2);
+            var mint = Key(3);
+
+            // Act
+            var create = AssociatedTokenAccount.Create(payer, owner, mint);
+            var idempotent = AssociatedTokenAccount.CreateIdempotent(payer, owner, mint);
+
+            // Assert
+            idempotent.Data.Should().Equal((byte)1);
+            idempotent.ProgramId.Should().Be(create.ProgramId);
+            idempotent.Accounts.Should().Equal(create.Accounts);
+        }
+    }
 }

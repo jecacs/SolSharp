@@ -18,11 +18,11 @@ wire format and the signing path, without dragging in a large dependency graph. 
 writing bots, indexers, or backend services that talk to Solana from .NET and care about
 speed and control, this is aimed at you.
 
-> **Status: 0.4.1 — stable release.** SolSharp ships as a single NuGet package — `SolSharp` —
-> bundling the Core (primitives + encodings), Wallet (Ed25519 keys, signing, verification), Rpc (HTTP
-> reads + send/simulate + WebSocket streaming + DI), and Programs (instructions + transaction building +
-> signing) assemblies. Versioning follows semver; while on 0.x, minor releases may still carry breaking
-> changes.
+> **Status: 0.5.0 — stable release.** SolSharp ships as a single NuGet package — `SolSharp` —
+> bundling the Core (primitives + encodings), Wallet (Ed25519 keys, signing, verification, BIP-39/SLIP-0010
+> mnemonic import), Rpc (HTTP reads + send/simulate + WebSocket streaming + DI), and Programs (instructions +
+> transaction building + signing, durable nonces) assemblies. Versioning follows semver; while on 0.x, minor
+> releases may still carry breaking changes.
 
 📖 **New here? Read the [usage guide](docs/USAGE.md)** — a task-oriented cookbook covering keys, reads,
 SPL token state, building/signing/sending transactions, v0 + address lookup tables, decoding transactions,
@@ -56,7 +56,7 @@ dotnet add package SolSharp
 ```
 
 ```xml
-<PackageReference Include="SolSharp" Version="0.4.1" />
+<PackageReference Include="SolSharp" Version="0.5.0" />
 ```
 
 | Assembly           | Purpose                                              | Status |
@@ -104,8 +104,8 @@ bool ok = PublicKey.TryParse(input, out var key);
   `getVoteAccounts`, `getInflationReward`, `getLeaderSchedule`, `getBlocks`, `getClusterNodes`,
   `requestAirdrop`); each typed, fully documented, and tested.
 - Account-state decoders — `Mint` and `TokenAccount` (SPL Token state, via `GetMintAsync` /
-  `GetTokenAccountAsync`) and `AddressLookupTable`; for other programs, pair `getAccountInfo` with Core's
-  `BorshReader`.
+  `GetTokenAccountAsync`), `NonceAccount` (via `GetNonceAccountAsync`), and `AddressLookupTable`; for other
+  programs, pair `getAccountInfo` with Core's `BorshReader`.
 - `getTransaction` returns the decoded transaction bytes (feed to `Transaction.Deserialize`) alongside rich
   metadata — pre/post SOL and token balances, inner (CPI) instructions, loaded lookup-table addresses, logs,
   and compute units. Failures decode to a typed `TransactionError` (exposing the program's `Custom` code) on
@@ -143,6 +143,9 @@ await foreach (var slot in ws.SubscribeSlotsAsync())
 
 - `Keypair` — generate a key, or load one with `Parse` (auto-detecting a base58 export, a `solana-keygen`
   JSON array, hex, or base64); signs messages and zeroes its secret on dispose (or finalization).
+- Mnemonic import — `FromMnemonic` (the `solana-keygen` scheme) and `FromMnemonicAtPath` (the
+  Phantom / Solflare SLIP-0010 scheme), built on the public `Bip39` and `Slip10` helpers and validated
+  against the official test vectors.
 - `ISigner` — the signing abstraction the transaction builder depends on, so the key stays swappable.
 - `PublicKey.Verify(message, signature)` — Ed25519 verification, kept in Wallet so Core stays crypto-free.
 
@@ -150,20 +153,24 @@ await foreach (var slot in ws.SubscribeSlotsAsync())
 using SolSharp.Wallet;
 
 using var keypair = Keypair.Generate();      // or Keypair.Parse(phantomExport / id.json)
+using var wallet = Keypair.FromMnemonicAtPath(words, "m/44'/501'/0'/0'"); // Phantom-style import
 byte[] signature = keypair.Sign(message);
 bool ok = keypair.PublicKey.Verify(message, signature);
 ```
 
 `SolSharp.Programs`:
 
-- Instruction builders: `SystemProgram` (transfer, create / allocate / assign, create-with-seed, durable nonce), `ComputeBudgetProgram` (compute-unit
-  limit and priority fee), `TokenProgram` (transfer / transfer-checked, mint / burn, approve / revoke,
-  freeze / thaw, initialize mint / account, close, sync-native — each with a `tokenProgram` override for
-  Token-2022), `AssociatedTokenAccount`, `AddressLookupTableProgram` (create / extend / deactivate / close),
-  and `MemoProgram`.
+- Instruction builders: `SystemProgram` (transfer, create / allocate / assign — plus `CreateAccountWithSeed`,
+  `AllocateWithSeed`, `AssignWithSeed`, `TransferWithSeed` — and the durable-nonce set, including the
+  `CreateNonceAccount` pair), `ComputeBudgetProgram` (compute-unit limit, priority fee, `RequestHeapFrame`,
+  `SetLoadedAccountsDataSizeLimit`), `TokenProgram` (transfer, mint, burn, approve — checked variants
+  included — revoke, `SetAuthority` via `AuthorityType`, freeze / thaw, initialize mint / account, close,
+  sync-native — each with a `tokenProgram` override for Token-2022), `AssociatedTokenAccount` (create and
+  `CreateIdempotent`), `AddressLookupTableProgram` (create / extend / deactivate / close), and `MemoProgram`.
 - `ProgramDerivedAddress` (`FindProgramAddress` / `TryCreateProgramAddress`) and `PublicKey.IsOnCurve()`.
 - `Message` (legacy) and `MessageV0` (versioned, loading extra accounts from address lookup tables),
-  `Transaction`, and `TransactionBuilder` (`Build` / `BuildV0`) — compilation, wire serialization (with
+  `Transaction`, and `TransactionBuilder` (`Build` / `BuildV0`, durable-nonce anchoring via
+  `SetDurableNonce`) — compilation, wire serialization (with
   `Transaction.Deserialize` to parse one back, and `DecompileInstructions` to resolve a parsed message's
   instructions to program ids and account keys, loading v0 lookup-table accounts), signing, and base64
   output. Every encoding is checked byte-for-byte against the Rust `solana-sdk` (via solders) and `solana-py`.
@@ -196,6 +203,8 @@ var signature = await rpc.SendTransactionAsync(tx.Serialize());
 - [x] Borsh reader + writer, typed SPL account state (`Mint` / `TokenAccount`), `Transaction.Deserialize` + instruction decompilation, and typed `TransactionError`
 - [x] Live integration test suite (configurable RPC / WS endpoint)
 - [x] Published NuGet package (single `SolSharp` package bundling the four assemblies)
+- [x] Durable nonces — nonce instructions + `NonceAccount` decoding + `TransactionBuilder.SetDurableNonce`
+- [x] Mnemonic wallet import — BIP-39 + SLIP-0010 (`solana-keygen` and Phantom/Solflare schemes)
 
 ## Requirements
 

@@ -11,6 +11,7 @@ namespace SolSharp.Core.Converters;
 /// </summary>
 public static class SolanaJsonSerializer
 {
+    /// <summary>The shared, frozen options instance; safe to use concurrently from any thread.</summary>
     public static readonly JsonSerializerOptions Options = CreateOptions();
 
     private static JsonSerializerOptions CreateOptions()

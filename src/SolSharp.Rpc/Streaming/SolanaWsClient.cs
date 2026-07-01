@@ -19,6 +19,8 @@ namespace SolSharp.Rpc.Streaming;
 /// <see cref="System.Threading.Channels.ChannelReader{T}"/> (which unsubscribes when its token is cancelled).
 /// When <see cref="SolanaWsClientOptions.AutoReconnect"/> is enabled (the default), a dropped connection
 /// is transparently re-established and the active subscriptions are replayed onto it.
+/// A notification that fails to decode faults only its own subscription; the connection and the other
+/// subscriptions are unaffected.
 /// </summary>
 public sealed class SolanaWsClient : IAsyncDisposable
 {
@@ -37,6 +39,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
     private long _nextLocalId;
     private long _connectionGeneration;
     private Task? _runLoop;
+    private bool _disposed;
 
     /// <summary>Creates a client over a real <see cref="System.Net.WebSockets.ClientWebSocket"/> with default options.</summary>
     /// <param name="loggerFactory">Optional factory for connection/reconnection diagnostics; no logging when null.</param>
@@ -73,8 +76,14 @@ public sealed class SolanaWsClient : IAsyncDisposable
     /// <returns>A task that completes once connected.</returns>
     /// <exception cref="System.Net.WebSockets.WebSocketException">The connection could not be established.</exception>
     /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    /// <exception cref="InvalidOperationException">The client is already connected.</exception>
+    /// <exception cref="ObjectDisposedException">The client has been disposed.</exception>
     public async Task ConnectAsync(Uri endpoint, CancellationToken cancellationToken = default)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_runLoop is not null)
+            throw new InvalidOperationException("The client is already connected; create one client per connection.");
+
         _endpoint = endpoint;
         _connection = _connectionFactory();
         await _connection.ConnectAsync(endpoint, cancellationToken);
@@ -625,23 +634,54 @@ public sealed class SolanaWsClient : IAsyncDisposable
         using var document = JsonDocument.Parse(message);
         var root = document.RootElement;
 
-        if (root.TryGetProperty("id", out var idElement) &&
-            root.TryGetProperty("result", out var resultElement) &&
-            idElement.TryGetInt32(out var requestId) &&
-            _pending.TryRemove(requestId, out var pending))
+        if (root.TryGetProperty("id", out var idElement) && idElement.TryGetInt32(out var requestId))
         {
-            if (resultElement.ValueKind == JsonValueKind.Number && resultElement.TryGetInt64(out var subscriptionId))
+            if (root.TryGetProperty("result", out var resultElement) &&
+                _pending.TryRemove(requestId, out var pending))
             {
-                pending.Subscription.ServerId = subscriptionId;
-                pending.Subscription.Established = true;
-                _byServerId[subscriptionId] = pending.Subscription;
-                pending.Acked.TrySetResult(subscriptionId);
-            }
-            else
-            {
-                pending.Acked.TrySetException(new InvalidOperationException("The node rejected the subscription."));
+                if (resultElement.ValueKind == JsonValueKind.Number && resultElement.TryGetInt64(out var subscriptionId))
+                {
+                    pending.Subscription.ServerId = subscriptionId;
+                    pending.Subscription.Established = true;
+                    _byServerId[subscriptionId] = pending.Subscription;
+                    pending.Acked.TrySetResult(subscriptionId);
+                }
+                else
+                {
+                    pending.Acked.TrySetException(new InvalidOperationException("The node rejected the subscription."));
+                }
+
+                return;
             }
 
+            // JSON-RPC error response: {"jsonrpc":"2.0","error":{"code":...,"message":"..."},"id":N}.
+            // Without this branch a rejected subscribe never resolves its ack and the caller hangs forever.
+            if (root.TryGetProperty("error", out var errorElement) &&
+                _pending.TryRemove(requestId, out var faulted))
+            {
+                // The error member is an object per JSON-RPC, but guard the shape anyway: TryGetProperty
+                // throws on a non-object element, and one malformed frame must not read as a dropped connection.
+                var detail = errorElement.ValueKind == JsonValueKind.Object &&
+                             errorElement.TryGetProperty("message", out var errorMessage) &&
+                             errorMessage.ValueKind == JsonValueKind.String
+                    ? errorMessage.GetString()
+                    : errorElement.GetRawText();
+                var code = errorElement.ValueKind == JsonValueKind.Object &&
+                           errorElement.TryGetProperty("code", out var codeElement) &&
+                           codeElement.TryGetInt64(out var codeValue)
+                    ? codeValue
+                    : 0;
+
+                _logger.LogWarning(
+                    "Solana WS request {RequestId} ('{Method}') rejected by the node (code {Code}): {Detail}",
+                    requestId, faulted.Subscription.SubscribeMethod, code, detail);
+
+                faulted.Acked.TrySetException(
+                    new InvalidOperationException($"The node rejected '{faulted.Subscription.SubscribeMethod}' (code {code}): {detail}"));
+                return;
+            }
+
+            // Unsubscribe acks and replies to requests we no longer track land here; nothing to route.
             return;
         }
 
@@ -651,8 +691,32 @@ public sealed class SolanaWsClient : IAsyncDisposable
             subscriptionElement.TryGetInt64(out var notified) &&
             _byServerId.TryGetValue(notified, out var subscription))
         {
-            subscription.Sink.Deliver(notification);
+            try
+            {
+                subscription.Sink.Deliver(notification);
+            }
+            catch (Exception exception)
+            {
+                FaultSubscription(subscription, exception);
+            }
         }
+    }
+
+    // A notification that cannot be decoded faults only its own subscription: the consumer sees the decode
+    // error on its channel or stream instead of a silent stall, and the connection and every other
+    // subscription keep going. Letting the exception escape here would read as a dropped connection and,
+    // with auto-reconnect and a systematically undecodable payload, loop drop/replay forever.
+    private void FaultSubscription(Subscription subscription, Exception exception)
+    {
+        _logger.LogWarning(
+            exception, "Solana WS could not decode a '{Method}' notification; faulting that subscription", subscription.SubscribeMethod);
+
+        if (!_active.TryRemove(subscription.LocalId, out _))
+            return;
+
+        _byServerId.TryRemove(subscription.ServerId, out _);
+        subscription.Sink.Complete(exception);
+        _ = SendUnsubscribeAsync(subscription.UnsubscribeMethod, subscription.ServerId);
     }
 
     private void FaultPending(Exception exception)
@@ -662,9 +726,13 @@ public sealed class SolanaWsClient : IAsyncDisposable
         _pending.Clear();
     }
 
-    private void CompleteAll(Exception exception)
+    // A null exception is an orderly shutdown: each subscription's channel or stream completes without an
+    // error, so consumers observe the end of the stream. A non-null exception (a connection that dropped and
+    // will not be re-established) faults them instead. In-flight subscribes always fault - they can never
+    // be acknowledged.
+    private void CompleteAll(Exception? exception)
     {
-        FaultPending(exception);
+        FaultPending(exception ?? new ObjectDisposedException(nameof(SolanaWsClient)));
 
         foreach (var subscription in _active.Values)
             subscription.Sink.Complete(exception);
@@ -684,10 +752,18 @@ public sealed class SolanaWsClient : IAsyncDisposable
         }
     }
 
-    /// <summary>Closes the connection and ends all subscriptions.</summary>
+    /// <summary>
+    /// Closes the connection and ends every subscription: active channels and streams complete without an
+    /// error, and a subscribe still awaiting its acknowledgement faults with
+    /// <see cref="ObjectDisposedException"/>. Safe to call more than once.
+    /// </summary>
     /// <returns>A task that completes once cleanup is done.</returns>
     public async ValueTask DisposeAsync()
     {
+        if (_disposed)
+            return;
+        _disposed = true;
+
         await _lifetimeCts.CancelAsync();
 
         if (_runLoop is not null)
@@ -696,13 +772,16 @@ public sealed class SolanaWsClient : IAsyncDisposable
             {
                 await _runLoop;
             }
-            catch
+            catch (Exception exception)
             {
+                _logger.LogDebug(exception, "Solana WS receive loop ended with an error during dispose");
             }
         }
 
         if (_connection is not null)
             await SafeDisposeAsync(_connection);
+
+        CompleteAll(exception: null);
 
         _lifetimeCts.Dispose();
         _sendLock.Dispose();
@@ -736,7 +815,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
     {
         void Deliver(JsonElement result);
 
-        void Complete(Exception exception);
+        void Complete(Exception? exception);
     }
 
     private sealed class SubscriptionSink<T> : ISubscriptionSink
@@ -756,6 +835,6 @@ public sealed class SolanaWsClient : IAsyncDisposable
                 _channel.Writer.TryWrite(value);
         }
 
-        public void Complete(Exception exception) => _channel.Writer.TryComplete(exception);
+        public void Complete(Exception? exception) => _channel.Writer.TryComplete(exception);
     }
 }

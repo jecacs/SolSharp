@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Threading.Channels;
 using FluentAssertions;
 using NUnit.Framework;
 using SolSharp.Core.Constants;
@@ -35,6 +36,7 @@ public static class SolanaWsClientTests
             (await move).Should().BeTrue();
             subscription.Current.Slot.Should().Be(11);
             subscription.Current.Parent.Should().Be(10);
+            subscription.Current.Root.Should().Be(9);
 
             await subscription.DisposeAsync();
 
@@ -100,6 +102,7 @@ public static class SolanaWsClientTests
                 """{"jsonrpc":"2.0","method":"logsNotification","params":{"subscription":7,"result":{"context":{"slot":100},"value":{"signature":"sig11","err":null,"logs":["Program log: hi"]}}}}""");
 
             var message = await reader.ReadAsync();
+            message.Context!.Slot.Should().Be(100ul);
             message.Value!.Signature.Should().Be("sig11");
             message.Value.Logs.Should().ContainSingle().Which.Should().Be("Program log: hi");
             message.Value.IsError.Should().BeFalse();
@@ -107,6 +110,106 @@ public static class SolanaWsClientTests
             await cts.CancelAsync();
             await WaitUntil(() => fake.Sent.Exists(message => message.Contains("logsUnsubscribe")));
             fake.Sent.Should().Contain(message => message.Contains("\"method\":\"logsUnsubscribe\""));
+        }
+    }
+
+    [TestFixture]
+    public sealed class SubscribeRejection
+    {
+        [Test]
+        public async Task ErrorResponse_FaultsTheSubscribeCall()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+
+            var program = PublicKey.Parse(SolanaProgramIds.TokenProgram);
+
+            // Act
+            var subscribe = client.SubscribeLogsAsync(program);
+
+            await WaitUntil(() => fake.Sent.Count > 0);
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","error":{"code":-32602,"message":"Too many subscriptions"},"id":1}""");
+
+            // Assert
+            var act = async () => await subscribe;
+            (await act.Should().ThrowAsync<InvalidOperationException>())
+                .Which.Message.Should().Contain("-32602").And.Contain("Too many subscriptions");
+        }
+
+        [Test]
+        public async Task ErrorResponse_DoesNotDisturbOtherSubscriptions()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+
+            var program = PublicKey.Parse(SolanaProgramIds.TokenProgram);
+
+            var first = client.SubscribeLogsAsync(program);
+            await WaitUntil(() => fake.Sent.Count == 1);
+            fake.PushFromServer("""{"jsonrpc":"2.0","result":7,"id":1}""");
+            var reader = await first;
+
+            // Act: a second subscribe gets rejected.
+            var second = client.SubscribeLogsAsync(program);
+            await WaitUntil(() => fake.Sent.Count == 2);
+            fake.PushFromServer("""{"jsonrpc":"2.0","error":{"code":-32000,"message":"nope"},"id":2}""");
+
+            var act = async () => await second;
+            await act.Should().ThrowAsync<InvalidOperationException>();
+
+            // Assert: the first subscription still delivers.
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"logsNotification","params":{"subscription":7,"result":{"context":{"slot":100},"value":{"signature":"sig1","err":null,"logs":[]}}}}""");
+
+            var message = await reader.ReadAsync();
+            message.Value!.Signature.Should().Be("sig1");
+        }
+    }
+
+    [TestFixture]
+    public sealed class NotificationDecodeFailure
+    {
+        [Test]
+        public async Task FaultsOnlyThatSubscription_OthersKeepStreaming()
+        {
+            // Arrange: an account and a logs subscription multiplexed over one connection.
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+
+            var token = PublicKey.Parse(SolanaProgramIds.TokenProgram);
+
+            var subscribeAccount = client.SubscribeAccountAsync(token);
+            await WaitUntil(() => fake.Sent.Count == 1);
+            fake.PushFromServer("""{"jsonrpc":"2.0","result":1,"id":1}""");
+            var accountReader = await subscribeAccount;
+
+            var subscribeLogs = client.SubscribeLogsAsync(token);
+            await WaitUntil(() => fake.Sent.Count == 2);
+            fake.PushFromServer("""{"jsonrpc":"2.0","result":2,"id":2}""");
+            var logsReader = await subscribeLogs;
+
+            // Act: the account notification is undecodable (no "lamports"); the logs one after it is fine.
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"accountNotification","params":{"subscription":1,"result":{"context":{"slot":1},"value":{"owner":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA","executable":false,"rentEpoch":0,"data":["","base64"]}}}}""");
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"logsNotification","params":{"subscription":2,"result":{"context":{"slot":2},"value":{"signature":"sig22","err":null,"logs":[]}}}}""");
+
+            // Assert: the healthy subscription still delivers over the same, un-dropped connection...
+            (await logsReader.ReadAsync()).Value!.Signature.Should().Be("sig22");
+
+            // ...while the broken one is completed with the decode error and unsubscribed.
+            var read = async () => await accountReader.ReadAsync();
+            (await read.Should().ThrowAsync<ChannelClosedException>())
+                .Which.InnerException.Should().NotBeNull();
+
+            await WaitUntil(() => fake.Sent.Exists(entry => entry.Contains("accountUnsubscribe")));
+            fake.Sent.Should().Contain(entry => entry.Contains("\"method\":\"accountUnsubscribe\""));
         }
     }
 
@@ -192,6 +295,44 @@ public static class SolanaWsClientTests
             // A notification carrying the new id reaches the original, still-open reader.
             second.PushFromServer(AccountNotification(subscription: 22, lamports: 2));
             (await reader.ReadAsync()).Value!.Lamports.Should().Be(2);
+        }
+    }
+
+    [TestFixture]
+    public sealed class ReconnectGiveUp
+    {
+        [Test]
+        public async Task ExhaustedAttempts_CompleteSubscriptionsWithTheError()
+        {
+            // Arrange: the first connection works; every reconnect attempt fails.
+            var first = new FakeWebSocketConnection();
+            var attempts = 0;
+            var options = new SolanaWsClientOptions
+            {
+                MaxReconnectAttempts = 2,
+                ReconnectInitialDelay = TimeSpan.FromMilliseconds(1),
+                ReconnectMaxDelay = TimeSpan.FromMilliseconds(1)
+            };
+
+            await using var client = new SolanaWsClient(
+                () => Interlocked.Increment(ref attempts) == 1
+                    ? first
+                    : throw new InvalidOperationException("connection refused"),
+                options);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+
+            var subscribe = client.SubscribeLogsAsync(PublicKey.Parse(SolanaProgramIds.TokenProgram));
+            await WaitUntil(() => first.Sent.Count > 0);
+            first.PushFromServer("""{"jsonrpc":"2.0","result":1,"id":1}""");
+            var reader = await subscribe;
+
+            // Act: drop the connection; both reconnect attempts fail, so the client gives up.
+            first.Drop();
+            await WaitUntil(() => reader.Completion.IsCompleted);
+
+            // Assert
+            reader.Completion.IsFaulted.Should().BeTrue();
+            attempts.Should().Be(3); // the initial connect plus the two failed reconnects
         }
     }
 
@@ -432,6 +573,92 @@ public static class SolanaWsClientTests
 
         private const string AccountNotificationJson =
             """{"jsonrpc":"2.0","method":"accountNotification","params":{"subscription":11,"result":{"context":{"slot":250},"value":{"lamports":2039280,"owner":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA","executable":false,"rentEpoch":18446744073709551615,"space":165,"data":{"program":"spl-token","parsed":{"type":"account","info":{"mint":"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v","owner":"67vHA8qZGCJKw1UNGUJZME4MwEWDRGWzp7MGvsut43A8","tokenAmount":{"amount":"1000000","decimals":6,"uiAmount":1.0,"uiAmountString":"1"},"state":"initialized"}},"space":165}}}}}""";
+    }
+
+    [TestFixture]
+    public sealed class Connect
+    {
+        [Test]
+        public async Task SecondCall_Throws()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+
+            // Act & Assert
+            var act = () => client.ConnectAsync(new Uri("wss://localhost"));
+            await act.Should().ThrowAsync<InvalidOperationException>();
+        }
+
+        [Test]
+        public async Task AfterDispose_Throws()
+        {
+            // Arrange
+            var client = new SolanaWsClient(new FakeWebSocketConnection());
+            await client.DisposeAsync();
+
+            // Act & Assert
+            var act = () => client.ConnectAsync(new Uri("wss://localhost"));
+            await act.Should().ThrowAsync<ObjectDisposedException>();
+        }
+    }
+
+    [TestFixture]
+    public sealed class Dispose
+    {
+        [Test]
+        public async Task CompletesActiveSubscriptionChannels()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+
+            var subscribe = client.SubscribeLogsAsync(PublicKey.Parse(SolanaProgramIds.TokenProgram));
+            await WaitUntil(() => fake.Sent.Count > 0);
+            fake.PushFromServer("""{"jsonrpc":"2.0","result":1,"id":1}""");
+            var reader = await subscribe;
+
+            // Act
+            await client.DisposeAsync();
+
+            // Assert: the channel completes (without an error), so a blocked consumer observes the end
+            // of the stream rather than hanging forever.
+            reader.Completion.IsCompletedSuccessfully.Should().BeTrue();
+        }
+
+        [Test]
+        public async Task FaultsASubscribeAwaitingItsAcknowledgement()
+        {
+            // Arrange: the subscribe request is sent but the server never acknowledges it.
+            var fake = new FakeWebSocketConnection();
+            var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+
+            var subscribe = client.SubscribeLogsAsync(PublicKey.Parse(SolanaProgramIds.TokenProgram));
+            await WaitUntil(() => fake.Sent.Count > 0);
+
+            // Act
+            await client.DisposeAsync();
+
+            // Assert
+            var act = async () => await subscribe;
+            await act.Should().ThrowAsync<ObjectDisposedException>();
+        }
+
+        [Test]
+        public async Task CanBeCalledTwice()
+        {
+            // Arrange
+            var client = new SolanaWsClient(new FakeWebSocketConnection());
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            await client.DisposeAsync();
+
+            // Act & Assert
+            var act = async () => await client.DisposeAsync();
+            await act.Should().NotThrowAsync();
+        }
     }
 
     // A plain (non-interpolated) raw string so the four trailing literal braces stay content; the two

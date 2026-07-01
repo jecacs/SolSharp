@@ -31,7 +31,9 @@ public static class SolanaRpcClientClusterTests
 
             // Assert
             info.AbsoluteSlot.Should().Be(200);
+            info.BlockHeight.Should().Be(190);
             info.Epoch.Should().Be(5);
+            info.SlotIndex.Should().Be(40);
             info.SlotsInEpoch.Should().Be(432000);
             info.TransactionCount.Should().Be(12345);
             handler.CapturedRequestBody.Should().Contain("\"getEpochInfo\"");

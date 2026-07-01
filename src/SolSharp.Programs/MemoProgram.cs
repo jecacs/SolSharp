@@ -10,7 +10,8 @@ public static class MemoProgram
 
     /// <summary>
     /// Builds a memo instruction whose data is <paramref name="text"/> encoded as UTF-8. Any
-    /// <paramref name="signers"/> must sign the transaction and are recorded with the memo on-chain.
+    /// <paramref name="signers"/> must sign the transaction and are recorded with the memo on-chain;
+    /// they are referenced as read-only signers, since the memo program writes to no account.
     /// </summary>
     /// <param name="text">The memo text.</param>
     /// <param name="signers">The accounts that must sign the memo; pass none for an unsigned memo.</param>
@@ -21,9 +22,11 @@ public static class MemoProgram
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(signers);
 
+        // Read-only signers, matching the Rust spl-memo builder (AccountMeta::new_readonly(pubkey, true));
+        // a writable flag would needlessly write-lock the signer accounts. (solana-py marks them writable.)
         var accounts = new AccountMeta[signers.Length];
         for (var i = 0; i < signers.Length; i++)
-            accounts[i] = AccountMeta.WritableSigner(signers[i]);
+            accounts[i] = AccountMeta.ReadonlySigner(signers[i]);
 
         return new Instruction
         {

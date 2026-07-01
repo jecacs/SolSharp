@@ -69,7 +69,7 @@ public sealed class MessageV0 : ITransactionMessage
     /// <param name="addressLookupTables">The lookup tables to source extra accounts from; pass an empty list for none.</param>
     /// <returns>The compiled v0 message.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="recentBlockhash"/>, <paramref name="instructions"/>, or <paramref name="addressLookupTables"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentException">The instructions reference more than <see cref="MaxAccounts"/> distinct accounts.</exception>
+    /// <exception cref="ArgumentException">The instructions reference more than <see cref="MaxAccounts"/> distinct accounts, or a supplied lookup table holds more than <see cref="MaxAccounts"/> addresses.</exception>
     public static MessageV0 Compile(
         PublicKey feePayer,
         string recentBlockhash,
@@ -111,6 +111,13 @@ public sealed class MessageV0 : ITransactionMessage
 
         foreach (var table in addressLookupTables)
         {
+            // An on-chain lookup table holds at most 256 addresses; anything bigger cannot be addressed by
+            // the single-byte wire indexes and would otherwise truncate silently in the (byte) casts below.
+            if (table.Addresses.Count > MaxAccounts)
+                throw new ArgumentException(
+                    $"Lookup table {table.Key} holds {table.Addresses.Count} addresses; the wire format allows at most {MaxAccounts}.",
+                    nameof(addressLookupTables));
+
             var writableIndexes = new List<byte>();
             var readonlyIndexes = new List<byte>();
             var tableWritable = new List<PublicKey>();
@@ -335,52 +342,68 @@ public sealed class MessageV0 : ITransactionMessage
     /// <summary>Parses a v0 message from its wire bytes (including the leading <see cref="VersionPrefix"/> byte).</summary>
     /// <param name="data">The serialized v0 message.</param>
     /// <returns>The parsed message.</returns>
-    /// <exception cref="FormatException">The data is not a versioned message, or a compact-u16 length is malformed.</exception>
+    /// <exception cref="FormatException">
+    /// The data is not a versioned message, carries a version other than 0, is truncated, or a compact-u16
+    /// length is malformed.
+    /// </exception>
     public static MessageV0 Deserialize(ReadOnlySpan<byte> data)
     {
-        var offset = 0;
-        var prefix = data[offset++];
-        if ((prefix & VersionPrefix) == 0)
-            throw new FormatException("Not a versioned message: the high bit of the version prefix is not set.");
-
-        var requiredSignatures = data[offset++];
-        var readonlySignedAccounts = data[offset++];
-        var readonlyUnsignedAccounts = data[offset++];
-
-        var accountKeys = MessageWire.ReadAccountKeys(data, ref offset);
-
-        var recentBlockhash = new PublicKey(data.Slice(offset, PublicKey.Length)).ToString();
-        offset += PublicKey.Length;
-
-        var instructions = MessageWire.ReadInstructions(data, ref offset);
-
-        var lookupCount = ShortVec.Decode(data[offset..], out var read);
-        offset += read;
-        var addressTableLookups = new MessageAddressTableLookup[lookupCount];
-        for (var i = 0; i < lookupCount; i++)
+        try
         {
-            var accountKey = new PublicKey(data.Slice(offset, PublicKey.Length));
+            var offset = 0;
+            var prefix = data[offset++];
+            if ((prefix & VersionPrefix) == 0)
+                throw new FormatException("Not a versioned message: the high bit of the version prefix is not set.");
+
+            // Only version 0 exists today; a future v1 payload must fail loudly rather than misparse as v0.
+            var version = prefix & ~VersionPrefix;
+            if (version != 0)
+                throw new FormatException($"Unsupported message version {version}; only v0 is supported.");
+
+            var requiredSignatures = data[offset++];
+            var readonlySignedAccounts = data[offset++];
+            var readonlyUnsignedAccounts = data[offset++];
+
+            var accountKeys = MessageWire.ReadAccountKeys(data, ref offset);
+
+            var recentBlockhash = new PublicKey(data.Slice(offset, PublicKey.Length)).ToString();
             offset += PublicKey.Length;
 
-            var writableCount = ShortVec.Decode(data[offset..], out read);
-            offset += read;
-            var writableIndexes = data.Slice(offset, writableCount).ToArray();
-            offset += writableCount;
+            var instructions = MessageWire.ReadInstructions(data, ref offset);
 
-            var readonlyCount = ShortVec.Decode(data[offset..], out read);
+            var lookupCount = ShortVec.Decode(data[offset..], out var read);
             offset += read;
-            var readonlyIndexes = data.Slice(offset, readonlyCount).ToArray();
-            offset += readonlyCount;
-
-            addressTableLookups[i] = new MessageAddressTableLookup
+            var addressTableLookups = new MessageAddressTableLookup[lookupCount];
+            for (var i = 0; i < lookupCount; i++)
             {
-                AccountKey = accountKey,
-                WritableIndexes = writableIndexes,
-                ReadonlyIndexes = readonlyIndexes
-            };
-        }
+                var accountKey = new PublicKey(data.Slice(offset, PublicKey.Length));
+                offset += PublicKey.Length;
 
-        return new MessageV0(requiredSignatures, readonlySignedAccounts, readonlyUnsignedAccounts, accountKeys, recentBlockhash, instructions, addressTableLookups);
+                var writableCount = ShortVec.Decode(data[offset..], out read);
+                offset += read;
+                var writableIndexes = data.Slice(offset, writableCount).ToArray();
+                offset += writableCount;
+
+                var readonlyCount = ShortVec.Decode(data[offset..], out read);
+                offset += read;
+                var readonlyIndexes = data.Slice(offset, readonlyCount).ToArray();
+                offset += readonlyCount;
+
+                addressTableLookups[i] = new MessageAddressTableLookup
+                {
+                    AccountKey = accountKey,
+                    WritableIndexes = writableIndexes,
+                    ReadonlyIndexes = readonlyIndexes
+                };
+            }
+
+            return new MessageV0(requiredSignatures, readonlySignedAccounts, readonlyUnsignedAccounts, accountKeys, recentBlockhash, instructions, addressTableLookups);
+        }
+        catch (Exception exception) when (exception is IndexOutOfRangeException or ArgumentOutOfRangeException)
+        {
+            // Span indexing and slicing throw index errors on short input; surface the documented type.
+            throw new FormatException("The v0 message data is truncated.", exception);
+        }
     }
 
     private static void AddClass(

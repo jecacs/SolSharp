@@ -55,5 +55,18 @@ public static class TransactionDeserializeTests
             message.AddressTableLookups.Should().ContainSingle();
             message.AddressTableLookups[0].WritableIndexes.Should().Equal((byte)0);
         }
+
+        [Test]
+        public void TruncatedData_ThrowsFormatException()
+        {
+            // Arrange: cut inside the first signature.
+            var truncated = Convert.FromHexString(SignedTransferHex)[..10];
+
+            // Act
+            Action act = () => Transaction.Deserialize(truncated);
+
+            // Assert
+            act.Should().Throw<FormatException>();
+        }
     }
 }

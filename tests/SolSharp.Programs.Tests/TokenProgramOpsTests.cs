@@ -69,6 +69,87 @@ public static class TokenProgramOpsTests
         }
     }
 
+    // Reference data/accounts from solana-py spl.token.instructions; amounts are 1000, decimals 6.
+    [TestFixture]
+    public sealed class CheckedOps
+    {
+        [Test]
+        public void ApproveChecked_MatchesSolanaPy()
+        {
+            // Act
+            var ix = TokenProgram.ApproveChecked(Pk(2), Pk(3), Pk(4), Pk(5), 1000, 6);
+
+            // Assert
+            DataHex(ix).Should().Be("0de80300000000000006");
+            ix.Accounts.Should().HaveCount(4);
+            Check(ix.Accounts[0], Pk(2), signer: false, writable: true);
+            Check(ix.Accounts[1], Pk(3), signer: false, writable: false);
+            Check(ix.Accounts[2], Pk(4), signer: false, writable: false);
+            Check(ix.Accounts[3], Pk(5), signer: true, writable: false);
+        }
+
+        [Test]
+        public void MintToChecked_MatchesSolanaPy()
+        {
+            // Act
+            var ix = TokenProgram.MintToChecked(Pk(2), Pk(3), Pk(4), 1000, 6);
+
+            // Assert
+            DataHex(ix).Should().Be("0ee80300000000000006");
+            ix.Accounts.Should().HaveCount(3);
+            Check(ix.Accounts[0], Pk(2), signer: false, writable: true);
+            Check(ix.Accounts[1], Pk(3), signer: false, writable: true);
+            Check(ix.Accounts[2], Pk(4), signer: true, writable: false);
+        }
+
+        [Test]
+        public void BurnChecked_MatchesSolanaPy()
+        {
+            // Act
+            var ix = TokenProgram.BurnChecked(Pk(2), Pk(3), Pk(4), 1000, 6);
+
+            // Assert
+            DataHex(ix).Should().Be("0fe80300000000000006");
+            ix.Accounts.Should().HaveCount(3);
+            Check(ix.Accounts[0], Pk(2), signer: false, writable: true);
+            Check(ix.Accounts[1], Pk(3), signer: false, writable: true);
+            Check(ix.Accounts[2], Pk(4), signer: true, writable: false);
+        }
+    }
+
+    [TestFixture]
+    public sealed class SetAuthority
+    {
+        // Reference from solana-py: set_authority(account=[2], authority=ACCOUNT_OWNER, current=[3], new=[4]).
+        [Test]
+        public void WithNewAuthority_MatchesSolanaPy()
+        {
+            // Act
+            var ix = TokenProgram.SetAuthority(Pk(2), Pk(3), AuthorityType.AccountOwner, Pk(4));
+
+            // Assert
+            DataHex(ix).Should().Be("0602010404040404040404040404040404040404040404040404040404040404040404");
+            ix.Accounts.Should().HaveCount(2);
+            Check(ix.Accounts[0], Pk(2), signer: false, writable: true);
+            Check(ix.Accounts[1], Pk(3), signer: true, writable: false);
+        }
+
+        // Removing an authority packs the compact Rust spl-token COption: a lone 0 tag with no value.
+        // (solana-py pads None with 32 zero bytes; the program unpacks both forms.)
+        [Test]
+        public void WithoutNewAuthority_PacksCompactNone()
+        {
+            // Act
+            var ix = TokenProgram.SetAuthority(Pk(2), Pk(3), AuthorityType.CloseAccount);
+
+            // Assert
+            DataHex(ix).Should().Be("060300");
+            ix.Accounts.Should().HaveCount(2);
+            Check(ix.Accounts[0], Pk(2), signer: false, writable: true);
+            Check(ix.Accounts[1], Pk(3), signer: true, writable: false);
+        }
+    }
+
     [TestFixture]
     public sealed class SimpleOps
     {

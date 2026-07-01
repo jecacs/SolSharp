@@ -13,6 +13,7 @@ public sealed class TransactionBuilder
     private readonly List<AddressLookupTableAccount> _lookupTables = [];
     private PublicKey? _feePayer;
     private string? _recentBlockhash;
+    private Instruction? _nonceAdvance;
 
     /// <summary>Appends an instruction to the transaction.</summary>
     /// <param name="instruction">The instruction to add.</param>
@@ -51,6 +52,25 @@ public sealed class TransactionBuilder
     public TransactionBuilder SetRecentBlockhash(string recentBlockhash)
     {
         _recentBlockhash = recentBlockhash;
+        return this;
+    }
+
+    /// <summary>
+    /// Anchors the transaction to a durable nonce instead of a recent blockhash: <paramref name="nonce"/>
+    /// takes the blockhash slot, and an <see cref="SystemProgram.AdvanceNonceAccount"/> instruction is
+    /// prepended ahead of the added instructions, as the runtime requires. Replaces any previously set
+    /// recent blockhash or durable nonce.
+    /// </summary>
+    /// <param name="nonceAccount">The durable nonce account.</param>
+    /// <param name="authority">The nonce authority; must sign the transaction.</param>
+    /// <param name="nonce">The account's current nonce value (base58), e.g. <c>NonceAccount.Nonce</c>.</param>
+    /// <returns>This builder, so calls can be chained.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="nonce"/> is <c>null</c>.</exception>
+    public TransactionBuilder SetDurableNonce(PublicKey nonceAccount, PublicKey authority, string nonce)
+    {
+        ArgumentNullException.ThrowIfNull(nonce);
+        _nonceAdvance = SystemProgram.AdvanceNonceAccount(nonceAccount, authority);
+        _recentBlockhash = nonce;
         return this;
     }
 
@@ -100,8 +120,12 @@ public sealed class TransactionBuilder
         if (_instructions.Count == 0)
             throw new InvalidOperationException("At least one instruction is required.");
 
-        return Message.Compile(feePayer, _recentBlockhash, _instructions);
+        return Message.Compile(feePayer, _recentBlockhash, EffectiveInstructions());
     }
+
+    // A durable-nonce transaction must run AdvanceNonceAccount as its first instruction.
+    private IReadOnlyList<Instruction> EffectiveInstructions()
+        => _nonceAdvance is null ? _instructions : [_nonceAdvance, .. _instructions];
 
     /// <summary>Compiles the collected instructions into an unsigned v0 <see cref="MessageV0"/>, using the set lookup tables.</summary>
     /// <returns>The compiled v0 message.</returns>
@@ -137,6 +161,6 @@ public sealed class TransactionBuilder
         if (_instructions.Count == 0)
             throw new InvalidOperationException("At least one instruction is required.");
 
-        return MessageV0.Compile(feePayer, _recentBlockhash, _instructions, _lookupTables);
+        return MessageV0.Compile(feePayer, _recentBlockhash, EffectiveInstructions(), _lookupTables);
     }
 }

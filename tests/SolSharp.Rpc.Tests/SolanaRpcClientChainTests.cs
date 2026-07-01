@@ -95,7 +95,9 @@ public static class SolanaRpcClientChainTests
 
             // Assert
             block.Should().NotBeNull();
-            block!.ParentSlot.Should().Be(99);
+            block!.Blockhash.Should().Be("Ckt");
+            block.PreviousBlockhash.Should().Be("Prev");
+            block.ParentSlot.Should().Be(99);
             block.BlockHeight.Should().Be(90);
             block.BlockTime.Should().Be(1700000000);
             block.Signatures.Should().Equal("sig1", "sig2");

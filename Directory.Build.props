@@ -11,11 +11,16 @@
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
 
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!-- Tests are exempt from the public-XML-docs rule; in library code a public member without docs
+       surfaces CS1591 and fails the CI build (-warnaserror). -->
+  <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('Tests'))">
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup Label="Package metadata">
-    <Version>0.4.1</Version>
+    <Version>0.5.0</Version>
     <Authors>Yevhen Koval</Authors>
     <Product>SolSharp</Product>
     <Copyright>Copyright (c) 2026 Yevhen Koval</Copyright>

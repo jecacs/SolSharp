@@ -72,5 +72,19 @@ public static class SolanaRpcClientSignaturesTests
             handler.CapturedRequestBody.Should().Contain("\"limit\":5");
             handler.CapturedRequestBody.Should().Contain("\"before\":\"cursorSig\"");
         }
+
+        [Test]
+        public async Task SendsUntilWhenProvided()
+        {
+            // Arrange
+            var (client, handler) = Make("""{"jsonrpc":"2.0","result":[],"id":1}""");
+            var options = new GetSignaturesForAddressOptions { Until = "untilSig" };
+
+            // Act
+            await client.GetSignaturesForAddressAsync(PublicKey.Parse(Address), options);
+
+            // Assert
+            handler.CapturedRequestBody.Should().Contain("\"until\":\"untilSig\"");
+        }
     }
 }

@@ -190,4 +190,78 @@ public static class SystemProgramTests
             Metas(instruction).Should().Equal((Key(2), false, true), (Key(3), true, false));
         }
     }
+
+    [TestFixture]
+    public sealed class AllocateWithSeed
+    {
+        // Reference bytes from solders: allocate_with_seed(address=[2], base=[3], seed="hello", space=165, owner=[9]).
+        [Test]
+        public void MatchesSolanaSdk()
+        {
+            // Act
+            var instruction = SystemProgram.AllocateWithSeed(Key(2), Key(3), "hello", 165, Key(9));
+
+            // Assert
+            instruction.Data.Should().Equal(Hex(
+                "090000000303030303030303030303030303030303030303030303030303030303030303050000000000000068656c6c6fa5000000000000000909090909090909090909090909090909090909090909090909090909090909"));
+            Metas(instruction).Should().Equal((Key(2), false, true), (Key(3), true, false));
+        }
+    }
+
+    [TestFixture]
+    public sealed class AssignWithSeed
+    {
+        // Reference bytes from solders: assign_with_seed(address=[2], base=[3], seed="hello", owner=[9]).
+        [Test]
+        public void MatchesSolanaSdk()
+        {
+            // Act
+            var instruction = SystemProgram.AssignWithSeed(Key(2), Key(3), "hello", Key(9));
+
+            // Assert
+            instruction.Data.Should().Equal(Hex(
+                "0a0000000303030303030303030303030303030303030303030303030303030303030303050000000000000068656c6c6f0909090909090909090909090909090909090909090909090909090909090909"));
+            Metas(instruction).Should().Equal((Key(2), false, true), (Key(3), true, false));
+        }
+    }
+
+    [TestFixture]
+    public sealed class TransferWithSeed
+    {
+        // Reference bytes from solders: transfer_with_seed(from=[2], base=[3], seed="hello", owner=[9], to=[4], lamports=777).
+        [Test]
+        public void MatchesSolanaSdk()
+        {
+            // Act
+            var instruction = SystemProgram.TransferWithSeed(Key(2), Key(3), "hello", Key(9), Key(4), 777);
+
+            // Assert
+            instruction.Data.Should().Equal(Hex(
+                "0b0000000903000000000000050000000000000068656c6c6f0909090909090909090909090909090909090909090909090909090909090909"));
+            Metas(instruction).Should().Equal((Key(2), false, true), (Key(3), true, false), (Key(4), false, true));
+        }
+    }
+
+    [TestFixture]
+    public sealed class CreateNonceAccount
+    {
+        // Reference bytes from solders: create_nonce_account(from=[1], nonce=[2], authority=[3], lamports=1_447_680)
+        // - a CreateAccount of NONCE_ACCOUNT_LENGTH (80) bytes owned by the System program, then InitializeNonceAccount.
+        [Test]
+        public void MatchesSolanaSdk()
+        {
+            // Act
+            var instructions = SystemProgram.CreateNonceAccount(Key(1), Key(2), Key(3), 1_447_680);
+
+            // Assert
+            instructions.Should().HaveCount(2);
+            instructions[0].Data.Should().Equal(Hex(
+                "0000000000171600000000005000000000000000" +
+                "0000000000000000000000000000000000000000000000000000000000000000"));
+            Metas(instructions[0]).Should().Equal((Key(1), true, true), (Key(2), true, true));
+
+            instructions[1].Data.Should().Equal(Hex("060000000303030303030303030303030303030303030303030303030303030303030303"));
+            Metas(instructions[1]).Should().Equal((Key(2), false, true), (RecentBlockhashes, false, false), (Rent, false, false));
+        }
+    }
 }

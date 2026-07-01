@@ -42,6 +42,8 @@ public static class SolanaRpcClientConfirmTests
 
             // Assert
             statuses.Should().HaveCount(2);
+            statuses[0]!.Slot.Should().Be(10ul);
+            statuses[0]!.Confirmations.Should().Be(5);
             statuses[0]!.ConfirmationStatus.Should().Be("confirmed");
             statuses[0]!.IsError.Should().BeFalse();
             statuses[1].Should().BeNull();

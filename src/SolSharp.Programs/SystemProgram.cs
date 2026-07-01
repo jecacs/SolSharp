@@ -22,6 +22,12 @@ public static class SystemProgram
     private const uint InitializeNonceAccountDiscriminator = 6;
     private const uint AuthorizeNonceAccountDiscriminator = 7;
     private const uint AllocateDiscriminator = 8;
+    private const uint AllocateWithSeedDiscriminator = 9;
+    private const uint AssignWithSeedDiscriminator = 10;
+    private const uint TransferWithSeedDiscriminator = 11;
+
+    /// <summary>The serialized size of a durable nonce account, in bytes (80).</summary>
+    public const int NonceAccountLength = 80;
 
     private static readonly PublicKey RentSysvar = PublicKey.Parse(Sysvars.Rent);
     private static readonly PublicKey RecentBlockhashesSysvar = PublicKey.Parse(Sysvars.RecentBlockhashes);
@@ -154,6 +160,142 @@ public static class SystemProgram
             Data = data
         };
     }
+
+    /// <summary>
+    /// Allocates <paramref name="space"/> bytes for an account at an address derived from a base key and a
+    /// seed (<c>create_with_seed</c>). The base account signs in place of the derived address.
+    /// </summary>
+    /// <param name="account">The derived address to allocate space for (writable, does not sign).</param>
+    /// <param name="baseAccount">The base key the address was derived from; signs the transaction.</param>
+    /// <param name="seed">The seed the address was derived with.</param>
+    /// <param name="space">The number of bytes to allocate.</param>
+    /// <param name="owner">The program that will own the account.</param>
+    /// <returns>The allocateWithSeed instruction.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="seed"/> is <c>null</c>.</exception>
+    public static Instruction AllocateWithSeed(PublicKey account, PublicKey baseAccount, string seed, ulong space, PublicKey owner)
+    {
+        ArgumentNullException.ThrowIfNull(seed);
+        var seedBytes = System.Text.Encoding.UTF8.GetBytes(seed);
+
+        using var buffer = new MemoryStream(84 + seedBytes.Length);
+        Span<byte> word = stackalloc byte[8];
+
+        BinaryPrimitives.WriteUInt32LittleEndian(word, AllocateWithSeedDiscriminator);
+        buffer.Write(word[..4]);
+        buffer.Write(baseAccount.ToBytes());
+        BinaryPrimitives.WriteUInt64LittleEndian(word, (ulong)seedBytes.Length); // bincode string: u64 length prefix
+        buffer.Write(word);
+        buffer.Write(seedBytes);
+        BinaryPrimitives.WriteUInt64LittleEndian(word, space);
+        buffer.Write(word);
+        buffer.Write(owner.ToBytes());
+
+        return new Instruction
+        {
+            ProgramId = ProgramId,
+            Accounts = [AccountMeta.Writable(account), AccountMeta.ReadonlySigner(baseAccount)],
+            Data = buffer.ToArray()
+        };
+    }
+
+    /// <summary>
+    /// Assigns a new owner program to an account at an address derived from a base key and a seed
+    /// (<c>create_with_seed</c>). The base account signs in place of the derived address.
+    /// </summary>
+    /// <param name="account">The derived address to reassign (writable, does not sign).</param>
+    /// <param name="baseAccount">The base key the address was derived from; signs the transaction.</param>
+    /// <param name="seed">The seed the address was derived with.</param>
+    /// <param name="owner">The program to set as the new owner.</param>
+    /// <returns>The assignWithSeed instruction.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="seed"/> is <c>null</c>.</exception>
+    public static Instruction AssignWithSeed(PublicKey account, PublicKey baseAccount, string seed, PublicKey owner)
+    {
+        ArgumentNullException.ThrowIfNull(seed);
+        var seedBytes = System.Text.Encoding.UTF8.GetBytes(seed);
+
+        using var buffer = new MemoryStream(76 + seedBytes.Length);
+        Span<byte> word = stackalloc byte[8];
+
+        BinaryPrimitives.WriteUInt32LittleEndian(word, AssignWithSeedDiscriminator);
+        buffer.Write(word[..4]);
+        buffer.Write(baseAccount.ToBytes());
+        BinaryPrimitives.WriteUInt64LittleEndian(word, (ulong)seedBytes.Length); // bincode string: u64 length prefix
+        buffer.Write(word);
+        buffer.Write(seedBytes);
+        buffer.Write(owner.ToBytes());
+
+        return new Instruction
+        {
+            ProgramId = ProgramId,
+            Accounts = [AccountMeta.Writable(account), AccountMeta.ReadonlySigner(baseAccount)],
+            Data = buffer.ToArray()
+        };
+    }
+
+    /// <summary>
+    /// Transfers lamports from an account at an address derived from a base key and a seed
+    /// (<c>create_with_seed</c>). The base account signs in place of the derived address.
+    /// </summary>
+    /// <param name="from">The derived funding address; debited (writable, does not sign).</param>
+    /// <param name="baseAccount">The base key <paramref name="from"/> was derived from; signs the transaction.</param>
+    /// <param name="seed">The seed <paramref name="from"/> was derived with.</param>
+    /// <param name="owner">The owner program <paramref name="from"/> was derived with.</param>
+    /// <param name="to">The account that receives the lamports.</param>
+    /// <param name="lamports">The amount to transfer, in lamports.</param>
+    /// <returns>The transferWithSeed instruction.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="seed"/> is <c>null</c>.</exception>
+    public static Instruction TransferWithSeed(
+        PublicKey from,
+        PublicKey baseAccount,
+        string seed,
+        PublicKey owner,
+        PublicKey to,
+        ulong lamports)
+    {
+        ArgumentNullException.ThrowIfNull(seed);
+        var seedBytes = System.Text.Encoding.UTF8.GetBytes(seed);
+
+        using var buffer = new MemoryStream(52 + seedBytes.Length);
+        Span<byte> word = stackalloc byte[8];
+
+        BinaryPrimitives.WriteUInt32LittleEndian(word, TransferWithSeedDiscriminator);
+        buffer.Write(word[..4]);
+        BinaryPrimitives.WriteUInt64LittleEndian(word, lamports);
+        buffer.Write(word);
+        BinaryPrimitives.WriteUInt64LittleEndian(word, (ulong)seedBytes.Length); // bincode string: u64 length prefix
+        buffer.Write(word);
+        buffer.Write(seedBytes);
+        buffer.Write(owner.ToBytes());
+
+        return new Instruction
+        {
+            ProgramId = ProgramId,
+            Accounts =
+            [
+                AccountMeta.Writable(from),
+                AccountMeta.ReadonlySigner(baseAccount),
+                AccountMeta.Writable(to)
+            ],
+            Data = buffer.ToArray()
+        };
+    }
+
+    /// <summary>
+    /// Builds the two instructions that create and initialize a durable nonce account: a
+    /// <see cref="CreateAccount"/> of <see cref="NonceAccountLength"/> bytes owned by the System program,
+    /// followed by <see cref="InitializeNonceAccount"/>.
+    /// </summary>
+    /// <param name="payer">The funding account; signs the transaction and pays for the nonce account.</param>
+    /// <param name="nonceAccount">The address of the nonce account to create; must also sign.</param>
+    /// <param name="authority">The authority allowed to advance and withdraw the nonce.</param>
+    /// <param name="lamports">The lamports to deposit (the rent-exempt minimum for <see cref="NonceAccountLength"/> bytes).</param>
+    /// <returns>The create-account instruction followed by the initialize-nonce instruction.</returns>
+    public static Instruction[] CreateNonceAccount(PublicKey payer, PublicKey nonceAccount, PublicKey authority, ulong lamports)
+        =>
+        [
+            CreateAccount(payer, nonceAccount, lamports, NonceAccountLength, ProgramId),
+            InitializeNonceAccount(nonceAccount, authority)
+        ];
 
     /// <summary>Initializes a created account as a durable nonce account controlled by <paramref name="authority"/>.</summary>
     /// <param name="nonceAccount">The account to initialize as a nonce account (writable).</param>

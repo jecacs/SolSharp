@@ -222,6 +222,62 @@ public sealed partial class Keypair
         }
     }
 
+    /// <summary>
+    /// Creates a keypair from a BIP-39 mnemonic the way <c>solana-keygen</c> does: the first
+    /// <see cref="SeedLength"/> bytes of the BIP-39 seed become the Ed25519 seed, with no BIP-32 derivation.
+    /// For the Phantom / Solflare derivation-path scheme use <see cref="FromMnemonicAtPath"/>.
+    /// </summary>
+    /// <param name="mnemonic">The mnemonic phrase (typically 12 or 24 space-separated words).</param>
+    /// <param name="passphrase">The optional BIP-39 passphrase (the "25th word"); empty by default.</param>
+    /// <returns>The keypair.</returns>
+    /// <exception cref="ArgumentException"><paramref name="mnemonic"/> is <c>null</c>, empty, or whitespace.</exception>
+    /// <exception cref="ArgumentNullException"><paramref name="passphrase"/> is <c>null</c>.</exception>
+    public static Keypair FromMnemonic(string mnemonic, string passphrase = "")
+    {
+        var seed = Bip39.ToSeed(mnemonic, passphrase);
+        try
+        {
+            return FromSeed(seed.AsSpan(0, SeedLength));
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(seed);
+        }
+    }
+
+    /// <summary>
+    /// Creates a keypair from a BIP-39 mnemonic with SLIP-0010 derivation, the way Phantom and Solflare
+    /// derive accounts: <c>m/44'/501'/0'/0'</c> is the first account; increment the third segment for the
+    /// next ones.
+    /// </summary>
+    /// <param name="mnemonic">The mnemonic phrase (typically 12 or 24 space-separated words).</param>
+    /// <param name="derivationPath">The all-hardened derivation path, e.g. <c>m/44'/501'/0'/0'</c>.</param>
+    /// <param name="passphrase">The optional BIP-39 passphrase (the "25th word"); empty by default.</param>
+    /// <returns>The keypair.</returns>
+    /// <exception cref="ArgumentException"><paramref name="mnemonic"/> is <c>null</c>, empty, or whitespace.</exception>
+    /// <exception cref="ArgumentNullException"><paramref name="derivationPath"/> or <paramref name="passphrase"/> is <c>null</c>.</exception>
+    /// <exception cref="FormatException"><paramref name="derivationPath"/> is not an all-hardened derivation path.</exception>
+    public static Keypair FromMnemonicAtPath(string mnemonic, string derivationPath, string passphrase = "")
+    {
+        var seed = Bip39.ToSeed(mnemonic, passphrase);
+        try
+        {
+            var derived = Slip10.DeriveEd25519(seed, derivationPath);
+            try
+            {
+                return FromSeed(derived);
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(derived);
+            }
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(seed);
+        }
+    }
+
     private static Keypair FromDecodedZeroing(byte[] bytes, string what)
     {
         try

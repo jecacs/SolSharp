@@ -1,3 +1,5 @@
+using System.Net.Sockets;
+using System.Net.WebSockets;
 using System.Runtime.ExceptionServices;
 using NUnit.Framework;
 using SolSharp.Rpc.Protocol;
@@ -49,12 +51,14 @@ internal static class IntegrationEnvironment
 
     /// <summary>
     /// Whether <paramref name="exception"/> reflects a transient transport problem (a rate limit, timeout,
-    /// broken connection, resilience-pipeline rejection, or an RPC-level error) as opposed to a real defect.
+    /// broken connection or socket, rejected WebSocket handshake, resilience-pipeline rejection, or an
+    /// RPC-level error) as opposed to a real defect.
     /// </summary>
     /// <param name="exception">The exception to classify.</param>
     /// <returns><c>true</c> when the failure should be treated as transient.</returns>
     public static bool IsTransient(Exception exception)
         => exception is HttpRequestException or TaskCanceledException or TimeoutException or OperationCanceledException or RpcException
+               or WebSocketException or SocketException
            || exception.GetType().FullName?.StartsWith("Polly.", StringComparison.Ordinal) == true
            || (exception.InnerException is { } inner && IsTransient(inner));
 

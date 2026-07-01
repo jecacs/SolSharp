@@ -58,4 +58,38 @@ public static class ComputeBudgetProgramTests
             instructions[1].Data.Should().Equal(Hex("03e803000000000000")); // SetComputeUnitPrice(1000)
         }
     }
+
+    [TestFixture]
+    public sealed class RequestHeapFrame
+    {
+        // Reference bytes from solders: request_heap_frame(262_144).
+        [Test]
+        public void MatchesSolanaSdk()
+        {
+            // Act
+            var instruction = ComputeBudgetProgram.RequestHeapFrame(262_144);
+
+            // Assert
+            instruction.ProgramId.Should().Be(PublicKey.Parse(SolanaProgramIds.ComputeBudgetProgram));
+            instruction.Accounts.Should().BeEmpty();
+            instruction.Data.Should().Equal(Hex("0100000400"));
+        }
+    }
+
+    [TestFixture]
+    public sealed class SetLoadedAccountsDataSizeLimit
+    {
+        // Reference bytes from solders: set_loaded_accounts_data_size_limit(1_234_567).
+        [Test]
+        public void MatchesSolanaSdk()
+        {
+            // Act
+            var instruction = ComputeBudgetProgram.SetLoadedAccountsDataSizeLimit(1_234_567);
+
+            // Assert
+            instruction.ProgramId.Should().Be(PublicKey.Parse(SolanaProgramIds.ComputeBudgetProgram));
+            instruction.Accounts.Should().BeEmpty();
+            instruction.Data.Should().Equal(Hex("0487d61200"));
+        }
+    }
 }

@@ -18,10 +18,10 @@ public static class MemoProgramTests
     [TestFixture]
     public sealed class Memo
     {
-        // Reference from solana-py spl.memo.create_memo: program MemoSq4..., data is the UTF-8 text,
-        // the signer is a writable signer.
+        // Reference from the Rust spl-memo builder (build_memo): program MemoSq4..., data is the UTF-8
+        // text, each signer is a read-only signer (AccountMeta::new_readonly(pubkey, true)).
         [Test]
-        public void WithSigner_MatchesSolanaPy()
+        public void WithSigner_MatchesSplMemo()
         {
             // Act
             var instruction = MemoProgram.Memo("hello", Pk(6));
@@ -32,7 +32,7 @@ public static class MemoProgramTests
             instruction.Accounts.Should().ContainSingle();
             instruction.Accounts[0].PublicKey.Should().Be(Pk(6));
             instruction.Accounts[0].IsSigner.Should().BeTrue();
-            instruction.Accounts[0].IsWritable.Should().BeTrue();
+            instruction.Accounts[0].IsWritable.Should().BeFalse();
         }
 
         [Test]

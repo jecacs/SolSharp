@@ -183,22 +183,30 @@ public sealed class Message : ITransactionMessage
     /// <summary>Parses a legacy message from its wire bytes.</summary>
     /// <param name="data">The serialized message (no version prefix).</param>
     /// <returns>The parsed message.</returns>
-    /// <exception cref="FormatException">A compact-u16 length in the data is malformed.</exception>
+    /// <exception cref="FormatException">The data is truncated, or a compact-u16 length in it is malformed.</exception>
     public static Message Deserialize(ReadOnlySpan<byte> data)
     {
-        var offset = 0;
-        var requiredSignatures = data[offset++];
-        var readonlySignedAccounts = data[offset++];
-        var readonlyUnsignedAccounts = data[offset++];
+        try
+        {
+            var offset = 0;
+            var requiredSignatures = data[offset++];
+            var readonlySignedAccounts = data[offset++];
+            var readonlyUnsignedAccounts = data[offset++];
 
-        var accountKeys = MessageWire.ReadAccountKeys(data, ref offset);
+            var accountKeys = MessageWire.ReadAccountKeys(data, ref offset);
 
-        var recentBlockhash = new PublicKey(data.Slice(offset, PublicKey.Length)).ToString();
-        offset += PublicKey.Length;
+            var recentBlockhash = new PublicKey(data.Slice(offset, PublicKey.Length)).ToString();
+            offset += PublicKey.Length;
 
-        var instructions = MessageWire.ReadInstructions(data, ref offset);
+            var instructions = MessageWire.ReadInstructions(data, ref offset);
 
-        return new Message(requiredSignatures, readonlySignedAccounts, readonlyUnsignedAccounts, accountKeys, recentBlockhash, instructions);
+            return new Message(requiredSignatures, readonlySignedAccounts, readonlyUnsignedAccounts, accountKeys, recentBlockhash, instructions);
+        }
+        catch (Exception exception) when (exception is IndexOutOfRangeException or ArgumentOutOfRangeException)
+        {
+            // Span indexing and slicing throw index errors on short input; surface the documented type.
+            throw new FormatException("The message data is truncated.", exception);
+        }
     }
 
     private static void AddClass(

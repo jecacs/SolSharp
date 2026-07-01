@@ -25,6 +25,16 @@ public static class SolanaUnitsTests
             // Assert
             act.Should().Throw<ArgumentOutOfRangeException>();
         }
+
+        [Test]
+        public void LargerThanUlongLamports_Throws()
+        {
+            // Act: 18_446_744_074 SOL converts past ulong.MaxValue lamports.
+            Action act = () => SolanaUnits.SolToLamports(18_446_744_074m);
+
+            // Assert
+            act.Should().Throw<ArgumentOutOfRangeException>();
+        }
     }
 
     [TestFixture]

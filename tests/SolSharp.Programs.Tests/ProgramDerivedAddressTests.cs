@@ -25,6 +25,19 @@ public static class ProgramDerivedAddressTests
             address.Should().Be(PublicKey.Parse("DPrMg7Y6Dp1XHiQjEwEEyDbAbA71jX7Z6L1ycmu1thcF"));
             bump.Should().Be(254);
         }
+
+        [Test]
+        public void SixteenSeeds_Throws()
+        {
+            // Arrange: 16 caller seeds leave no slot for the bump, so every derivation attempt exceeds MaxSeeds.
+            var seeds = Enumerable.Range(0, ProgramDerivedAddress.MaxSeeds).Select(i => new byte[] { (byte)i }).ToArray();
+
+            // Act
+            Action act = () => ProgramDerivedAddress.FindProgramAddress(seeds, Key(9));
+
+            // Assert
+            act.Should().Throw<ArgumentException>();
+        }
     }
 
     [TestFixture]
@@ -41,6 +54,33 @@ public static class ProgramDerivedAddressTests
 
             // Assert
             act.Should().Throw<ArgumentException>();
+        }
+
+        [Test]
+        public void MoreSeedsThanMax_Throws()
+        {
+            // Arrange
+            var seeds = Enumerable.Range(0, ProgramDerivedAddress.MaxSeeds + 1).Select(i => new byte[] { (byte)i }).ToArray();
+
+            // Act
+            Action act = () => ProgramDerivedAddress.TryCreateProgramAddress(seeds, Key(9), out _);
+
+            // Assert
+            act.Should().Throw<ArgumentException>();
+        }
+
+        [Test]
+        public void ExactlyMaxSeeds_IsAccepted()
+        {
+            // Arrange: 16 seeds is the solana-sdk limit itself, so the derivation must run (whether or not
+            // the resulting hash lands off-curve).
+            var seeds = Enumerable.Range(0, ProgramDerivedAddress.MaxSeeds).Select(i => new byte[] { (byte)i }).ToArray();
+
+            // Act
+            Action act = () => ProgramDerivedAddress.TryCreateProgramAddress(seeds, Key(9), out _);
+
+            // Assert
+            act.Should().NotThrow();
         }
     }
 }

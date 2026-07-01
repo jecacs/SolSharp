@@ -36,6 +36,8 @@ public static class SolanaRpcClientClusterReadsTests
             current.ActivatedStake.Should().Be(42000000ul);
             current.Commission.Should().Be(7);
             current.LastVote.Should().Be(250000ul);
+            current.RootSlot.Should().Be(249968ul);
+            current.EpochVoteAccount.Should().BeTrue();
             current.EpochCredits.Should().HaveCount(2);
             current.EpochCredits[1].Should().Equal(601L, 2100L, 1000L);
         }
@@ -57,6 +59,7 @@ public static class SolanaRpcClientClusterReadsTests
             // Assert
             rewards.Should().HaveCount(2);
             rewards[0]!.Epoch.Should().Be(600ul);
+            rewards[0]!.EffectiveSlot.Should().Be(259200000ul);
             rewards[0]!.Amount.Should().Be(2500ul);
             rewards[0]!.PostBalance.Should().Be(1002500ul);
             rewards[0]!.Commission.Should().BeNull();
@@ -130,6 +133,7 @@ public static class SolanaRpcClientClusterReadsTests
             var node = nodes.Should().ContainSingle().Subject;
             node.Pubkey.Should().Be(PublicKey.Parse(Node));
             node.Gossip.Should().Be("10.0.0.1:8001");
+            node.Tpu.Should().Be("10.0.0.1:8003");
             node.Rpc.Should().Be("10.0.0.1:8899");
             node.Version.Should().Be("1.18.5");
             node.FeatureSet.Should().Be(3469865029L);

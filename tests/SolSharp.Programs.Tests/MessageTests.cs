@@ -119,4 +119,23 @@ public static class MessageTests
             act.Should().Throw<FormatException>();
         }
     }
+
+    [TestFixture]
+    public sealed class Deserialize
+    {
+        [Test]
+        public void TruncatedData_ThrowsFormatException()
+        {
+            // Arrange: a compiled transfer cut in the middle of the account keys.
+            var system = PublicKey.Parse(SolanaProgramIds.SystemProgram);
+            var instruction = new Instruction { ProgramId = system, Accounts = [AccountMeta.Writable(Key(2))], Data = [7] };
+            var data = Message.Compile(Key(1), Key(8).ToString(), [instruction]).Serialize()[..6];
+
+            // Act
+            Action act = () => Message.Deserialize(data);
+
+            // Assert
+            act.Should().Throw<FormatException>();
+        }
+    }
 }
