@@ -4,6 +4,32 @@ All notable changes to SolSharp are documented here. The format is loosely based
 [Keep a Changelog](https://keepachangelog.com), and the project follows
 [semantic versioning](https://semver.org) — while on 0.x, minor releases may carry breaking changes.
 
+## [0.6.0]
+
+### Added
+
+- Token-2022 extension decoding: `TokenExtensionSet.DecodeMint` / `DecodeAccount` walk the TLV section of
+  an extended mint or token account (layout and `ExtensionType` values mirrored from
+  `spl_token_2022_interface`), with typed views for the transfer-fee config and withheld amounts, the
+  metadata pointer and in-mint `TokenMetadata`, the permanent delegate, mint close authority, default
+  account state, and the memo-transfer requirement — and raw TLV access for every other extension.
+- A devnet write gate in the release workflow: a live airdrop → transfer → confirm round-trip and the full
+  durable-nonce lifecycle (create, fetch, nonce-anchored spend, advance) now run against devnet before
+  anything is published. The write suite never targets mainnet; `SOLSHARP_DEVNET_RPC_URL` overrides the
+  endpoint.
+- JSON-RPC batching: `SolanaRpcClient.CreateBatch()` queues calls (`GetBalanceAsync`, `GetAccountInfoAsync`,
+  `GetLatestBlockhashAsync`, `GetSlotAsync`, `GetTokenAccountBalanceAsync`, `SendTransactionAsync`) and
+  submits them in one HTTP round-trip with `ExecuteAsync`. Responses are matched by id in any order; a
+  per-call node error faults only that call's task.
+- Allocation-free serialization: `GetSerializedLength()` and a span-writing `Serialize(Span<byte>)` on
+  `Message` / `MessageV0` (and `ITransactionMessage`), plus `Transaction.TrySerialize(Span<byte>, out int)`
+  for latency-sensitive senders. The allocating `Serialize()` overloads now produce exactly one
+  right-sized array (byte output unchanged, still KAT-verified).
+- `AddSolanaWs(...)` registers `SolanaWsClient` as a container-managed singleton wired to the registered
+  `ILoggerFactory`.
+- A BenchmarkDotNet harness under `benchmarks/` (signing, transaction compile + serialize, base58,
+  `jsonParsed` decoding); run it with `dotnet run -c Release --project benchmarks/SolSharp.Benchmarks`.
+
 ## [0.5.0]
 
 ### Added

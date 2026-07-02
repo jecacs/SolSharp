@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <!-- A standalone harness, deliberately outside the solution: run it with
+         `dotnet run -c Release --project benchmarks/SolSharp.Benchmarks`. Benchmark classes must be
+         public for BenchmarkDotNet, so the public-XML-docs rule does not apply here. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.14.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/SolSharp.Core/SolSharp.Core.csproj" />
+    <ProjectReference Include="../../src/SolSharp.Wallet/SolSharp.Wallet.csproj" />
+    <ProjectReference Include="../../src/SolSharp.Rpc/SolSharp.Rpc.csproj" />
+    <ProjectReference Include="../../src/SolSharp.Programs/SolSharp.Programs.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -20,13 +20,16 @@
   </PropertyGroup>
 
   <PropertyGroup Label="Package metadata">
-    <Version>0.5.0</Version>
+    <Version>0.6.0</Version>
     <Authors>Yevhen Koval</Authors>
     <Product>SolSharp</Product>
+    <!-- nuget.org search ranks by term relevance in id/title/tags/description, weighted by downloads;
+         the title and tags below carry the terms people actually search for. -->
+    <Title>SolSharp — Solana SDK for .NET</Title>
     <Copyright>Copyright (c) 2026 Yevhen Koval</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageTags>solana;web3;blockchain;rpc;crypto;defi</PackageTags>
+    <PackageTags>solana;solana-sdk;web3;blockchain;rpc;websocket;wallet;spl-token;token-2022;transactions;ed25519;crypto;defi</PackageTags>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/jecacs/SolSharp</RepositoryUrl>
     <PackageProjectUrl>https://github.com/jecacs/SolSharp</PackageProjectUrl>

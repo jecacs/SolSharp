@@ -19,11 +19,20 @@ internal static class IntegrationEnvironment
     /// <summary>The public mainnet WebSocket endpoint used when <c>SOLSHARP_WS_URL</c> is not set.</summary>
     public const string DefaultWsEndpoint = "wss://api.mainnet-beta.solana.com";
 
-    /// <summary>The HTTP JSON-RPC endpoint the tests talk to.</summary>
+    /// <summary>The public devnet JSON-RPC endpoint used when <c>SOLSHARP_DEVNET_RPC_URL</c> is not set.</summary>
+    public const string DefaultDevnetHttpEndpoint = "https://api.devnet.solana.com";
+
+    /// <summary>The HTTP JSON-RPC endpoint the read tests talk to.</summary>
     public static string HttpEndpoint => Resolve("SOLSHARP_RPC_URL", DefaultHttpEndpoint);
 
     /// <summary>The WebSocket endpoint the tests talk to.</summary>
     public static string WsEndpoint => Resolve("SOLSHARP_WS_URL", DefaultWsEndpoint);
+
+    /// <summary>
+    /// The HTTP JSON-RPC endpoint the write tests talk to. Always a devnet endpoint: the write suite
+    /// airdrops and submits transactions, which must never target mainnet.
+    /// </summary>
+    public static string DevnetHttpEndpoint => Resolve("SOLSHARP_DEVNET_RPC_URL", DefaultDevnetHttpEndpoint);
 
     private static string Resolve(string variable, string fallback)
         => Environment.GetEnvironmentVariable(variable) is { Length: > 0 } value ? value : fallback;

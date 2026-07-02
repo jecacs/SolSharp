@@ -68,5 +68,37 @@ public static class TransactionDeserializeTests
             // Assert
             act.Should().Throw<FormatException>();
         }
+
+        [TestCase(SignedTransferHex)]
+        [TestCase(SignedV0Hex)]
+        public void TrySerialize_MatchesSerializeAndReportsExactLength(string hex)
+        {
+            // Arrange
+            var bytes = Convert.FromHexString(hex);
+            var transaction = Transaction.Deserialize(bytes);
+
+            // Act
+            var buffer = new byte[transaction.GetSerializedLength()];
+            var ok = transaction.TrySerialize(buffer, out var written);
+
+            // Assert: the span path emits the same bytes as the allocating path, sized exactly.
+            ok.Should().BeTrue();
+            written.Should().Be(bytes.Length);
+            buffer.Should().Equal(bytes);
+        }
+
+        [Test]
+        public void TrySerialize_TooSmallBuffer_ReturnsFalse()
+        {
+            // Arrange
+            var transaction = Transaction.Deserialize(Convert.FromHexString(SignedTransferHex));
+
+            // Act
+            var ok = transaction.TrySerialize(new byte[10], out var written);
+
+            // Assert
+            ok.Should().BeFalse();
+            written.Should().Be(0);
+        }
     }
 }

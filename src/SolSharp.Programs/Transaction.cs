@@ -7,7 +7,7 @@ namespace SolSharp.Programs;
 /// <summary>
 /// A transaction: an <see cref="ITransactionMessage"/> (legacy <see cref="Message"/> or <see cref="MessageV0"/>)
 /// plus one signature slot per required signer. Sign it with <see cref="Sign"/>, then serialize with
-/// <see cref="Serialize"/> or <see cref="ToBase64"/> to submit it.
+/// <see cref="Serialize()"/> or <see cref="ToBase64"/> to submit it.
 /// </summary>
 public sealed class Transaction
 {
@@ -106,13 +106,44 @@ public sealed class Transaction
     /// <exception cref="FormatException">The message's recent blockhash is not a 32-byte base58 value.</exception>
     public byte[] Serialize()
     {
-        using var buffer = new MemoryStream();
-        buffer.Write(ShortVec.Encode(_signatures.Length));
-        foreach (var signature in _signatures)
-            buffer.Write(signature);
+        var buffer = new byte[GetSerializedLength()];
+        TrySerialize(buffer, out _);
+        return buffer;
+    }
 
-        buffer.Write(Message.Serialize());
-        return buffer.ToArray();
+    /// <summary>Returns the exact length of the serialized transaction, in bytes.</summary>
+    /// <returns>The serialized length.</returns>
+    public int GetSerializedLength()
+        => ShortVec.GetByteCount(_signatures.Length)
+           + _signatures.Length * SignatureLength
+           + Message.GetSerializedLength();
+
+    /// <summary>
+    /// Serializes the transaction into <paramref name="destination"/> without allocating - the hot-path
+    /// alternative to <see cref="Serialize()"/> for latency-sensitive senders.
+    /// </summary>
+    /// <param name="destination">The span to write into.</param>
+    /// <param name="written">The number of bytes written; <c>0</c> when the span is too small.</param>
+    /// <returns><c>false</c> when <paramref name="destination"/> is smaller than <see cref="GetSerializedLength"/> bytes.</returns>
+    /// <exception cref="FormatException">The message's recent blockhash is not a 32-byte base58 value.</exception>
+    public bool TrySerialize(Span<byte> destination, out int written)
+    {
+        if (destination.Length < GetSerializedLength())
+        {
+            written = 0;
+            return false;
+        }
+
+        var offset = ShortVec.Encode(_signatures.Length, destination);
+        foreach (var signature in _signatures)
+        {
+            signature.CopyTo(destination[offset..]);
+            offset += SignatureLength;
+        }
+
+        offset += Message.Serialize(destination[offset..]);
+        written = offset;
+        return true;
     }
 
     /// <summary>Serializes the transaction and base64-encodes it - the form <c>sendTransaction</c> accepts.</summary>

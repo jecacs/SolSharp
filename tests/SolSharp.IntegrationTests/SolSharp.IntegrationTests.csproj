@@ -16,6 +16,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/SolSharp.Rpc/SolSharp.Rpc.csproj" />
+    <ProjectReference Include="../../src/SolSharp.Wallet/SolSharp.Wallet.csproj" />
+    <ProjectReference Include="../../src/SolSharp.Programs/SolSharp.Programs.csproj" />
   </ItemGroup>
 
 </Project>

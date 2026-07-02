@@ -24,14 +24,16 @@ jobs:
         run: dotnet build --configuration Release -warnaserror
 
       # Unlike CI (which stays offline), the release gate runs the FULL suite, including the live-cluster
-      # integration tests, so nothing is published without the real read/streaming paths passing. Rate
-      # limits report inconclusive (not failed), so a busy node will not block a release; a real regression
-      # will. Set SOLSHARP_RPC_URL / SOLSHARP_WS_URL secrets to use a private node instead of public mainnet.
+      # integration tests, so nothing is published without the real read/streaming paths passing - and the
+      # write path (airdrop, transfer, durable nonce) against devnet. Rate limits report inconclusive (not
+      # failed), so a busy node will not block a release; a real regression will. Set SOLSHARP_RPC_URL /
+      # SOLSHARP_WS_URL secrets for a private mainnet node, SOLSHARP_DEVNET_RPC_URL for a private devnet one.
       - name: Test (full suite, including live integration)
         run: dotnet test --no-build --configuration Release
         env:
           SOLSHARP_RPC_URL: ${{ secrets.SOLSHARP_RPC_URL }}
           SOLSHARP_WS_URL: ${{ secrets.SOLSHARP_WS_URL }}
+          SOLSHARP_DEVNET_RPC_URL: ${{ secrets.SOLSHARP_DEVNET_RPC_URL }}
 
       # No --no-build: packing rebuilds so the facade's bundling target (which folds the four
       # assemblies into the single SolSharp package) runs against fully resolved references.

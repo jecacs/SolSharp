@@ -27,6 +27,7 @@ assemblies — the namespaces `SolSharp.Core.*`, `SolSharp.Rpc`, `SolSharp.Walle
 - [Confirming a transaction](#confirming-a-transaction)
 - [Durable nonces](#durable-nonces)
 - [Program-derived addresses (PDAs)](#program-derived-addresses-pdas)
+- [Batching RPC calls](#batching-rpc-calls)
 - [Rate limits, custom endpoints, and headers](#rate-limits-custom-endpoints-and-headers)
 - [Error handling](#error-handling)
 
@@ -242,6 +243,28 @@ foreach (var entry in owned)
 var supply = await rpc.GetTokenSupplyAsync(usdc);
 Console.WriteLine($"{supply.UiAmountString} ({supply.Decimals} decimals)");
 ```
+
+**Token-2022 extensions.** An extended Token-2022 mint or account carries TLV entries after its base
+layout. Decode them alongside the base state:
+
+```csharp
+using SolSharp.Rpc.Models.Token2022;
+
+var info = await rpc.GetAccountInfoAsync(mintAddress)
+    ?? throw new InvalidOperationException("mint not found");
+
+var mint = Mint.Decode(info.Data);                        // the base 82-byte state
+var extensions = TokenExtensionSet.DecodeMint(info.Data); // the TLV extension section
+
+if (extensions?.GetTransferFeeConfig() is { } fee)
+    Console.WriteLine($"transfer fee: {fee.GetEpochFee(currentEpoch).BasisPoints} bps");
+
+var symbol = extensions?.GetTokenMetadata()?.Symbol;      // in-mint metadata, when present
+```
+
+Typed getters cover the common extensions — transfer-fee config and withheld amounts, metadata pointer and
+in-mint `TokenMetadata`, permanent delegate, mint close authority, default account state, memo-transfer
+requirement. Every other TLV entry stays available raw via `Extensions` and `Find(type)`.
 
 ## Sending your first transaction
 
@@ -649,6 +672,27 @@ bool onCurve = somePublicKey.IsOnCurve();
 
 A derivation accepts at most `MaxSeeds` (16) seeds — the bump counts toward the limit — of up to
 `MaxSeedLength` (32) bytes each, matching the runtime's rules.
+
+## Batching RPC calls
+
+`CreateBatch` queues several calls and submits them as one JSON-RPC batch — one HTTP round-trip instead of
+N. Await the queued tasks only **after** starting `ExecuteAsync`; a per-call node error faults only that
+call's task.
+
+```csharp
+var batch = rpc.CreateBatch();
+var balance = batch.GetBalanceAsync(wallet);
+var blockhash = batch.GetLatestBlockhashAsync();
+var slot = batch.GetSlotAsync();
+
+await batch.ExecuteAsync();   // one round-trip
+
+Console.WriteLine($"{await balance} lamports at slot {await slot}");
+```
+
+Sends batch too — submit several signed transactions at once with `batch.SendTransactionAsync(bytes)`.
+Note that some RPC providers disable or cap JSON-RPC batching; a non-batch reply surfaces as an
+`RpcException`.
 
 ## Rate limits, custom endpoints, and headers
 

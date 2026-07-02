@@ -21,6 +21,17 @@ public interface ITransactionMessage
     /// <returns>The serialized message.</returns>
     byte[] Serialize();
 
+    /// <summary>Returns the exact length of the serialized message, in bytes.</summary>
+    /// <returns>The serialized length.</returns>
+    int GetSerializedLength();
+
+    /// <summary>Serializes the message into <paramref name="destination"/> without allocating.</summary>
+    /// <param name="destination">The span to write into; must be at least <see cref="GetSerializedLength"/> bytes.</param>
+    /// <returns>The number of bytes written.</returns>
+    /// <exception cref="ArgumentException"><paramref name="destination"/> is smaller than <see cref="GetSerializedLength"/> bytes.</exception>
+    /// <exception cref="FormatException">The message's recent blockhash is not a 32-byte base58 value.</exception>
+    int Serialize(Span<byte> destination);
+
     /// <summary>
     /// Resolves the compiled instructions back into <see cref="Instruction"/>s, mapping each account index to
     /// its public key and signer/writable flags. A v0 message additionally loads accounts from the supplied

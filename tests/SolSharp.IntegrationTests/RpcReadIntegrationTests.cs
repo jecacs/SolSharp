@@ -4,6 +4,7 @@ using NUnit.Framework;
 using SolSharp.Core.Primitives;
 using SolSharp.Rpc;
 using SolSharp.Rpc.Models;
+using SolSharp.Rpc.Models.Token2022;
 
 namespace SolSharp.IntegrationTests;
 
@@ -377,6 +378,34 @@ public static class RpcReadIntegrationTests
             // Assert
             block!.Blockhash.Should().NotBeNullOrEmpty();
             block.ParentSlot.Should().BeGreaterThan(0);
+        }
+    }
+
+    [TestFixture]
+    [Category("Integration")]
+    public sealed class Token2022Extensions
+    {
+        // PYUSD: a long-lived Token-2022 mint that keeps its metadata in the mint itself.
+        private static readonly PublicKey PyusdMint = PublicKey.Parse("2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo");
+
+        [Test]
+        public async Task DecodesPyusdMintExtensions()
+        {
+            // Arrange
+            using var provider = CreateProvider();
+            var client = provider.GetRequiredService<SolanaRpcClient>();
+
+            // Act
+            var account = await IntegrationEnvironment.CallAsync(() => client.GetAccountInfoAsync(PyusdMint));
+
+            // Assert
+            account.Should().NotBeNull();
+            var extensions = TokenExtensionSet.DecodeMint(account!.Data);
+            extensions.Should().NotBeNull("PYUSD is an extended Token-2022 mint");
+            extensions!.Has(ExtensionType.MetadataPointer).Should().BeTrue();
+            extensions.GetMetadataPointer()!.MetadataAddress.Should().Be(PyusdMint, "PYUSD points its metadata at the mint itself");
+            // Soft assertion by design: if the in-mint metadata is ever moved, the pointer checks above still hold.
+            extensions.GetTokenMetadata()?.Symbol.Should().Be("PYUSD");
         }
     }
 }

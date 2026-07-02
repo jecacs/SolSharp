@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using NUnit.Framework;
 using Polly;
+using SolSharp.Rpc.Streaming;
 
 namespace SolSharp.Rpc.Tests;
 
@@ -39,6 +40,38 @@ public static class ServiceCollectionExtensionsTests
             // Act & Assert
             provider.GetRequiredService<IOptions<SolanaRpcOptions>>().Value.Endpoint
                 .Should().Be("https://node.example/rpc");
+        }
+    }
+
+    [TestFixture]
+    public sealed class AddSolanaWs
+    {
+        [Test]
+        public void ResolvesASingletonClient()
+        {
+            // Arrange: no logging registered on purpose - the client must tolerate its absence.
+            var services = new ServiceCollection();
+            services.AddSolanaWs(new SolanaWsClientOptions { AutoReconnect = false });
+            var provider = services.BuildServiceProvider();
+
+            // Act
+            var first = provider.GetRequiredService<SolanaWsClient>();
+            var second = provider.GetRequiredService<SolanaWsClient>();
+
+            // Assert
+            first.Should().NotBeNull();
+            second.Should().BeSameAs(first);
+        }
+
+        [Test]
+        public void DefaultOptions_AlsoResolve()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddSolanaWs();
+
+            // Act & Assert
+            services.BuildServiceProvider().GetRequiredService<SolanaWsClient>().Should().NotBeNull();
         }
     }
 

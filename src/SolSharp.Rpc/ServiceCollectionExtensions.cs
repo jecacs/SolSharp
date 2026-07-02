@@ -1,12 +1,26 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using SolSharp.Rpc.Streaming;
 
 namespace SolSharp.Rpc;
 
-/// <summary>Dependency-injection registration for <see cref="SolanaRpcClient"/>.</summary>
+/// <summary>Dependency-injection registration for <see cref="SolanaRpcClient"/> and <see cref="SolanaWsClient"/>.</summary>
 public static class ServiceCollectionExtensions
 {
+    /// <summary>
+    /// Registers <see cref="SolanaWsClient"/> as a singleton, wired to the container's
+    /// <see cref="ILoggerFactory"/> when one is registered. The consumer still opens the connection with
+    /// <see cref="SolanaWsClient.ConnectAsync"/>; the container disposes the client on shutdown.
+    /// </summary>
+    /// <param name="services">The service collection to add to.</param>
+    /// <param name="options">Connection options (auto-reconnect policy); defaults are used when <c>null</c>.</param>
+    /// <returns>The same service collection, so calls can be chained.</returns>
+    public static IServiceCollection AddSolanaWs(this IServiceCollection services, SolanaWsClientOptions? options = null)
+        => services.AddSingleton(provider =>
+            new SolanaWsClient(options ?? new SolanaWsClientOptions(), provider.GetService<ILoggerFactory>()));
+
     /// <summary>
     /// Registers <see cref="SolanaRpcClient"/> as a typed <see cref="HttpClient"/> with a standard
     /// resilience pipeline (retry on transient failures and HTTP 429, with backoff and a request timeout).

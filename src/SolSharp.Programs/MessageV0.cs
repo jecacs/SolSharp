@@ -6,7 +6,7 @@ namespace SolSharp.Programs;
 /// <summary>
 /// A compiled v0 (versioned) transaction message: like a legacy <see cref="Message"/>, but able to load
 /// extra accounts from on-chain address lookup tables so a transaction can reference far more accounts.
-/// Build one with <see cref="Compile"/>, then <see cref="Serialize"/> for the signed-and-sent bytes, which
+/// Build one with <see cref="Compile"/>, then <see cref="Serialize()"/> for the signed-and-sent bytes, which
 /// begin with the <see cref="VersionPrefix"/> byte.
 /// </summary>
 public sealed class MessageV0 : ITransactionMessage
@@ -232,42 +232,90 @@ public sealed class MessageV0 : ITransactionMessage
     /// <exception cref="FormatException"><see cref="RecentBlockhash"/> is not a 32-byte base58 value.</exception>
     public byte[] Serialize()
     {
+        var buffer = new byte[GetSerializedLength()];
+        Serialize(buffer);
+        return buffer;
+    }
+
+    /// <summary>Returns the exact length of the serialized message, in bytes.</summary>
+    /// <returns>The serialized length.</returns>
+    public int GetSerializedLength()
+    {
+        var length = 1 + 3 // the version prefix and the header counts
+            + ShortVec.GetByteCount(AccountKeys.Count) + AccountKeys.Count * PublicKey.Length
+            + PublicKey.Length // the recent blockhash
+            + ShortVec.GetByteCount(Instructions.Count);
+
+        foreach (var instruction in Instructions)
+            length += 1
+                + ShortVec.GetByteCount(instruction.AccountIndexes.Length) + instruction.AccountIndexes.Length
+                + ShortVec.GetByteCount(instruction.Data.Length) + instruction.Data.Length;
+
+        length += ShortVec.GetByteCount(AddressTableLookups.Count);
+        foreach (var lookup in AddressTableLookups)
+            length += PublicKey.Length
+                + ShortVec.GetByteCount(lookup.WritableIndexes.Length) + lookup.WritableIndexes.Length
+                + ShortVec.GetByteCount(lookup.ReadonlyIndexes.Length) + lookup.ReadonlyIndexes.Length;
+
+        return length;
+    }
+
+    /// <summary>Serializes the message into <paramref name="destination"/> without allocating.</summary>
+    /// <param name="destination">The span to write into; must be at least <see cref="GetSerializedLength"/> bytes.</param>
+    /// <returns>The number of bytes written.</returns>
+    /// <exception cref="ArgumentException"><paramref name="destination"/> is smaller than <see cref="GetSerializedLength"/> bytes.</exception>
+    /// <exception cref="FormatException"><see cref="RecentBlockhash"/> is not a 32-byte base58 value.</exception>
+    public int Serialize(Span<byte> destination)
+    {
         if (!Base58.TryDecode(RecentBlockhash, out var blockhash) || blockhash.Length != PublicKey.Length)
             throw new FormatException($"Recent blockhash must be a 32-byte base58 value, got '{RecentBlockhash}'.");
 
-        using var buffer = new MemoryStream(256);
-        buffer.WriteByte(VersionPrefix);
-        buffer.WriteByte(RequiredSignatures);
-        buffer.WriteByte(ReadonlySignedAccounts);
-        buffer.WriteByte(ReadonlyUnsignedAccounts);
+        var required = GetSerializedLength();
+        if (destination.Length < required)
+            throw new ArgumentException($"Destination must be at least {required} bytes.", nameof(destination));
 
-        buffer.Write(ShortVec.Encode(AccountKeys.Count));
+        var offset = 0;
+        destination[offset++] = VersionPrefix;
+        destination[offset++] = RequiredSignatures;
+        destination[offset++] = ReadonlySignedAccounts;
+        destination[offset++] = ReadonlyUnsignedAccounts;
+
+        offset += ShortVec.Encode(AccountKeys.Count, destination[offset..]);
         foreach (var key in AccountKeys)
-            buffer.Write(key.ToBytes());
+        {
+            key.CopyTo(destination[offset..]);
+            offset += PublicKey.Length;
+        }
 
-        buffer.Write(blockhash);
+        blockhash.CopyTo(destination[offset..]);
+        offset += PublicKey.Length;
 
-        buffer.Write(ShortVec.Encode(Instructions.Count));
+        offset += ShortVec.Encode(Instructions.Count, destination[offset..]);
         foreach (var instruction in Instructions)
         {
-            buffer.WriteByte(instruction.ProgramIdIndex);
-            buffer.Write(ShortVec.Encode(instruction.AccountIndexes.Length));
-            buffer.Write(instruction.AccountIndexes);
-            buffer.Write(ShortVec.Encode(instruction.Data.Length));
-            buffer.Write(instruction.Data);
+            destination[offset++] = instruction.ProgramIdIndex;
+            offset += ShortVec.Encode(instruction.AccountIndexes.Length, destination[offset..]);
+            instruction.AccountIndexes.CopyTo(destination[offset..]);
+            offset += instruction.AccountIndexes.Length;
+            offset += ShortVec.Encode(instruction.Data.Length, destination[offset..]);
+            instruction.Data.CopyTo(destination[offset..]);
+            offset += instruction.Data.Length;
         }
 
-        buffer.Write(ShortVec.Encode(AddressTableLookups.Count));
+        offset += ShortVec.Encode(AddressTableLookups.Count, destination[offset..]);
         foreach (var lookup in AddressTableLookups)
         {
-            buffer.Write(lookup.AccountKey.ToBytes());
-            buffer.Write(ShortVec.Encode(lookup.WritableIndexes.Length));
-            buffer.Write(lookup.WritableIndexes);
-            buffer.Write(ShortVec.Encode(lookup.ReadonlyIndexes.Length));
-            buffer.Write(lookup.ReadonlyIndexes);
+            lookup.AccountKey.CopyTo(destination[offset..]);
+            offset += PublicKey.Length;
+            offset += ShortVec.Encode(lookup.WritableIndexes.Length, destination[offset..]);
+            lookup.WritableIndexes.CopyTo(destination[offset..]);
+            offset += lookup.WritableIndexes.Length;
+            offset += ShortVec.Encode(lookup.ReadonlyIndexes.Length, destination[offset..]);
+            lookup.ReadonlyIndexes.CopyTo(destination[offset..]);
+            offset += lookup.ReadonlyIndexes.Length;
         }
 
-        return buffer.ToArray();
+        return offset;
     }
 
     /// <summary>

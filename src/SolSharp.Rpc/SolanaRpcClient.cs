@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using SolSharp.Core.Converters;
 using SolSharp.Core.Primitives;
 using SolSharp.Rpc.Models;
@@ -904,6 +905,25 @@ public class SolanaRpcClient(HttpClient httpClient)
             RpcRequests.GetParsedAccountInfo(account, commitment ?? Commitment.Confirmed), cancellationToken);
 
         return result.Value;
+    }
+
+    /// <summary>
+    /// Creates an empty JSON-RPC batch bound to this client. Queue calls on it, then submit them in one
+    /// HTTP round-trip with <see cref="RpcBatch.ExecuteAsync"/>.
+    /// </summary>
+    /// <returns>A new, empty batch.</returns>
+    public RpcBatch CreateBatch() => new(this);
+
+    internal async Task<JsonElement> SendBatchAsync(IReadOnlyList<RpcRequest> requests, CancellationToken cancellationToken)
+    {
+        using var response = await httpClient
+            .PostAsJsonAsync(string.Empty, requests, SolanaJsonSerializer.Options, cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        return document.RootElement.Clone();
     }
 
     private async Task<T> SendAsync<T>(RpcRequest request, CancellationToken cancellationToken)

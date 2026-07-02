@@ -18,7 +18,7 @@ wire format and the signing path, without dragging in a large dependency graph. 
 writing bots, indexers, or backend services that talk to Solana from .NET and care about
 speed and control, this is aimed at you.
 
-> **Status: 0.5.0 — stable release.** SolSharp ships as a single NuGet package — `SolSharp` —
+> **Status: 0.6.0 — stable release.** SolSharp ships as a single NuGet package — `SolSharp` —
 > bundling the Core (primitives + encodings), Wallet (Ed25519 keys, signing, verification, BIP-39/SLIP-0010
 > mnemonic import), Rpc (HTTP reads + send/simulate + WebSocket streaming + DI), and Programs (instructions +
 > transaction building + signing, durable nonces) assemblies. Versioning follows semver; while on 0.x, minor
@@ -56,7 +56,7 @@ dotnet add package SolSharp
 ```
 
 ```xml
-<PackageReference Include="SolSharp" Version="0.5.0" />
+<PackageReference Include="SolSharp" Version="0.6.0" />
 ```
 
 | Assembly           | Purpose                                              | Status |
@@ -104,8 +104,10 @@ bool ok = PublicKey.TryParse(input, out var key);
   `getVoteAccounts`, `getInflationReward`, `getLeaderSchedule`, `getBlocks`, `getClusterNodes`,
   `requestAirdrop`); each typed, fully documented, and tested.
 - Account-state decoders — `Mint` and `TokenAccount` (SPL Token state, via `GetMintAsync` /
-  `GetTokenAccountAsync`), `NonceAccount` (via `GetNonceAccountAsync`), and `AddressLookupTable`; for other
-  programs, pair `getAccountInfo` with Core's `BorshReader`.
+  `GetTokenAccountAsync`), `NonceAccount` (via `GetNonceAccountAsync`), `AddressLookupTable`, and the
+  Token-2022 extension section (`TokenExtensionSet` — TLV walking plus typed views for transfer fees,
+  metadata pointer / in-mint metadata, permanent delegate, and more); for other programs, pair
+  `getAccountInfo` with Core's `BorshReader`.
 - `getTransaction` returns the decoded transaction bytes (feed to `Transaction.Deserialize`) alongside rich
   metadata — pre/post SOL and token balances, inner (CPI) instructions, loaded lookup-table addresses, logs,
   and compute units. Failures decode to a typed `TransactionError` (exposing the program's `Custom` code) on
@@ -117,7 +119,9 @@ bool ok = PublicKey.TryParse(input, out var key);
   (`IAsyncEnumerable`), `SubscribeLogsAsync`, `SubscribeAccountAsync`, `SubscribeParsedAccountAsync`, `SubscribeProgramAsync`,
   `SubscribeSignatureAsync`, `SubscribeBlocksAsync`, and `SubscribeParsedBlocksAsync` (`ChannelReader`), with
   automatic reconnect and resubscribe across dropped connections.
-- DI registration with a built-in resilience pipeline (retry on transient errors and HTTP 429).
+- DI registration with a built-in resilience pipeline (retry on transient errors and HTTP 429), plus
+  `AddSolanaWs` for a container-managed streaming client.
+- JSON-RPC batching — `CreateBatch()` queues reads (and sends) and submits them in one HTTP round-trip.
 - `SendTransactionAsync` / `SimulateTransactionAsync` — submit a signed transaction or dry-run it for logs and
   compute units; `SendAndConfirmTransactionAsync` sends and waits for confirmation (throwing if the transaction
   lands but errors). Confirm by polling (`GetSignatureStatusesAsync` / `ConfirmTransactionAsync`) or over the
@@ -170,7 +174,8 @@ bool ok = keypair.PublicKey.Verify(message, signature);
 - `ProgramDerivedAddress` (`FindProgramAddress` / `TryCreateProgramAddress`) and `PublicKey.IsOnCurve()`.
 - `Message` (legacy) and `MessageV0` (versioned, loading extra accounts from address lookup tables),
   `Transaction`, and `TransactionBuilder` (`Build` / `BuildV0`, durable-nonce anchoring via
-  `SetDurableNonce`) — compilation, wire serialization (with
+  `SetDurableNonce`) — compilation, wire serialization (allocation-free via `Transaction.TrySerialize` and
+  the span `Serialize` overloads, with
   `Transaction.Deserialize` to parse one back, and `DecompileInstructions` to resolve a parsed message's
   instructions to program ids and account keys, loading v0 lookup-table accounts), signing, and base64
   output. Every encoding is checked byte-for-byte against the Rust `solana-sdk` (via solders) and `solana-py`.
@@ -205,6 +210,10 @@ var signature = await rpc.SendTransactionAsync(tx.Serialize());
 - [x] Published NuGet package (single `SolSharp` package bundling the four assemblies)
 - [x] Durable nonces — nonce instructions + `NonceAccount` decoding + `TransactionBuilder.SetDurableNonce`
 - [x] Mnemonic wallet import — BIP-39 + SLIP-0010 (`solana-keygen` and Phantom/Solflare schemes)
+- [x] Token-2022 extensions — TLV decoding with typed views (transfer fee, metadata, delegate, ...)
+- [x] Devnet write gate — live airdrop / transfer / durable-nonce run before every release
+- [x] JSON-RPC batching, allocation-free (span) transaction serialization, `AddSolanaWs` DI
+- [x] BenchmarkDotNet harness (`benchmarks/`)
 
 ## Requirements
 
@@ -219,13 +228,20 @@ dotnet format   # apply the enforced code style
 ```
 
 The suite includes a `SolSharp.IntegrationTests` project that exercises the read and streaming paths against a
-live cluster. It targets the public mainnet endpoint by default and is overridable via the `SOLSHARP_RPC_URL`
-and `SOLSHARP_WS_URL` environment variables; no credentials are committed. These tests hit the network, so they
-tolerate rate limits by reporting inconclusive rather than failing, and are tagged `Integration`. For a fast,
-offline-only run, exclude them:
+live cluster, plus a write suite (airdrop, transfer, durable nonce) that always targets **devnet**. Reads
+default to the public mainnet endpoint (`SOLSHARP_RPC_URL` / `SOLSHARP_WS_URL` override); the write suite uses
+the public devnet endpoint (`SOLSHARP_DEVNET_RPC_URL` override); no credentials are committed. These tests hit
+the network, so they tolerate rate limits by reporting inconclusive rather than failing, and are tagged
+`Integration`. For a fast, offline-only run, exclude them:
 
 ```bash
 dotnet test --filter "TestCategory!=Integration"
+```
+
+Micro-benchmarks live in a standalone BenchmarkDotNet harness:
+
+```bash
+dotnet run -c Release --project benchmarks/SolSharp.Benchmarks
 ```
 
 To point the integration tests at your own node, set the endpoints (the key stays in your shell, never the repo):

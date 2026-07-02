@@ -6,7 +6,7 @@ namespace SolSharp.Programs;
 /// <summary>
 /// A compiled legacy Solana transaction message: the ordered account list, the header counts, the recent
 /// blockhash, and the compiled instructions. Build one with <see cref="Compile"/>, then serialize it with
-/// <see cref="Serialize"/> to get the bytes that are signed and sent.
+/// <see cref="Serialize()"/> to get the bytes that are signed and sent.
 /// </summary>
 public sealed class Message : ITransactionMessage
 {
@@ -141,31 +141,70 @@ public sealed class Message : ITransactionMessage
     /// <exception cref="FormatException"><see cref="RecentBlockhash"/> is not a 32-byte base58 value.</exception>
     public byte[] Serialize()
     {
+        var buffer = new byte[GetSerializedLength()];
+        Serialize(buffer);
+        return buffer;
+    }
+
+    /// <summary>Returns the exact length of the serialized message, in bytes.</summary>
+    /// <returns>The serialized length.</returns>
+    public int GetSerializedLength()
+    {
+        var length = 3 // the header counts
+            + ShortVec.GetByteCount(AccountKeys.Count) + AccountKeys.Count * PublicKey.Length
+            + PublicKey.Length // the recent blockhash
+            + ShortVec.GetByteCount(Instructions.Count);
+
+        foreach (var instruction in Instructions)
+            length += 1
+                + ShortVec.GetByteCount(instruction.AccountIndexes.Length) + instruction.AccountIndexes.Length
+                + ShortVec.GetByteCount(instruction.Data.Length) + instruction.Data.Length;
+
+        return length;
+    }
+
+    /// <summary>Serializes the message into <paramref name="destination"/> without allocating.</summary>
+    /// <param name="destination">The span to write into; must be at least <see cref="GetSerializedLength"/> bytes.</param>
+    /// <returns>The number of bytes written.</returns>
+    /// <exception cref="ArgumentException"><paramref name="destination"/> is smaller than <see cref="GetSerializedLength"/> bytes.</exception>
+    /// <exception cref="FormatException"><see cref="RecentBlockhash"/> is not a 32-byte base58 value.</exception>
+    public int Serialize(Span<byte> destination)
+    {
         if (!Base58.TryDecode(RecentBlockhash, out var blockhash) || blockhash.Length != PublicKey.Length)
             throw new FormatException($"Recent blockhash must be a 32-byte base58 value, got '{RecentBlockhash}'.");
 
-        using var buffer = new MemoryStream(256);
-        buffer.WriteByte(RequiredSignatures);
-        buffer.WriteByte(ReadonlySignedAccounts);
-        buffer.WriteByte(ReadonlyUnsignedAccounts);
+        var required = GetSerializedLength();
+        if (destination.Length < required)
+            throw new ArgumentException($"Destination must be at least {required} bytes.", nameof(destination));
 
-        buffer.Write(ShortVec.Encode(AccountKeys.Count));
+        var offset = 0;
+        destination[offset++] = RequiredSignatures;
+        destination[offset++] = ReadonlySignedAccounts;
+        destination[offset++] = ReadonlyUnsignedAccounts;
+
+        offset += ShortVec.Encode(AccountKeys.Count, destination[offset..]);
         foreach (var key in AccountKeys)
-            buffer.Write(key.ToBytes());
-
-        buffer.Write(blockhash);
-
-        buffer.Write(ShortVec.Encode(Instructions.Count));
-        foreach (var instruction in Instructions)
         {
-            buffer.WriteByte(instruction.ProgramIdIndex);
-            buffer.Write(ShortVec.Encode(instruction.AccountIndexes.Length));
-            buffer.Write(instruction.AccountIndexes);
-            buffer.Write(ShortVec.Encode(instruction.Data.Length));
-            buffer.Write(instruction.Data);
+            key.CopyTo(destination[offset..]);
+            offset += PublicKey.Length;
         }
 
-        return buffer.ToArray();
+        blockhash.CopyTo(destination[offset..]);
+        offset += PublicKey.Length;
+
+        offset += ShortVec.Encode(Instructions.Count, destination[offset..]);
+        foreach (var instruction in Instructions)
+        {
+            destination[offset++] = instruction.ProgramIdIndex;
+            offset += ShortVec.Encode(instruction.AccountIndexes.Length, destination[offset..]);
+            instruction.AccountIndexes.CopyTo(destination[offset..]);
+            offset += instruction.AccountIndexes.Length;
+            offset += ShortVec.Encode(instruction.Data.Length, destination[offset..]);
+            instruction.Data.CopyTo(destination[offset..]);
+            offset += instruction.Data.Length;
+        }
+
+        return offset;
     }
 
     /// <summary>Resolves the compiled instructions back into <see cref="Instruction"/>s, with each account's key and signer/writable flags.</summary>
