@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
+    <IsAotCompatible>true</IsAotCompatible>
     <Description>Solana transaction building for .NET: instructions, legacy message compilation and wire serialization, transaction signing, and System / Compute Budget / SPL Token instruction builders.</Description>
   </PropertyGroup>
 

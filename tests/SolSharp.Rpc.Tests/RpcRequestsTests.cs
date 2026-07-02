@@ -2,7 +2,6 @@ using System.Text.Json;
 using FluentAssertions;
 using NUnit.Framework;
 using SolSharp.Core.Constants;
-using SolSharp.Core.Converters;
 using SolSharp.Core.Primitives;
 using SolSharp.Rpc.Protocol;
 
@@ -10,8 +9,10 @@ namespace SolSharp.Rpc.Tests;
 
 public static class RpcRequestsTests
 {
+    // Serialized exactly as the clients do - through the source-generated metadata - so a request
+    // shape missing from SolanaJsonContext fails here even before the client suites run.
     private static string Serialize(RpcRequest request)
-        => JsonSerializer.Serialize(request, SolanaJsonSerializer.Options);
+        => JsonSerializer.Serialize(request, RpcJson.TypeInfo<RpcRequest>());
 
     [TestFixture]
     public sealed class GetBalance

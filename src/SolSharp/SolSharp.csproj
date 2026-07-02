@@ -4,8 +4,8 @@
     <TargetFramework>net8.0</TargetFramework>
     <PackageId>SolSharp</PackageId>
     <IsPackable>true</IsPackable>
-    <Description>A lean, dependency-light .NET 8 SDK for Solana. JSON-RPC reads, send/simulate, and multiplexed WebSocket streaming; Ed25519 keys and signing; SPL Token, PDA, and ATA helpers; and spec-accurate legacy and v0 (versioned) transaction building, signing, and decoding — every wire format checked byte-for-byte against the Rust solana-sdk. Ships as one package bundling the Core, Wallet, Rpc, and Programs assemblies.</Description>
-    <PackageReleaseNotes>0.6.0 adds Token-2022 extension decoding (TokenExtensionSet: TLV walking with typed views for transfer fees, metadata pointer and in-mint metadata, permanent delegate, and more), JSON-RPC batching (SolanaRpcClient.CreateBatch - reads and sends in one round-trip), allocation-free transaction serialization (Transaction.TrySerialize and span Serialize overloads with GetSerializedLength), and AddSolanaWs DI registration. The release gate now also runs a live devnet write suite (airdrop, transfer, durable-nonce lifecycle) before publishing. Follows semantic versioning; while on 0.x, minor releases may carry breaking changes. Changelog: https://github.com/jecacs/SolSharp/blob/main/CHANGELOG.md</PackageReleaseNotes>
+    <Description>A lean, Native AOT-ready .NET 8 SDK for Solana — source-generated JSON, no reflection, trimmable, compiles to a native binary. The full JSON-RPC HTTP read surface, send/simulate, and multiplexed WebSocket streaming; Ed25519 keys and signing; SPL Token, PDA, and ATA helpers; and spec-accurate legacy and v0 (versioned) transaction building, signing, and decoding — every wire format checked byte-for-byte against the Rust solana-sdk. Ships as one package bundling the Core, Wallet, Rpc, and Programs assemblies.</Description>
+    <PackageReleaseNotes>1.0.0 — first stable release; the public API is now covered by the semver compatibility promise (breaking changes only with a major version). The client covers the full current Solana JSON-RPC HTTP read surface, adding getBlockCommitment, getBlockProduction, getBlockTime, getBlocksWithLimit, getEpochSchedule, getFirstAvailableBlock, getGenesisHash, getHighestSnapshotSlot, getIdentity, getInflationGovernor, getInflationRate, getLargestAccounts, getMaxRetransmitSlot, getMaxShredInsertSlot, getRecentPerformanceSamples, getSlotLeader, getStakeMinimumDelegation, getTokenAccountsByDelegate, and minimumLedgerSlot — each typed, documented, and tested. All JSON is source-generated (no reflection) and every assembly is Native AOT compatible. Changelog: https://github.com/jecacs/SolSharp/blob/main/CHANGELOG.md</PackageReleaseNotes>
     <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);BundleProjectReferences</TargetsForTfmSpecificBuildOutput>
   </PropertyGroup>
 
@@ -22,7 +22,6 @@
     <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.1"/>
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="8.0.0"/>
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2"/>
-    <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" Version="8.0.0"/>
   </ItemGroup>
 
   <Target Name="BundleProjectReferences" DependsOnTargets="ResolveReferences">

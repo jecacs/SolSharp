@@ -5,6 +5,7 @@ out/
 artifacts/
 [Dd]ebug/
 [Rr]elease/
+BenchmarkDotNet.Artifacts/
 
 # Rider / IntelliJ
 .idea/

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using SolSharp.Rpc.Protocol;
 
 namespace SolSharp.Rpc.Models.Parsed;
 
@@ -19,11 +20,11 @@ internal sealed class ParsedTransactionJsonConverter : JsonConverter<ParsedTrans
         return new ParsedTransaction
         {
             Signatures = transaction.TryGetProperty("signatures", out var signatures)
-                ? signatures.Deserialize<IReadOnlyList<string>>(options) ?? []
+                ? signatures.Deserialize(options.GetTypeInfo<IReadOnlyList<string>>()) ?? []
                 : [],
-            Message = transaction.GetProperty("message").Deserialize<ParsedMessage>(options) ?? new ParsedMessage(),
+            Message = transaction.GetProperty("message").Deserialize(options.GetTypeInfo<ParsedMessage>()) ?? new ParsedMessage(),
             Meta = root.TryGetProperty("meta", out var meta) && meta.ValueKind is not JsonValueKind.Null
-                ? meta.Deserialize<ParsedTransactionMeta>(options)
+                ? meta.Deserialize(options.GetTypeInfo<ParsedTransactionMeta>())
                 : null,
             Slot = root.TryGetProperty("slot", out var slot) && slot.ValueKind is JsonValueKind.Number
                 ? slot.GetUInt64()

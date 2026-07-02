@@ -1,10 +1,10 @@
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using SolSharp.Core.Converters;
 using SolSharp.Core.Primitives;
 using SolSharp.Rpc.Models;
 using SolSharp.Rpc.Models.Parsed;
@@ -129,7 +129,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         CancellationToken cancellationToken = default)
     {
         var sink = new SubscriptionSink<RpcContextValue<LogInfo>>();
-        object[] parameters = [new { mentions = new[] { program } }, new { commitment }];
+        object[] parameters = [new LogsFilter { Mentions = [program] }, new CommitmentConfig { Commitment = commitment }];
         var subscription = await RegisterAsync("logsSubscribe", parameters, "logsUnsubscribe", sink, cancellationToken);
 
         cancellationToken.Register(() => Cancel(subscription, cancellationToken));
@@ -154,7 +154,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         CancellationToken cancellationToken = default)
     {
         var sink = new SubscriptionSink<RpcContextValue<AccountInfo>>();
-        object[] parameters = [account, new { encoding = "base64", commitment }];
+        object[] parameters = [account, new AccountInfoConfig { Encoding = "base64", Commitment = commitment }];
         var subscription = await RegisterAsync("accountSubscribe", parameters, "accountUnsubscribe", sink, cancellationToken);
 
         cancellationToken.Register(() => Cancel(subscription, cancellationToken));
@@ -178,7 +178,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         CancellationToken cancellationToken = default)
     {
         var sink = new SubscriptionSink<RpcContextValue<ParsedAccountInfo>>();
-        object[] parameters = [account, new { encoding = "jsonParsed", commitment }];
+        object[] parameters = [account, new AccountInfoConfig { Encoding = "jsonParsed", Commitment = commitment }];
         var subscription = await RegisterAsync("accountSubscribe", parameters, "accountUnsubscribe", sink, cancellationToken);
 
         cancellationToken.Register(() => Cancel(subscription, cancellationToken));
@@ -209,7 +209,12 @@ public sealed class SolanaWsClient : IAsyncDisposable
         object[] parameters =
         [
             program,
-            new { encoding = "base64", commitment, filters = filters?.Select(filter => filter.Payload).ToArray() }
+            new ProgramAccountsConfig
+            {
+                Encoding = "base64",
+                Commitment = commitment,
+                Filters = filters?.Select(filter => filter.Payload).ToArray()
+            }
         ];
         var subscription = await RegisterAsync("programSubscribe", parameters, "programUnsubscribe", sink, cancellationToken);
 
@@ -250,7 +255,8 @@ public sealed class SolanaWsClient : IAsyncDisposable
         PublicKey mentionsAccountOrProgram,
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
-        => SubscribeBlocksCoreAsync(new { mentionsAccountOrProgram }, commitment, cancellationToken);
+        => SubscribeBlocksCoreAsync(
+            new BlockSubscribeFilter { MentionsAccountOrProgram = mentionsAccountOrProgram }, commitment, cancellationToken);
 
     private async Task<ChannelReader<RpcContextValue<BlockNotification>>> SubscribeBlocksCoreAsync(
         object filter,
@@ -261,7 +267,14 @@ public sealed class SolanaWsClient : IAsyncDisposable
         object[] parameters =
         [
             filter,
-            new { commitment, encoding = "json", transactionDetails = "signatures", showRewards = false, maxSupportedTransactionVersion = 0 }
+            new BlockSubscribeConfig
+            {
+                Commitment = commitment,
+                Encoding = "json",
+                TransactionDetails = "signatures",
+                ShowRewards = false,
+                MaxSupportedTransactionVersion = 0
+            }
         ];
         var subscription = await RegisterAsync("blockSubscribe", parameters, "blockUnsubscribe", sink, cancellationToken);
 
@@ -303,7 +316,8 @@ public sealed class SolanaWsClient : IAsyncDisposable
         PublicKey mentionsAccountOrProgram,
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
-        => SubscribeParsedBlocksCoreAsync(new { mentionsAccountOrProgram }, commitment, cancellationToken);
+        => SubscribeParsedBlocksCoreAsync(
+            new BlockSubscribeFilter { MentionsAccountOrProgram = mentionsAccountOrProgram }, commitment, cancellationToken);
 
     private async Task<ChannelReader<RpcContextValue<ParsedBlockNotification>>> SubscribeParsedBlocksCoreAsync(
         object filter,
@@ -314,7 +328,14 @@ public sealed class SolanaWsClient : IAsyncDisposable
         object[] parameters =
         [
             filter,
-            new { commitment, encoding = "jsonParsed", transactionDetails = "full", showRewards = false, maxSupportedTransactionVersion = 0 }
+            new BlockSubscribeConfig
+            {
+                Commitment = commitment,
+                Encoding = "jsonParsed",
+                TransactionDetails = "full",
+                ShowRewards = false,
+                MaxSupportedTransactionVersion = 0
+            }
         ];
         var subscription = await RegisterAsync("blockSubscribe", parameters, "blockUnsubscribe", sink, cancellationToken);
 
@@ -340,7 +361,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         CancellationToken cancellationToken = default)
     {
         var sink = new SubscriptionSink<RpcContextValue<SignatureNotification>>();
-        object[] parameters = [signature, new { commitment }];
+        object[] parameters = [signature, new CommitmentConfig { Commitment = commitment }];
         var subscription = await RegisterAsync("signatureSubscribe", parameters, "signatureUnsubscribe", sink, cancellationToken);
 
         cancellationToken.Register(() => Cancel(subscription, cancellationToken));
@@ -488,7 +509,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
     private async Task SendAsync(RpcRequest request, CancellationToken cancellationToken)
     {
         var connection = _connection ?? throw new InvalidOperationException("The client is not connected.");
-        var json = JsonSerializer.Serialize(request, SolanaJsonSerializer.Options);
+        var json = JsonSerializer.Serialize(request, RpcJson.TypeInfo<RpcRequest>());
 
         await _sendLock.WaitAsync(cancellationToken);
         try
@@ -826,11 +847,15 @@ public sealed class SolanaWsClient : IAsyncDisposable
             SingleReader = true
         });
 
+        // Resolved once per sink so an unregistered notification type fails at subscribe time, not on
+        // the first delivery deep inside the receive loop.
+        private readonly JsonTypeInfo<T> _typeInfo = RpcJson.TypeInfo<T>();
+
         public ChannelReader<T> Reader => _channel.Reader;
 
         public void Deliver(JsonElement result)
         {
-            var value = result.Deserialize<T>(SolanaJsonSerializer.Options);
+            var value = result.Deserialize(_typeInfo);
             if (value is not null)
                 _channel.Writer.TryWrite(value);
         }

@@ -1,17 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
     <OutputType>Exe</OutputType>
-    <!-- A standalone harness, deliberately outside the solution: run it with
-         `dotnet run` from this directory (Release configuration). Benchmark classes must be
-         public for BenchmarkDotNet, so the public-XML-docs rule does not apply here. -->
+    <TargetFramework>net8.0</TargetFramework>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="BenchmarkDotNet" Version="0.14.0" />
-  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../../src/SolSharp.Core/SolSharp.Core.csproj" />

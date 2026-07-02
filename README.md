@@ -9,8 +9,9 @@
 [![build](https://github.com/jecacs/SolSharp/actions/workflows/ci.yml/badge.svg)](https://github.com/jecacs/SolSharp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A lean, modern .NET SDK for Solana — RPC, WebSocket streaming, and wire-level
-transaction signing and building.
+A lean, modern, Native AOT-ready .NET SDK for Solana — RPC, WebSocket streaming, and
+wire-level transaction signing and building. No reflection anywhere: all JSON is
+source-generated, and every assembly compiles clean to a native binary.
 
 SolSharp is built for low latency and a small dependency footprint. It is a focused,
 hackable alternative to the heavier general-purpose SDKs: you get direct control over the
@@ -18,11 +19,12 @@ wire format and the signing path, without dragging in a large dependency graph. 
 writing bots, indexers, or backend services that talk to Solana from .NET and care about
 speed and control, this is aimed at you.
 
-> **Status: 0.6.0 — stable release.** SolSharp ships as a single NuGet package — `SolSharp` —
+> **Status: 1.0.0 — stable release.** SolSharp ships as a single NuGet package — `SolSharp` —
 > bundling the Core (primitives + encodings), Wallet (Ed25519 keys, signing, verification, BIP-39/SLIP-0010
-> mnemonic import), Rpc (HTTP reads + send/simulate + WebSocket streaming + DI), and Programs (instructions +
-> transaction building + signing, durable nonces) assemblies. Versioning follows semver; while on 0.x, minor
-> releases may still carry breaking changes.
+> mnemonic import), Rpc (the full JSON-RPC HTTP read surface + send/simulate + WebSocket streaming + DI), and
+> Programs (instructions + transaction building + signing, durable nonces) assemblies. JSON is
+> source-generated and all four assemblies are Native AOT compatible. Versioning follows semver: from 1.0.0,
+> breaking changes only come with a major version.
 
 📖 **New here? Read the [usage guide](docs/USAGE.md)** — a task-oriented cookbook covering keys, reads,
 SPL token state, building/signing/sending transactions, v0 + address lookup tables, decoding transactions,
@@ -37,6 +39,9 @@ latency-sensitive workloads.
 
 ## Why
 
+- **Native AOT ready.** JSON is source-generated (no reflection anywhere), every assembly is trimmable
+  and AOT-clean, and CI publishes and runs a native-compiled smoke sample on every push. Ship your bot
+  as a self-contained native binary with instant startup.
 - **Lean.** No kitchen-sink dependency graph. `Core` depends on a single package (base58).
 - **Wire-level control.** Hand-rolled, spec-accurate transaction and message encoding — the part
   most SDKs hide — with Ed25519 signing on a vetted crypto library, all tested against known vectors.
@@ -56,7 +61,7 @@ dotnet add package SolSharp
 ```
 
 ```xml
-<PackageReference Include="SolSharp" Version="0.6.0" />
+<PackageReference Include="SolSharp" Version="0.7.0" />
 ```
 
 | Assembly           | Purpose                                              | Status |
@@ -94,15 +99,21 @@ bool ok = PublicKey.TryParse(input, out var key);
 
 `SolSharp.Rpc`:
 
-- HTTP JSON-RPC reads — accounts (`getAccountInfo`, `getMultipleAccounts`, `getProgramAccounts` with
-  memcmp / data-size filters and data slices, `getTokenAccountsByOwner`, `getTokenLargestAccounts`,
-  `getTokenAccountBalance`, `getAddressLookupTable` fetch + decode), transactions and blocks
-  (`getTransaction`, `getSignaturesForAddress`, `getSignatureStatuses`, `getBlock`, `getBlockHeight`,
+- HTTP JSON-RPC reads — the full current read surface: accounts (`getAccountInfo`,
+  `getMultipleAccounts`, `getProgramAccounts` with memcmp / data-size filters and data slices,
+  `getTokenAccountsByOwner`, `getTokenAccountsByDelegate`, `getTokenLargestAccounts`,
+  `getTokenAccountBalance`, `getLargestAccounts`, `getAddressLookupTable` fetch + decode),
+  transactions and blocks (`getTransaction`, `getSignaturesForAddress`, `getSignatureStatuses`,
+  `getBlock`, `getBlockHeight`, `getBlockTime`, `getBlockCommitment`, `getBlockProduction`,
   `getTransactionCount`, `getFeeForMessage`), and cluster state (`getBalance`, `getSlot`,
-  `getLatestBlockhash`, `isBlockhashValid`, `getEpochInfo`, `getVersion`, `getHealth`, `getSupply`,
-  `getSlotLeaders`, `getRecentPrioritizationFees`, `getTokenSupply`, `getMinimumBalanceForRentExemption`,
-  `getVoteAccounts`, `getInflationReward`, `getLeaderSchedule`, `getBlocks`, `getClusterNodes`,
-  `requestAirdrop`); each typed, fully documented, and tested.
+  `getLatestBlockhash`, `isBlockhashValid`, `getEpochInfo`, `getEpochSchedule`, `getVersion`,
+  `getHealth`, `getIdentity`, `getGenesisHash`, `getSupply`, `getSlotLeader`, `getSlotLeaders`,
+  `getRecentPrioritizationFees`, `getRecentPerformanceSamples`, `getTokenSupply`,
+  `getMinimumBalanceForRentExemption`, `getVoteAccounts`, `getInflationReward`,
+  `getInflationGovernor`, `getInflationRate`, `getLeaderSchedule`, `getBlocks`,
+  `getBlocksWithLimit`, `getFirstAvailableBlock`, `getClusterNodes`, `getHighestSnapshotSlot`,
+  `getMaxRetransmitSlot`, `getMaxShredInsertSlot`, `getStakeMinimumDelegation`,
+  `minimumLedgerSlot`, `requestAirdrop`); each typed, fully documented, and tested.
 - Account-state decoders — `Mint` and `TokenAccount` (SPL Token state, via `GetMintAsync` /
   `GetTokenAccountAsync`), `NonceAccount` (via `GetNonceAccountAsync`), `AddressLookupTable`, and the
   Token-2022 extension section (`TokenExtensionSet` — TLV walking plus typed views for transfer fees,

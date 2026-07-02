@@ -28,3 +28,23 @@ jobs:
       # deterministic and offline; run it locally with a configured SOLSHARP_RPC_URL.
       - name: Test
         run: dotnet test --no-build --configuration Release --filter "TestCategory!=Integration"
+
+  # Proves the Native AOT claim end to end: the sample publishes with PublishAot (trimmed, no JIT,
+  # no reflection-based serialization) and then runs its offline signing / transaction-serialization /
+  # JSON-RPC-pipeline checks as a native binary. A type missing from the source-generated JSON context
+  # or a reflection call sneaking into a hot path fails this job.
+  aot-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Publish sample (Native AOT)
+        run: dotnet publish samples/SolSharp.AotSmoke -c Release -r linux-x64
+
+      - name: Run sample
+        run: samples/SolSharp.AotSmoke/bin/Release/net8.0/linux-x64/publish/SolSharp.AotSmoke

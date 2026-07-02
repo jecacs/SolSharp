@@ -239,6 +239,9 @@ foreach (var entry in owned)
     Console.WriteLine($"{entry.PublicKey}: {decoded!.Amount}");
 }
 
+// Same shape for accounts approved to a delegate:
+var delegated = await rpc.GetTokenAccountsByDelegateAsync(delegateKey, usdc);
+
 // The mint's total supply as a UI amount:
 var supply = await rpc.GetTokenSupplyAsync(usdc);
 Console.WriteLine($"{supply.UiAmountString} ({supply.Decimals} decimals)");
@@ -562,6 +565,47 @@ var blocks = await rpc.GetBlocksAsync(startSlot, endSlot);  // confirmed slots i
 
 // Staking rewards paid to a set of addresses for a given epoch (null per address when there were none):
 var rewards = await rpc.GetInflationRewardAsync([voteAccount], epoch: 600);
+```
+
+Epoch structure, inflation, and network identity:
+
+```csharp
+var epochSchedule = await rpc.GetEpochScheduleAsync();      // slots per epoch, warmup, offsets
+var governor = await rpc.GetInflationGovernorAsync();       // inflation parameters
+var rate = await rpc.GetInflationRateAsync();               // current total/validator/foundation split
+var genesis = await rpc.GetGenesisHashAsync();              // identifies the network (mainnet/devnet/...)
+var identity = await rpc.GetIdentityAsync();                // the queried node's identity key
+var leader = await rpc.GetSlotLeaderAsync();                // current slot leader
+var minStake = await rpc.GetStakeMinimumDelegationAsync();  // minimum stake delegation, lamports
+```
+
+Block timing, production, and history bounds:
+
+```csharp
+var time = await rpc.GetBlockTimeAsync(slot);               // Unix seconds, null when unavailable
+var limited = await rpc.GetBlocksWithLimitAsync(slot, 10);  // up to N confirmed slots from a start
+var commitment = await rpc.GetBlockCommitmentAsync(slot);   // stake voted per confirmation depth
+
+// Leader slots vs. blocks actually produced, per validator (current epoch by default):
+var production = await rpc.GetBlockProductionAsync(identity: validator, firstSlot: 100, lastSlot: 200);
+
+var first = await rpc.GetFirstAvailableBlockAsync();        // oldest block the node still has
+var minLedger = await rpc.GetMinimumLedgerSlotAsync();      // lowest slot in the node's ledger
+var snapshot = await rpc.GetHighestSnapshotSlotAsync();     // full + incremental snapshot slots
+```
+
+Node throughput and the largest wallets:
+
+```csharp
+// TPS material: transactions and slots per sampled window, newest first (max 720 samples):
+var samples = await rpc.GetRecentPerformanceSamplesAsync(limit: 60);
+var tps = samples.Average(s => (double)s.NumTransactions / s.SamplePeriodSecs);
+
+// The 20 largest accounts by balance, optionally one side of the circulating-supply split:
+var largest = await rpc.GetLargestAccountsAsync(filter: LargestAccountsFilter.Circulating);
+
+var retransmit = await rpc.GetMaxRetransmitSlotAsync();     // highest slot from retransmitted shreds
+var inserted = await rpc.GetMaxShredInsertSlotAsync();      // highest slot inserted into the ledger
 ```
 
 ## WebSocket subscriptions

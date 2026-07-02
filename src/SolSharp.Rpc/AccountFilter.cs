@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace SolSharp.Rpc;
 
 /// <summary>
@@ -16,11 +18,38 @@ public sealed class AccountFilter
     /// <param name="bytesBase58">The bytes to match, base58-encoded.</param>
     /// <returns>The filter.</returns>
     public static AccountFilter MemoryCompare(int offset, string bytesBase58) =>
-        new(new { memcmp = new { offset, bytes = bytesBase58, encoding = "base58" } });
+        new(new MemcmpFilter { Memcmp = new MemcmpMatch { Offset = offset, Bytes = bytesBase58, Encoding = "base58" } });
 
     /// <summary>Matches accounts whose data is exactly <paramref name="size"/> bytes long (a <c>dataSize</c> filter).</summary>
     /// <param name="size">The required account data length in bytes.</param>
     /// <returns>The filter.</returns>
     public static AccountFilter DataSize(long size) =>
-        new(new { dataSize = size });
+        new(new DataSizeFilter { DataSize = size });
+}
+
+/// <summary>The <c>{ memcmp: { offset, bytes, encoding } }</c> wire shape of a memcmp filter entry.</summary>
+internal sealed record MemcmpFilter
+{
+    [JsonPropertyName("memcmp")]
+    public required MemcmpMatch Memcmp { get; init; }
+}
+
+/// <summary>The body of a <see cref="MemcmpFilter"/>.</summary>
+internal sealed record MemcmpMatch
+{
+    [JsonPropertyName("offset")]
+    public required int Offset { get; init; }
+
+    [JsonPropertyName("bytes")]
+    public required string Bytes { get; init; }
+
+    [JsonPropertyName("encoding")]
+    public required string Encoding { get; init; }
+}
+
+/// <summary>The <c>{ dataSize }</c> wire shape of a data-size filter entry.</summary>
+internal sealed record DataSizeFilter
+{
+    [JsonPropertyName("dataSize")]
+    public required long DataSize { get; init; }
 }

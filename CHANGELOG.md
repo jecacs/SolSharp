@@ -2,7 +2,60 @@
 
 All notable changes to SolSharp are documented here. The format is loosely based on
 [Keep a Changelog](https://keepachangelog.com), and the project follows
-[semantic versioning](https://semver.org) — while on 0.x, minor releases may carry breaking changes.
+[semantic versioning](https://semver.org) — from 1.0.0 breaking changes only come with a major
+version (on the earlier 0.x releases, minor versions could carry them).
+
+## [1.0.0]
+
+First stable release. The public API is now covered by the semver compatibility promise.
+
+### Added
+
+- The remaining Solana JSON-RPC HTTP read methods — `SolanaRpcClient` now covers the full current API
+  surface (deprecated `getStakeActivation` deliberately excluded): `GetBlockCommitmentAsync`,
+  `GetBlockProductionAsync` (identity/slot-range narrowing), `GetBlockTimeAsync`,
+  `GetBlocksWithLimitAsync`, `GetEpochScheduleAsync`, `GetFirstAvailableBlockAsync`,
+  `GetGenesisHashAsync`, `GetHighestSnapshotSlotAsync`, `GetIdentityAsync`,
+  `GetInflationGovernorAsync`, `GetInflationRateAsync`, `GetLargestAccountsAsync` (with
+  `LargestAccountsFilter`), `GetMaxRetransmitSlotAsync`, `GetMaxShredInsertSlotAsync`,
+  `GetRecentPerformanceSamplesAsync`, `GetSlotLeaderAsync`, `GetStakeMinimumDelegationAsync`,
+  `GetTokenAccountsByDelegateAsync`, and `GetMinimumLedgerSlotAsync` (wire method
+  `minimumLedgerSlot`).
+- New response models: `BlockCommitment`, `BlockProduction` (+ `BlockProductionRange`),
+  `EpochSchedule`, `HighestSnapshotSlot`, `InflationGovernor`, `InflationRate`, `LargestAccount`,
+  and `PerformanceSample`. `getIdentity` and `getSlotLeader` unwrap to `PublicKey` directly.
+
+## [0.7.0]
+
+### Added
+
+- Source-generated JSON serialization end to end: every RPC request, response envelope, and WebSocket
+  notification now serializes through source-generated `JsonSerializerContext`s (all ~60 closed root
+  shapes registered) instead of reflection — faster startup, no runtime metadata generation, and the
+  whole request/response surface verifiable at compile time. The public `CoreJsonContext` exposes the
+  metadata for the Core wire primitives (`Commitment`, `PublicKey`) for chaining into your own
+  source-generated resolvers, and `CommitmentJsonConverter` / `PublicKeyJsonConverter` are now public —
+  a source-generated context can only register a converter-attributed type when it can construct the
+  converter, so consumer contexts registering models with these primitives need them accessible.
+- Native AOT support: all four assemblies build clean under the trim/AOT analyzers and are marked
+  `IsAotCompatible` (trimmable), so `PublishAot` applications can take SolSharp without warnings. CI
+  gains an `aot-smoke` job that publishes `samples/SolSharp.AotSmoke` as a native binary and runs its
+  offline signing, transaction-serialization, and JSON-RPC-pipeline checks.
+- `DataSlice` is now self-serializing to its `{ offset, length }` wire shape via `JsonPropertyName`
+  attributes, like the other wire types.
+
+### Changed
+
+- **Breaking:** `SolanaJsonSerializer.Options` no longer falls back to reflection. It is frozen over a
+  source-generated resolver covering the Core wire primitives (`Commitment`, `PublicKey`); serializing
+  any other type with it now throws `NotSupportedException`. For custom models, create your own
+  `JsonSerializerOptions` — the SolSharp wire types keep their format under any options because their
+  mappings live in `[JsonConverter]` attributes.
+- **Breaking (DI edge case):** `AddSolanaRpc` validates `SolanaRpcOptions.Endpoint` with an explicit
+  predicate instead of `ValidateDataAnnotations()` (which is not trim-safe); the same absolute-http(s)
+  rule is enforced, and the `Microsoft.Extensions.Options.DataAnnotations` package dependency is gone.
+- RPC request parameter objects are typed internal records instead of anonymous types (a source-generation
+  requirement); the emitted wire bytes are unchanged and remain pinned by the request-body test asserts.
 
 ## [0.6.0]
 

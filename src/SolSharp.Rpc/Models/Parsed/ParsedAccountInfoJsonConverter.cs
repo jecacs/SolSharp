@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using SolSharp.Core.Primitives;
+using SolSharp.Rpc.Protocol;
 
 namespace SolSharp.Rpc.Models.Parsed;
 
@@ -28,7 +29,7 @@ internal sealed class ParsedAccountInfoJsonConverter : JsonConverter<ParsedAccou
                 program = programElement.GetString();
 
             if (data.TryGetProperty("parsed", out var parsedElement) && parsedElement.ValueKind is not JsonValueKind.Null)
-                parsed = parsedElement.Deserialize<ParsedInstructionInfo>(options);
+                parsed = parsedElement.Deserialize(options.GetTypeInfo<ParsedInstructionInfo>());
 
             if (data.TryGetProperty("space", out var dataSpace) && dataSpace.ValueKind is JsonValueKind.Number)
                 space = dataSpace.GetUInt64();

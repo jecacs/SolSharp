@@ -1,6 +1,5 @@
 using System.Net.Http.Json;
 using System.Text.Json;
-using SolSharp.Core.Converters;
 using SolSharp.Core.Primitives;
 using SolSharp.Rpc.Models;
 using SolSharp.Rpc.Models.Parsed;
@@ -908,6 +907,305 @@ public class SolanaRpcClient(HttpClient httpClient)
     }
 
     /// <summary>
+    /// Returns how much cluster stake has voted on a block at each confirmation depth, along with the
+    /// epoch's total active stake.
+    /// See <see href="https://solana.com/docs/rpc/http/getblockcommitment">getBlockCommitment</see>.
+    /// </summary>
+    /// <param name="slot">The slot of the block to query.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The block's commitment; its <see cref="BlockCommitment.Commitment"/> is <c>null</c> for an unknown block.</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<BlockCommitment> GetBlockCommitmentAsync(ulong slot, CancellationToken cancellationToken = default)
+        => SendAsync<BlockCommitment>(RpcRequests.GetBlockCommitment(slot), cancellationToken);
+
+    /// <summary>
+    /// Returns recent block production: leader slots and blocks produced per validator identity,
+    /// optionally narrowed to one identity and/or a slot range (the current epoch when omitted).
+    /// See <see href="https://solana.com/docs/rpc/http/getblockproduction">getBlockProduction</see>.
+    /// </summary>
+    /// <param name="commitment">The commitment level to query at.</param>
+    /// <param name="identity">Only return production for this validator identity; all validators when null.</param>
+    /// <param name="firstSlot">The first slot of the range to query; the current epoch when null.</param>
+    /// <param name="lastSlot">The last slot of the range; the highest slot when null. Ignored unless <paramref name="firstSlot"/> is set.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The block production per identity and the covered slot range.</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<BlockProduction> GetBlockProductionAsync(
+        Commitment commitment = Commitment.Confirmed,
+        PublicKey? identity = null,
+        ulong? firstSlot = null,
+        ulong? lastSlot = null,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await SendAsync<RpcContextValue<BlockProduction>>(
+            RpcRequests.GetBlockProduction(commitment, identity, firstSlot, lastSlot), cancellationToken);
+
+        return result.Value!;
+    }
+
+    /// <summary>
+    /// Returns a block's estimated production time as a Unix timestamp, or <c>null</c> when the node has
+    /// no timestamp for it. See <see href="https://solana.com/docs/rpc/http/getblocktime">getBlockTime</see>.
+    /// </summary>
+    /// <param name="slot">The slot of the block to query.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The block time in Unix seconds, or <c>null</c> when unavailable.</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error (for example, for a slot it has not processed).</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<long?> GetBlockTimeAsync(ulong slot, CancellationToken cancellationToken = default)
+        => SendAsync<long?>(RpcRequests.GetBlockTime(slot), cancellationToken);
+
+    /// <summary>
+    /// Returns up to <paramref name="limit"/> confirmed block slots starting at <paramref name="startSlot"/>.
+    /// See <see href="https://solana.com/docs/rpc/http/getblockswithlimit">getBlocksWithLimit</see>.
+    /// </summary>
+    /// <param name="startSlot">The first slot of the range.</param>
+    /// <param name="limit">The maximum number of slots to return (max 500,000).</param>
+    /// <param name="commitment">The commitment level to query at (<c>processed</c> is not supported by the node).</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The slots that produced a block, in ascending order.</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<IReadOnlyList<ulong>> GetBlocksWithLimitAsync(
+        ulong startSlot,
+        ulong limit,
+        Commitment commitment = Commitment.Confirmed,
+        CancellationToken cancellationToken = default)
+        => SendAsync<IReadOnlyList<ulong>>(RpcRequests.GetBlocksWithLimit(startSlot, limit, commitment), cancellationToken);
+
+    /// <summary>
+    /// Returns the cluster's epoch schedule (epoch length, warmup, leader-schedule offset).
+    /// See <see href="https://solana.com/docs/rpc/http/getepochschedule">getEpochSchedule</see>.
+    /// </summary>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The epoch schedule.</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<EpochSchedule> GetEpochScheduleAsync(CancellationToken cancellationToken = default)
+        => SendAsync<EpochSchedule>(RpcRequests.GetEpochSchedule(), cancellationToken);
+
+    /// <summary>
+    /// Returns the slot of the lowest confirmed block the node has not purged from its ledger.
+    /// See <see href="https://solana.com/docs/rpc/http/getfirstavailableblock">getFirstAvailableBlock</see>.
+    /// </summary>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The first available block's slot.</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<ulong> GetFirstAvailableBlockAsync(CancellationToken cancellationToken = default)
+        => SendAsync<ulong>(RpcRequests.GetFirstAvailableBlock(), cancellationToken);
+
+    /// <summary>
+    /// Returns the cluster's genesis hash (base58), which identifies the network.
+    /// See <see href="https://solana.com/docs/rpc/http/getgenesishash">getGenesisHash</see>.
+    /// </summary>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The genesis hash (base58).</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<string> GetGenesisHashAsync(CancellationToken cancellationToken = default)
+        => SendAsync<string>(RpcRequests.GetGenesisHash(), cancellationToken);
+
+    /// <summary>
+    /// Returns the highest slots the node has snapshots for.
+    /// See <see href="https://solana.com/docs/rpc/http/gethighestsnapshotslot">getHighestSnapshotSlot</see>.
+    /// </summary>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The full and (when present) incremental snapshot slots.</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error (for example, when it has no snapshot).</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<HighestSnapshotSlot> GetHighestSnapshotSlotAsync(CancellationToken cancellationToken = default)
+        => SendAsync<HighestSnapshotSlot>(RpcRequests.GetHighestSnapshotSlot(), cancellationToken);
+
+    /// <summary>
+    /// Returns the identity public key of the node being queried.
+    /// See <see href="https://solana.com/docs/rpc/http/getidentity">getIdentity</see>.
+    /// </summary>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The node's identity public key.</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<PublicKey> GetIdentityAsync(CancellationToken cancellationToken = default)
+    {
+        var result = await SendAsync<NodeIdentity>(RpcRequests.GetIdentity(), cancellationToken);
+        return result.Identity;
+    }
+
+    /// <summary>
+    /// Returns the cluster's inflation governor (the parameters inflation is computed from).
+    /// See <see href="https://solana.com/docs/rpc/http/getinflationgovernor">getInflationGovernor</see>.
+    /// </summary>
+    /// <param name="commitment">The commitment level to query at.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The inflation parameters.</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<InflationGovernor> GetInflationGovernorAsync(
+        Commitment commitment = Commitment.Confirmed,
+        CancellationToken cancellationToken = default)
+        => SendAsync<InflationGovernor>(RpcRequests.GetInflationGovernor(commitment), cancellationToken);
+
+    /// <summary>
+    /// Returns the inflation values for the current epoch.
+    /// See <see href="https://solana.com/docs/rpc/http/getinflationrate">getInflationRate</see>.
+    /// </summary>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The current inflation rate split.</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<InflationRate> GetInflationRateAsync(CancellationToken cancellationToken = default)
+        => SendAsync<InflationRate>(RpcRequests.GetInflationRate(), cancellationToken);
+
+    /// <summary>
+    /// Returns the 20 largest accounts by lamport balance, optionally restricted to one side of the
+    /// circulating-supply split. Results may be cached up to two hours by the node.
+    /// See <see href="https://solana.com/docs/rpc/http/getlargestaccounts">getLargestAccounts</see>.
+    /// </summary>
+    /// <param name="commitment">The commitment level to query at.</param>
+    /// <param name="filter">Restrict results to circulating or non-circulating accounts; both when null.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The largest accounts, largest first.</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<IReadOnlyList<LargestAccount>> GetLargestAccountsAsync(
+        Commitment commitment = Commitment.Confirmed,
+        LargestAccountsFilter? filter = null,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await SendAsync<RpcContextValue<LargestAccount[]>>(
+            RpcRequests.GetLargestAccounts(commitment, filter), cancellationToken);
+
+        return result.Value!;
+    }
+
+    /// <summary>
+    /// Returns the highest slot seen from retransmitted shreds.
+    /// See <see href="https://solana.com/docs/rpc/http/getmaxretransmitslot">getMaxRetransmitSlot</see>.
+    /// </summary>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The slot number.</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<ulong> GetMaxRetransmitSlotAsync(CancellationToken cancellationToken = default)
+        => SendAsync<ulong>(RpcRequests.GetMaxRetransmitSlot(), cancellationToken);
+
+    /// <summary>
+    /// Returns the highest slot seen from shreds inserted into the ledger.
+    /// See <see href="https://solana.com/docs/rpc/http/getmaxshredinsertslot">getMaxShredInsertSlot</see>.
+    /// </summary>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The slot number.</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<ulong> GetMaxShredInsertSlotAsync(CancellationToken cancellationToken = default)
+        => SendAsync<ulong>(RpcRequests.GetMaxShredInsertSlot(), cancellationToken);
+
+    /// <summary>
+    /// Returns recent performance samples (transactions and slots per sampled window), newest first.
+    /// See <see href="https://solana.com/docs/rpc/http/getrecentperformancesamples">getRecentPerformanceSamples</see>.
+    /// </summary>
+    /// <param name="limit">The number of samples to return (max 720); the node default when null.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The performance samples, newest first.</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<IReadOnlyList<PerformanceSample>> GetRecentPerformanceSamplesAsync(
+        int? limit = null,
+        CancellationToken cancellationToken = default)
+        => await SendAsync<PerformanceSample[]>(RpcRequests.GetRecentPerformanceSamples(limit), cancellationToken);
+
+    /// <summary>
+    /// Returns the identity of the current slot leader.
+    /// See <see href="https://solana.com/docs/rpc/http/getslotleader">getSlotLeader</see>.
+    /// </summary>
+    /// <param name="commitment">The commitment level to query at.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The current slot leader's identity public key.</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<PublicKey> GetSlotLeaderAsync(
+        Commitment commitment = Commitment.Confirmed,
+        CancellationToken cancellationToken = default)
+        => SendAsync<PublicKey>(RpcRequests.GetSlotLeader(commitment), cancellationToken);
+
+    /// <summary>
+    /// Returns the cluster's minimum stake delegation, in lamports.
+    /// See <see href="https://solana.com/docs/rpc/http/getstakeminimumdelegation">getStakeMinimumDelegation</see>.
+    /// </summary>
+    /// <param name="commitment">The commitment level to query at.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The minimum delegation in lamports.</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<ulong> GetStakeMinimumDelegationAsync(
+        Commitment commitment = Commitment.Confirmed,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await SendAsync<RpcContextValue<ulong>>(
+            RpcRequests.GetStakeMinimumDelegation(commitment), cancellationToken);
+
+        return result.Value;
+    }
+
+    /// <summary>
+    /// Returns the SPL token accounts approved to <paramref name="delegateAccount"/> for a specific
+    /// <paramref name="mint"/>. Account data is requested as base64 and exposed decoded on
+    /// <see cref="AccountInfo.Data"/>.
+    /// See <see href="https://solana.com/docs/rpc/http/gettokenaccountsbydelegate">getTokenAccountsByDelegate</see>.
+    /// </summary>
+    /// <param name="delegateAccount">The delegate the token accounts are approved to.</param>
+    /// <param name="mint">The token mint to filter by.</param>
+    /// <param name="commitment">The commitment level to query at.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The matching token accounts; empty when none.</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<IReadOnlyList<ProgramAccount>> GetTokenAccountsByDelegateAsync(
+        PublicKey delegateAccount,
+        PublicKey mint,
+        Commitment commitment = Commitment.Confirmed,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await SendAsync<RpcContextValue<ProgramAccount[]>>(
+            RpcRequests.GetTokenAccountsByDelegate(delegateAccount, mint, commitment), cancellationToken);
+
+        return result.Value!;
+    }
+
+    /// <summary>
+    /// Returns the lowest slot the node has information about in its ledger (wire method
+    /// <c>minimumLedgerSlot</c>). This slot can rise over time as the node purges older ledger data.
+    /// See <see href="https://solana.com/docs/rpc/http/minimumledgerslot">minimumLedgerSlot</see>.
+    /// </summary>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The minimum ledger slot.</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<ulong> GetMinimumLedgerSlotAsync(CancellationToken cancellationToken = default)
+        => SendAsync<ulong>(RpcRequests.MinimumLedgerSlot(), cancellationToken);
+
+    /// <summary>
     /// Creates an empty JSON-RPC batch bound to this client. Queue calls on it, then submit them in one
     /// HTTP round-trip with <see cref="RpcBatch.ExecuteAsync"/>.
     /// </summary>
@@ -917,7 +1215,7 @@ public class SolanaRpcClient(HttpClient httpClient)
     internal async Task<JsonElement> SendBatchAsync(IReadOnlyList<RpcRequest> requests, CancellationToken cancellationToken)
     {
         using var response = await httpClient
-            .PostAsJsonAsync(string.Empty, requests, SolanaJsonSerializer.Options, cancellationToken);
+            .PostAsJsonAsync(string.Empty, requests, RpcJson.TypeInfo<IReadOnlyList<RpcRequest>>(), cancellationToken);
 
         response.EnsureSuccessStatusCode();
 
@@ -929,12 +1227,12 @@ public class SolanaRpcClient(HttpClient httpClient)
     private async Task<T> SendAsync<T>(RpcRequest request, CancellationToken cancellationToken)
     {
         using var response = await httpClient
-            .PostAsJsonAsync(string.Empty, request, SolanaJsonSerializer.Options, cancellationToken);
+            .PostAsJsonAsync(string.Empty, request, RpcJson.TypeInfo<RpcRequest>(), cancellationToken);
 
         response.EnsureSuccessStatusCode();
 
         var payload = await response.Content
-            .ReadFromJsonAsync<RpcResponse<T>>(SolanaJsonSerializer.Options, cancellationToken) ?? throw new RpcException(-1, "Empty response body.");
+            .ReadFromJsonAsync(RpcJson.TypeInfo<RpcResponse<T>>(), cancellationToken) ?? throw new RpcException(-1, "Empty response body.");
 
         if (payload.Error is not null)
             throw new RpcException(payload.Error.Code, payload.Error.Message);

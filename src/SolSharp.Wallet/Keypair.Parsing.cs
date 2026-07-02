@@ -157,7 +157,7 @@ public sealed partial class Keypair
         int[]? values;
         try
         {
-            values = JsonSerializer.Deserialize<int[]>(json);
+            values = JsonSerializer.Deserialize(json, WalletJsonContext.Default.Int32Array);
         }
         catch (JsonException e)
         {

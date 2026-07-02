@@ -1,5 +1,4 @@
 using System.Text.Json;
-using SolSharp.Core.Converters;
 using SolSharp.Core.Primitives;
 using SolSharp.Rpc.Models;
 using SolSharp.Rpc.Protocol;
@@ -31,7 +30,7 @@ public sealed class RpcBatch
     /// <returns>The balance in lamports, once the batch executes.</returns>
     public Task<ulong> GetBalanceAsync(PublicKey account, Commitment commitment = Commitment.Confirmed)
         => Add(RpcRequests.GetBalance(account, commitment),
-            static result => result.Deserialize<RpcContextValue<ulong>>(SolanaJsonSerializer.Options)!.Value);
+            static result => result.Deserialize(RpcJson.TypeInfo<RpcContextValue<ulong>>())!.Value);
 
     /// <summary>Queues a <c>getAccountInfo</c> call (base64 account data).</summary>
     /// <param name="account">The account to query.</param>
@@ -39,14 +38,14 @@ public sealed class RpcBatch
     /// <returns>The account, or <c>null</c> if it does not exist, once the batch executes.</returns>
     public Task<AccountInfo?> GetAccountInfoAsync(PublicKey account, Commitment commitment = Commitment.Confirmed)
         => Add(RpcRequests.GetAccountInfo(account, commitment),
-            static result => result.Deserialize<RpcContextValue<AccountInfo>>(SolanaJsonSerializer.Options)!.Value);
+            static result => result.Deserialize(RpcJson.TypeInfo<RpcContextValue<AccountInfo>>())!.Value);
 
     /// <summary>Queues a <c>getLatestBlockhash</c> call.</summary>
     /// <param name="commitment">The commitment level to query at.</param>
     /// <returns>The blockhash and its last valid block height, once the batch executes.</returns>
     public Task<LatestBlockhash> GetLatestBlockhashAsync(Commitment commitment = Commitment.Confirmed)
         => Add(RpcRequests.GetLatestBlockhash(commitment),
-            static result => result.Deserialize<RpcContextValue<LatestBlockhash>>(SolanaJsonSerializer.Options)!.Value!);
+            static result => result.Deserialize(RpcJson.TypeInfo<RpcContextValue<LatestBlockhash>>())!.Value!);
 
     /// <summary>Queues a <c>getSlot</c> call.</summary>
     /// <param name="commitment">The commitment level to query at.</param>
@@ -61,7 +60,7 @@ public sealed class RpcBatch
     /// <returns>The token balance, once the batch executes.</returns>
     public Task<TokenAmount> GetTokenAccountBalanceAsync(PublicKey tokenAccount, Commitment commitment = Commitment.Confirmed)
         => Add(RpcRequests.GetTokenAccountBalance(tokenAccount, commitment),
-            static result => result.Deserialize<RpcContextValue<TokenAmount>>(SolanaJsonSerializer.Options)!.Value!);
+            static result => result.Deserialize(RpcJson.TypeInfo<RpcContextValue<TokenAmount>>())!.Value!);
 
     /// <summary>Queues a <c>sendTransaction</c> call - e.g. to submit several signed transactions in one round-trip.</summary>
     /// <param name="transaction">The signed transaction's serialized wire bytes.</param>

@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
+    <IsAotCompatible>true</IsAotCompatible>
     <Description>Ed25519 keys and signing for Solana on .NET: keypair generation, key parsing, message signing and verification, built on a vetted Ed25519 implementation.</Description>
   </PropertyGroup>
 
