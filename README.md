@@ -278,6 +278,9 @@ audited — use at your own risk. Never commit secrets or private keys, and neve
 private key to a dependency you do not control: build with a third-party library if you must,
 but sign with your own signer and simulate before sending.
 
+To report a vulnerability, see the [security policy](SECURITY.md) — please use private reporting
+rather than a public issue.
+
 ## License
 
 [MIT](LICENSE) © Yevhen Koval
