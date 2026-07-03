@@ -13,22 +13,18 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
-  <!-- Tests are exempt from the public-XML-docs rule; in library code a public member without docs
-       surfaces CS1591 and fails the CI build (-warnaserror). -->
   <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('Tests'))">
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup Label="Package metadata">
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <Authors>Yevhen Koval</Authors>
     <Product>SolSharp</Product>
-    <!-- nuget.org search ranks by term relevance in id/title/tags/description, weighted by downloads;
-         the title and tags below carry the terms people actually search for. -->
     <Title>SolSharp — Solana SDK for .NET</Title>
     <Copyright>Copyright (c) 2026 Yevhen Koval</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReadmeFile>README.nuget.md</PackageReadmeFile>
     <PackageTags>solana;solana-sdk;web3;blockchain;rpc;websocket;wallet;spl-token;token-2022;transactions;ed25519;crypto;defi;nativeaot;aot;trimming;source-generators</PackageTags>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/jecacs/SolSharp</RepositoryUrl>
@@ -48,7 +44,7 @@
   </PropertyGroup>
 
   <ItemGroup Condition="'$(IsPackable)' != 'false'">
-    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)README.nuget.md" Pack="true" PackagePath="\" Visible="false" />
     <None Include="$(MSBuildThisFileDirectory)assets/icon.png" Pack="true" PackagePath="\" Visible="false" Condition="Exists('$(MSBuildThisFileDirectory)assets/icon.png')" />
   </ItemGroup>
 

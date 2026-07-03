@@ -19,7 +19,7 @@ wire format and the signing path, without dragging in a large dependency graph. 
 writing bots, indexers, or backend services that talk to Solana from .NET and care about
 speed and control, this is aimed at you.
 
-> **Status: 1.0.0 — stable release.** SolSharp ships as a single NuGet package — `SolSharp` —
+> **Status: 1.0.1 — stable release.** SolSharp ships as a single NuGet package — `SolSharp` —
 > bundling the Core (primitives + encodings), Wallet (Ed25519 keys, signing, verification, BIP-39/SLIP-0010
 > mnemonic import), Rpc (the full JSON-RPC HTTP read surface + send/simulate + WebSocket streaming + DI), and
 > Programs (instructions + transaction building + signing, durable nonces) assemblies. JSON is
@@ -28,7 +28,7 @@ speed and control, this is aimed at you.
 
 📖 **New here? Read the [usage guide](docs/USAGE.md)** — a task-oriented cookbook covering keys, reads,
 SPL token state, building/signing/sending transactions, v0 + address lookup tables, decoding transactions,
-WebSocket subscriptions, confirmation, and more.
+WebSocket subscriptions, confirmation, Native AOT publishing, and more.
 
 ## Motivation
 
@@ -61,15 +61,15 @@ dotnet add package SolSharp
 ```
 
 ```xml
-<PackageReference Include="SolSharp" Version="0.7.0" />
+<PackageReference Include="SolSharp" Version="1.0.1" />
 ```
 
-| Assembly           | Purpose                                              | Status |
-| ------------------ | --------------------------------------------------- | ------ |
-| `SolSharp.Core`    | Primitives, encoding, JSON, program/sysvar constants | Usable |
-| `SolSharp.Wallet`  | Ed25519 keys, key parsing, signing and verification | Usable |
-| `SolSharp.Rpc`     | HTTP JSON-RPC reads + WebSocket streaming + DI       | Usable |
-| `SolSharp.Programs`| Instructions (System/Token/ATA/Memo/Compute Budget/ALT) + transaction building | Usable |
+| Assembly           | Purpose                                              |
+| ------------------ | ---------------------------------------------------- |
+| `SolSharp.Core`    | Primitives, encoding, JSON, program/sysvar constants |
+| `SolSharp.Wallet`  | Ed25519 keys, key parsing, signing and verification  |
+| `SolSharp.Rpc`     | Full HTTP JSON-RPC read surface + WebSocket streaming + DI |
+| `SolSharp.Programs`| Instructions (System/Token/ATA/Memo/Compute Budget/ALT) + transaction building |
 
 Keeping the split in the source means the layering stays compiler-enforced — dependencies point downward
 only: `Rpc` and `Wallet` build on `Core`, and `Programs` builds on `Core` and `Wallet`. `Core` depends on
@@ -77,7 +77,7 @@ nothing else in the solution and pulls no network or crypto package.
 
 See the [changelog](CHANGELOG.md) for what changed in each release.
 
-## What's here today
+## What's inside
 
 `SolSharp.Core`:
 
@@ -207,25 +207,6 @@ var tx = new TransactionBuilder()
 var signature = await rpc.SendTransactionAsync(tx.Serialize());
 ```
 
-## Roadmap
-
-- [x] Core primitives — `PublicKey`, `Base58`, `ShortVec`
-- [x] RPC enum + JSON converters (`Commitment`)
-- [x] Program / sysvar / mint constants + validation
-- [x] `SolSharp.Wallet` — Ed25519 keys, signing/verification, key parsing
-- [x] `SolSharp.Rpc` — HTTP reads (`getAccountInfo` / `getMultipleAccounts` / `getProgramAccounts` / `getSignaturesForAddress`, balances, blockhash, token supply, ...) + `sendTransaction` / `simulateTransaction`; multiplexed WebSocket streaming (slots, logs, accounts, programs, signatures, blocks) with auto-reconnect and optional `ILogger` diagnostics; DI + resilience
-- [x] `SolSharp.Programs` — System / Token (+ Token-2022) / ATA / Compute Budget / Memo instructions, PDA/ATA, transaction builder
-- [x] Versioned (v0) transactions + address lookup tables (compile / sign / fetch + decode / ALT program)
-- [x] Borsh reader + writer, typed SPL account state (`Mint` / `TokenAccount`), `Transaction.Deserialize` + instruction decompilation, and typed `TransactionError`
-- [x] Live integration test suite (configurable RPC / WS endpoint)
-- [x] Published NuGet package (single `SolSharp` package bundling the four assemblies)
-- [x] Durable nonces — nonce instructions + `NonceAccount` decoding + `TransactionBuilder.SetDurableNonce`
-- [x] Mnemonic wallet import — BIP-39 + SLIP-0010 (`solana-keygen` and Phantom/Solflare schemes)
-- [x] Token-2022 extensions — TLV decoding with typed views (transfer fee, metadata, delegate, ...)
-- [x] Devnet write gate — live airdrop / transfer / durable-nonce run before every release
-- [x] JSON-RPC batching, allocation-free (span) transaction serialization, `AddSolanaWs` DI
-- [x] BenchmarkDotNet harness (`benchmarks/`)
-
 ## Requirements
 
 - .NET 8 SDK or later.
@@ -271,6 +252,7 @@ SolSharp/
   src/SolSharp.Wallet/ Keypair (+ parsing), ISigner, PublicKey.Verify / IsOnCurve
   src/SolSharp.Programs/ instructions, PDA/ATA, Message/Transaction, TransactionBuilder
   src/SolSharp/        packaging facade — bundles the four assemblies into the single NuGet package
+  samples/             SolSharp.AotSmoke — native-compiled smoke sample, published and run in CI
   tests/               NUnit + FluentAssertions, mirroring each project
                        (+ SolSharp.IntegrationTests: live-cluster read/streaming checks)
   .github/workflows/   ci.yml (build + offline tests) and release.yml (tag → NuGet trusted publishing)

@@ -30,6 +30,7 @@ assemblies — the namespaces `SolSharp.Core.*`, `SolSharp.Rpc`, `SolSharp.Walle
 - [Batching RPC calls](#batching-rpc-calls)
 - [Rate limits, custom endpoints, and headers](#rate-limits-custom-endpoints-and-headers)
 - [Error handling](#error-handling)
+- [Publishing with Native AOT](#publishing-with-native-aot)
 
 ## Installation
 
@@ -245,6 +246,12 @@ var delegated = await rpc.GetTokenAccountsByDelegateAsync(delegateKey, usdc);
 // The mint's total supply as a UI amount:
 var supply = await rpc.GetTokenSupplyAsync(usdc);
 Console.WriteLine($"{supply.UiAmountString} ({supply.Decimals} decimals)");
+
+// One account's balance without decoding it, and a mint's 20 largest holders:
+var balance = await rpc.GetTokenAccountBalanceAsync(someTokenAccount);
+var holders = await rpc.GetTokenLargestAccountsAsync(usdc);
+foreach (var holder in holders)
+    Console.WriteLine($"{holder.Address}: {holder.UiAmountString}");
 ```
 
 **Token-2022 extensions.** An extended Token-2022 mint or account carries TLV entries after its base
@@ -346,6 +353,16 @@ Or set the two knobs individually:
 Two more compute-budget knobs exist: `RequestHeapFrame(bytes)` requests a larger transaction heap (a
 multiple of 1024, up to 256 KiB), and `SetLoadedAccountsDataSizeLimit(bytes)` caps the account data the
 transaction may load, lowering its loaded-accounts cost.
+
+Pick the price from data instead of guessing — recent per-slot priority fees, narrowed to the accounts
+your transaction locks — and check the base fee of a compiled message:
+
+```csharp
+var fees = await rpc.GetRecentPrioritizationFeesAsync([payer.PublicKey, recipient]);
+var suggested = fees.Max(f => f.Fee);       // micro-lamports per CU; take a max/percentile over ~150 slots
+
+var baseFee = await rpc.GetFeeForMessageAsync(tx.Message.Serialize());  // lamports, null for an unknown blockhash
+```
 
 ## SPL token transfers
 
@@ -500,6 +517,32 @@ static async Task<IReadOnlyList<AddressLookupTableAccount>> FetchTablesAsync(Sol
 `MessageV0.GetAccountKeys(tables)` gives the full resolved account list (static + lookup-loaded), so you can
 map a balance entry's `accountIndex` back to a public key.
 
+### Walking an address's history, or a whole block
+
+To find the transactions in the first place, page through an address's signatures (newest first) or
+fetch a block:
+
+```csharp
+// Page backwards through an address's history:
+var page = await rpc.GetSignaturesForAddressAsync(account,
+    new GetSignaturesForAddressOptions { Limit = 100 });
+foreach (var entry in page)
+    Console.WriteLine($"{entry.Signature} slot={entry.Slot} failed={entry.Err is not null}");
+
+var older = await rpc.GetSignaturesForAddressAsync(account,
+    new GetSignaturesForAddressOptions { Before = page[^1].Signature });
+
+// A block's transaction signatures (feed each to GetTransactionAsync as needed):
+var block = await rpc.GetBlockAsync(slot);          // null when the slot was skipped
+foreach (var signature in block!.Signatures ?? [])
+    Console.WriteLine(signature);
+
+// Or every transaction in the block already decoded by the node (indexer-style):
+var parsedBlock = await rpc.GetParsedBlockAsync(slot);
+foreach (var entry in parsedBlock!.Transactions)
+    Console.WriteLine($"fee: {entry.Meta?.Fee}");
+```
+
 ## Reading parsed transactions
 
 When you'd rather not Borsh-decode instructions yourself, ask the node to do it: the `jsonParsed` encoding
@@ -606,6 +649,19 @@ var largest = await rpc.GetLargestAccountsAsync(filter: LargestAccountsFilter.Ci
 
 var retransmit = await rpc.GetMaxRetransmitSlotAsync();     // highest slot from retransmitted shreds
 var inserted = await rpc.GetMaxShredInsertSlotAsync();      // highest slot inserted into the ledger
+```
+
+And the basics — node health and version, chain progress, SOL supply, upcoming leaders, and
+blockhash liveness:
+
+```csharp
+var healthy = await rpc.GetHealthAsync();                   // false when the node is behind
+var version = await rpc.GetVersionAsync();                  // solana-core version + feature set
+var height = await rpc.GetBlockHeightAsync();               // blocks below the current slot
+var txCount = await rpc.GetTransactionCountAsync();         // transactions processed by the cluster
+var solSupply = await rpc.GetSupplyAsync();                 // total / circulating / non-circulating
+var leaders = await rpc.GetSlotLeadersAsync(slot, 10);      // the next 10 slot leaders from a slot
+var alive = await rpc.IsBlockhashValidAsync(blockhash);     // can this blockhash still anchor a tx?
 ```
 
 ## WebSocket subscriptions
@@ -781,3 +837,36 @@ catch (RpcException ex)
     Console.WriteLine($"node rejected the request: {ex.Code} {ex.Message}");
 }
 ```
+
+## Publishing with Native AOT
+
+SolSharp is fully Native AOT compatible out of the box — all JSON is source-generated (no
+reflection), and every assembly is trimmable and builds clean under the trim/AOT analyzers.
+No extra configuration is needed; just enable AOT in your project:
+
+```xml
+<PropertyGroup>
+  <PublishAot>true</PublishAot>
+</PropertyGroup>
+```
+
+```bash
+dotnet publish -c Release -r linux-x64
+```
+
+The result is a self-contained native binary with instant startup and no JIT — well suited to
+bots and short-lived CLI tools. A complete working example lives in
+[`samples/SolSharp.AotSmoke`](../samples/SolSharp.AotSmoke), which CI publishes natively and runs
+on every push.
+
+Two things to know when your own code meets AOT:
+
+- **Your own JSON models need their own source generation.** `SolanaJsonSerializer.Options` covers
+  the SolSharp wire primitives only. If you serialize your own types, declare a
+  `JsonSerializerContext` for them; the SolSharp primitives (`PublicKey`, `Commitment`) keep their
+  wire format under any options because their mappings live in `[JsonConverter]` attributes — and
+  the public `CoreJsonContext` can be chained into your resolver if you register models that
+  contain them.
+- **Everything else is just C#.** Transaction building, signing, Borsh decoding, and the RPC/WS
+  clients use no reflection, so no `rd.xml`, no trimmer hints, and no `DynamicDependency`
+  annotations are required.

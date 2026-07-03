@@ -5,6 +5,27 @@ All notable changes to SolSharp are documented here. The format is loosely based
 [semantic versioning](https://semver.org) — from 1.0.0 breaking changes only come with a major
 version (on the earlier 0.x releases, minor versions could carry them).
 
+## [1.0.1]
+
+Documentation-only release; no code changes.
+
+### Fixed
+
+- The NuGet package now carries a dedicated `README.nuget.md`: nuget.org renders a restricted
+  markdown where raw HTML is shown as text, so the GitHub README's HTML-centered logo appeared as
+  literal markup on the package page.
+
+### Added
+
+- `docs/USAGE.md` gains a **Publishing with Native AOT** section (enabling `PublishAot`, bringing
+  your own `JsonSerializerContext` for your own models, chaining `CoreJsonContext`) and examples for
+  the previously unillustrated reads: paging an address's signature history and walking a block,
+  data-driven priority fees (`getRecentPrioritizationFees` + `getFeeForMessage`), token account
+  balance and largest holders, and the node/cluster basics (health, version, block height,
+  transaction count, supply, slot leaders, blockhash validity).
+- README refreshed for the stable line: roadmap and per-assembly status column removed, Native AOT
+  moved to the top of the pitch, `samples/` added to the layout.
+
 ## [1.0.0]
 
 First stable release. The public API is now covered by the semver compatibility promise.
