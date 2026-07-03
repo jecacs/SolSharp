@@ -63,3 +63,7 @@ await foreach (var slot in ws.SubscribeSlotsAsync())
 SolSharp handles private keys and builds transactions that move funds. It has **not** been audited —
 use at your own risk. Never hand a raw private key to a dependency you do not control: sign with your
 own signer and simulate before sending.
+
+To report a vulnerability, use the
+[security policy](https://github.com/jecacs/SolSharp/blob/main/SECURITY.md) — private reporting,
+not a public issue.

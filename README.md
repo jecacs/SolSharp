@@ -48,6 +48,25 @@ latency-sensitive workloads.
 - **Latency-minded.** Value types, allocation-free hot paths, span-based APIs.
 - **Modern .NET.** C# latest, nullable reference types, code style enforced on build.
 
+## How it compares to Solnet
+
+[Solnet](https://github.com/bmresearch/Solnet) is the longest-standing .NET SDK for Solana — actively
+maintained, with a wide ecosystem of program integrations. SolSharp is not a fork of it: it is a
+from-scratch SDK with different priorities. The differences that actually matter when choosing:
+
+| | SolSharp | Solnet |
+| --- | --- | --- |
+| **Native AOT & trimming** | Guaranteed and CI-enforced: source-generated JSON (zero reflection), `IsAotCompatible`, trim/AOT analyzers as errors, a native-compiled smoke test on every push | No AOT/trimming compatibility markings |
+| **API shape** | `async`-only; methods return typed values and throw typed exceptions (`RpcException`) | Sync + async; calls return `RequestResult<T>` wrappers to unwrap |
+| **Packaging** | One package, four layered assemblies | Per-area packages (`Solana.Rpc`, `Solana.Wallet`, `Solana.Programs`, ...) |
+| **Program coverage** | Focused core: System, Token + Token-2022 extensions, ATA, Compute Budget, Memo, Address Lookup Table | Broader: also Stake, Governance, StakePool, Name Service, and ecosystem packages (Metaplex, Raydium, Jupiter, ...) |
+| **Footprint** | Hot paths allocation-free; RPC depends on `Logging.Abstractions` only | RPC package pulls full `Logging` + `Logging.Console` |
+
+Pick **Solnet** when you need its program breadth — NFT/DEX integrations and the wider ecosystem
+packages around it. Pick **SolSharp** when you care about native binaries and startup time, typed
+async APIs, minimal dependencies, and wire-level control with byte-for-byte verified encoding —
+bots, indexers, latency-sensitive backends.
+
 ## Package
 
 SolSharp ships as a **single NuGet package** — `SolSharp` — so one `dotnet add package SolSharp` pulls in
