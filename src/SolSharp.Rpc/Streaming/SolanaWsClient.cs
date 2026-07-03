@@ -113,6 +113,32 @@ public sealed class SolanaWsClient : IAsyncDisposable
         => SubscribeAsync<ulong>("rootSubscribe", [], "rootUnsubscribe", cancellationToken);
 
     /// <summary>
+    /// Subscribes to new votes observed in gossip, before they land in a block. Ending the enumeration
+    /// sends the matching unsubscribe. This subscription is marked unstable by Solana and is only
+    /// available on nodes started with <c>--rpc-pubsub-enable-vote-subscription</c>; on other nodes the
+    /// subscribe call is rejected.
+    /// See <see href="https://solana.com/docs/rpc/websocket/votesubscribe">voteSubscribe</see>.
+    /// </summary>
+    /// <param name="cancellationToken">Stops the subscription when cancelled.</param>
+    /// <returns>An async stream of vote notifications.</returns>
+    /// <exception cref="InvalidOperationException">Surfaced during enumeration if the connection closes or the node rejects the subscription (for example, when vote subscriptions are not enabled).</exception>
+    public IAsyncEnumerable<VoteNotification> SubscribeVotesAsync(CancellationToken cancellationToken = default)
+        => SubscribeAsync<VoteNotification>("voteSubscribe", [], "voteUnsubscribe", cancellationToken);
+
+    /// <summary>
+    /// Subscribes to slot-lifecycle updates - one notification per stage a slot moves through
+    /// (shreds received, bank created, frozen, optimistically confirmed, rooted, or dead), richer and
+    /// more frequent than <see cref="SubscribeSlotsAsync"/>. Ending the enumeration sends the matching
+    /// unsubscribe. This subscription is marked unstable by Solana.
+    /// See <see href="https://solana.com/docs/rpc/websocket/slotsupdatessubscribe">slotsUpdatesSubscribe</see>.
+    /// </summary>
+    /// <param name="cancellationToken">Stops the subscription when cancelled.</param>
+    /// <returns>An async stream of slot-lifecycle updates.</returns>
+    /// <exception cref="InvalidOperationException">Surfaced during enumeration if the connection closes or the node rejects the subscription.</exception>
+    public IAsyncEnumerable<SlotsUpdate> SubscribeSlotsUpdatesAsync(CancellationToken cancellationToken = default)
+        => SubscribeAsync<SlotsUpdate>("slotsUpdatesSubscribe", [], "slotsUpdatesUnsubscribe", cancellationToken);
+
+    /// <summary>
     /// Subscribes to transaction logs mentioning <paramref name="program"/>, delivered through a channel.
     /// Cancelling <paramref name="cancellationToken"/> unsubscribes and completes the channel.
     /// See <see href="https://solana.com/docs/rpc/websocket/logssubscribe">logsSubscribe</see>.

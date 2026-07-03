@@ -90,6 +90,8 @@ namespace SolSharp.Rpc.Protocol;
 [JsonSerializable(typeof(RpcResponse<PublicKey>))]
 // WebSocket notification payloads (SubscriptionSink roots).
 [JsonSerializable(typeof(SlotInfo))]
+[JsonSerializable(typeof(VoteNotification))]
+[JsonSerializable(typeof(SlotsUpdate))]
 [JsonSerializable(typeof(RpcContextValue<LogInfo>))]
 [JsonSerializable(typeof(RpcContextValue<AccountInfo>))]
 [JsonSerializable(typeof(RpcContextValue<ParsedAccountInfo>))]

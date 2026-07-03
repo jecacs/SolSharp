@@ -697,6 +697,21 @@ Also available: `SubscribeRootsAsync` (rooted slots, like `SubscribeSlotsAsync`)
 streams `SubscribeParsedBlocksAsync` / `SubscribeParsedAccountAsync`. Cancel any channel subscription by
 cancelling the `CancellationToken` you pass in.
 
+Two more streams cover the slot lifecycle in depth — both are marked *unstable* by Solana, so their
+wire shape can change between node versions:
+
+```csharp
+// Every stage a slot moves through: firstShredReceived, createdBank, frozen (with
+// transaction stats), optimisticConfirmation, root, dead. Richer than SubscribeSlotsAsync:
+await foreach (var update in ws.SubscribeSlotsUpdatesAsync())
+    Console.WriteLine($"{update.Slot} {update.Type} fails={update.Stats?.NumFailedTransactions}");
+
+// Votes as they arrive in gossip, before they land in a block. The node must run with
+// --rpc-pubsub-enable-vote-subscription, otherwise the subscribe is rejected:
+await foreach (var vote in ws.SubscribeVotesAsync())
+    Console.WriteLine($"{vote.VotePubkey} voted on {vote.Slots[^1]}");
+```
+
 The reconnect policy is tunable through `SolanaWsClientOptions`: `AutoReconnect` (on by default), the
 `ReconnectInitialDelay` → `ReconnectMaxDelay` exponential backoff, and `MaxReconnectAttempts` (`0` retries
 forever). When the attempts are exhausted — or auto-reconnect is off — every subscription completes with the

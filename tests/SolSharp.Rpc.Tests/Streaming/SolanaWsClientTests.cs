@@ -75,6 +75,136 @@ public static class SolanaWsClientTests
     }
 
     [TestFixture]
+    public sealed class SubscribeVotes
+    {
+        [Test]
+        public async Task SendsSubscribe_YieldsVote_ThenUnsubscribes()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+
+            // Act
+            var subscription = client.SubscribeVotesAsync().GetAsyncEnumerator();
+            var move = subscription.MoveNextAsync();
+
+            // Assert
+            await WaitUntil(() => fake.Sent.Count > 0);
+            fake.Sent[0].Should().Contain("\"method\":\"voteSubscribe\"");
+
+            fake.PushFromServer("""{"jsonrpc":"2.0","result":42,"id":1}""");
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"voteNotification","params":{"subscription":42,"result":{"votePubkey":"7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67","slots":[249999,250000],"hash":"8Rshv2oMkPu5E4opXTRyuyBeZBqQ4S477VG26wUTFxUM","timestamp":1750000000,"signature":"sig22"}}}""");
+
+            (await move).Should().BeTrue();
+            subscription.Current.VotePubkey.Should().Be(PublicKey.Parse("7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67"));
+            subscription.Current.Slots.Should().Equal(249999ul, 250000ul);
+            subscription.Current.Hash.Should().Be("8Rshv2oMkPu5E4opXTRyuyBeZBqQ4S477VG26wUTFxUM");
+            subscription.Current.Timestamp.Should().Be(1750000000L);
+            subscription.Current.Signature.Should().Be("sig22");
+
+            await subscription.DisposeAsync();
+            fake.Sent.Should().Contain(message => message.Contains("\"method\":\"voteUnsubscribe\""));
+        }
+
+        [Test]
+        public async Task ParsesNullTimestamp()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+
+            // Act
+            var subscription = client.SubscribeVotesAsync().GetAsyncEnumerator();
+            var move = subscription.MoveNextAsync();
+
+            await WaitUntil(() => fake.Sent.Count > 0);
+            fake.PushFromServer("""{"jsonrpc":"2.0","result":42,"id":1}""");
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"voteNotification","params":{"subscription":42,"result":{"votePubkey":"7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67","slots":[1],"hash":"h","timestamp":null,"signature":"s"}}}""");
+
+            // Assert
+            (await move).Should().BeTrue();
+            subscription.Current.Timestamp.Should().BeNull();
+            await subscription.DisposeAsync();
+        }
+    }
+
+    [TestFixture]
+    public sealed class SubscribeSlotsUpdates
+    {
+        [Test]
+        public async Task SendsSubscribe_YieldsFrozenUpdateWithStats_ThenUnsubscribes()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+
+            // Act
+            var subscription = client.SubscribeSlotsUpdatesAsync().GetAsyncEnumerator();
+            var move = subscription.MoveNextAsync();
+
+            // Assert
+            await WaitUntil(() => fake.Sent.Count > 0);
+            fake.Sent[0].Should().Contain("\"method\":\"slotsUpdatesSubscribe\"");
+
+            fake.PushFromServer("""{"jsonrpc":"2.0","result":42,"id":1}""");
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"slotsUpdatesNotification","params":{"subscription":42,"result":{"slot":250001,"type":"frozen","timestamp":1750000000123,"stats":{"numTransactionEntries":96,"numSuccessfulTransactions":120,"numFailedTransactions":6,"maxTransactionsPerEntry":5}}}}""");
+
+            (await move).Should().BeTrue();
+            subscription.Current.Slot.Should().Be(250001ul);
+            subscription.Current.Type.Should().Be("frozen");
+            subscription.Current.Timestamp.Should().Be(1750000000123L);
+            subscription.Current.Parent.Should().BeNull();
+            subscription.Current.Error.Should().BeNull();
+            subscription.Current.Stats!.NumTransactionEntries.Should().Be(96ul);
+            subscription.Current.Stats.NumSuccessfulTransactions.Should().Be(120ul);
+            subscription.Current.Stats.NumFailedTransactions.Should().Be(6ul);
+            subscription.Current.Stats.MaxTransactionsPerEntry.Should().Be(5ul);
+
+            await subscription.DisposeAsync();
+            fake.Sent.Should().Contain(message => message.Contains("\"method\":\"slotsUpdatesUnsubscribe\""));
+        }
+
+        [Test]
+        public async Task ParsesCreatedBankParent_AndDeadError()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+
+            // Act
+            var subscription = client.SubscribeSlotsUpdatesAsync().GetAsyncEnumerator();
+            var first = subscription.MoveNextAsync();
+
+            await WaitUntil(() => fake.Sent.Count > 0);
+            fake.PushFromServer("""{"jsonrpc":"2.0","result":42,"id":1}""");
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"slotsUpdatesNotification","params":{"subscription":42,"result":{"slot":76,"type":"createdBank","parent":75,"timestamp":1750000000456}}}""");
+
+            // Assert
+            (await first).Should().BeTrue();
+            subscription.Current.Type.Should().Be("createdBank");
+            subscription.Current.Parent.Should().Be(75ul);
+
+            var second = subscription.MoveNextAsync();
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"slotsUpdatesNotification","params":{"subscription":42,"result":{"slot":77,"type":"dead","err":"invalid block","timestamp":1750000000789}}}""");
+
+            (await second).Should().BeTrue();
+            subscription.Current.Type.Should().Be("dead");
+            subscription.Current.Error.Should().Be("invalid block");
+
+            await subscription.DisposeAsync();
+        }
+    }
+
+    [TestFixture]
     public sealed class SubscribeLogs
     {
         [Test]

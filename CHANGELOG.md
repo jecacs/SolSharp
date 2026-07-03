@@ -5,6 +5,19 @@ All notable changes to SolSharp are documented here. The format is loosely based
 [semantic versioning](https://semver.org) — from 1.0.0 breaking changes only come with a major
 version (on the earlier 0.x releases, minor versions could carry them).
 
+## [1.1.0]
+
+### Added
+
+- Two new WebSocket streams completing the subscription surface: `SubscribeSlotsUpdatesAsync`
+  (`slotsUpdatesSubscribe` — every stage of the slot lifecycle: shreds received, bank created, frozen
+  with per-slot transaction stats, optimistic confirmation, root, dead) and `SubscribeVotesAsync`
+  (`voteSubscribe` — gossip votes before they land in a block; requires a node started with
+  `--rpc-pubsub-enable-vote-subscription`). Both are parameterless `IAsyncEnumerable` streams like
+  `SubscribeSlotsAsync`, and both are marked unstable by Solana — the wire shape can change between
+  node versions.
+- New notification models: `SlotsUpdate` (+ `SlotsUpdateStats`) and `VoteNotification`.
+
 ## [1.0.1]
 
 Documentation-only release; no code changes.

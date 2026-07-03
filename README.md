@@ -145,10 +145,11 @@ bool ok = PublicKey.TryParse(input, out var key);
 - `GetParsedTransactionAsync` / `GetParsedBlockAsync` / `GetParsedAccountInfoAsync` return the node's
   `jsonParsed` decoding — typed instructions, token balances, account state, and logs without local Borsh
   work — each instruction keeping both its parsed form and its raw program id / accounts / data.
-- WebSocket streaming multiplexed over one connection: `SubscribeSlotsAsync` and `SubscribeRootsAsync`
-  (`IAsyncEnumerable`), `SubscribeLogsAsync`, `SubscribeAccountAsync`, `SubscribeParsedAccountAsync`, `SubscribeProgramAsync`,
-  `SubscribeSignatureAsync`, `SubscribeBlocksAsync`, and `SubscribeParsedBlocksAsync` (`ChannelReader`), with
-  automatic reconnect and resubscribe across dropped connections.
+- WebSocket streaming multiplexed over one connection: `SubscribeSlotsAsync`, `SubscribeRootsAsync`,
+  `SubscribeSlotsUpdatesAsync` (slot lifecycle with per-stage stats), and `SubscribeVotesAsync` (gossip
+  votes) as `IAsyncEnumerable`; `SubscribeLogsAsync`, `SubscribeAccountAsync`, `SubscribeParsedAccountAsync`,
+  `SubscribeProgramAsync`, `SubscribeSignatureAsync`, `SubscribeBlocksAsync`, and `SubscribeParsedBlocksAsync`
+  (`ChannelReader`) — with automatic reconnect and resubscribe across dropped connections.
 - DI registration with a built-in resilience pipeline (retry on transient errors and HTTP 429), plus
   `AddSolanaWs` for a container-managed streaming client.
 - JSON-RPC batching — `CreateBatch()` queues reads (and sends) and submits them in one HTTP round-trip.
