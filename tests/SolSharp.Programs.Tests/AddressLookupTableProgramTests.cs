@@ -87,6 +87,28 @@ public static class AddressLookupTableProgramTests
     }
 
     [TestFixture]
+    public sealed class FreezeLookupTable
+    {
+        [Test]
+        public void EncodesDiscriminator_AndAccounts()
+        {
+            // Act
+            var instruction = AddressLookupTableProgram.FreezeLookupTable(Pk(5), Pk(1));
+
+            // Assert
+            DataHex(instruction).Should().Be("01000000");
+            instruction.ProgramId.Should().Be(AddressLookupTableProgram.ProgramId);
+            instruction.Accounts.Should().HaveCount(2);
+            instruction.Accounts[0].PublicKey.Should().Be(Pk(5));
+            instruction.Accounts[0].IsWritable.Should().BeTrue();
+            instruction.Accounts[0].IsSigner.Should().BeFalse();
+            instruction.Accounts[1].PublicKey.Should().Be(Pk(1));
+            instruction.Accounts[1].IsSigner.Should().BeTrue();
+            instruction.Accounts[1].IsWritable.Should().BeFalse();
+        }
+    }
+
+    [TestFixture]
     public sealed class DeactivateLookupTable
     {
         [Test]

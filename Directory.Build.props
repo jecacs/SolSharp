@@ -18,7 +18,7 @@
   </PropertyGroup>
 
   <PropertyGroup Label="Package metadata">
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Authors>Yevhen Koval</Authors>
     <Product>SolSharp</Product>
     <Title>SolSharp — Solana SDK for .NET</Title>

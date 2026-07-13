@@ -6,6 +6,10 @@ public static class SolanaUnits
     /// <summary>The number of lamports in one SOL.</summary>
     public const ulong LamportsPerSol = 1_000_000_000;
 
+    // The largest SOL amount whose lamport value fits in a ulong. Checked before multiplying so an
+    // oversized input throws the documented ArgumentOutOfRangeException, not decimal's OverflowException.
+    private const decimal MaxConvertibleSol = ulong.MaxValue / (decimal)LamportsPerSol;
+
     /// <summary>Converts an amount of SOL to lamports, truncating any sub-lamport fraction toward zero.</summary>
     /// <param name="sol">The amount in SOL; must not be negative.</param>
     /// <returns>The amount in lamports.</returns>
@@ -14,12 +18,10 @@ public static class SolanaUnits
     {
         if (sol < 0)
             throw new ArgumentOutOfRangeException(nameof(sol), sol, "SOL amount cannot be negative.");
-
-        var lamports = sol * LamportsPerSol;
-        if (lamports > ulong.MaxValue)
+        if (sol > MaxConvertibleSol)
             throw new ArgumentOutOfRangeException(nameof(sol), sol, "SOL amount is too large to express in lamports.");
 
-        return (ulong)lamports;
+        return (ulong)(sol * LamportsPerSol);
     }
 
     /// <summary>Converts an amount of lamports to SOL.</summary>

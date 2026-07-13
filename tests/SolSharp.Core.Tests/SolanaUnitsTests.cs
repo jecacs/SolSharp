@@ -35,6 +35,24 @@ public static class SolanaUnitsTests
             // Assert
             act.Should().Throw<ArgumentOutOfRangeException>();
         }
+
+        [Test]
+        public void FarPastDecimalMultiplyRange_StillThrowsArgumentOutOfRange()
+        {
+            // Act: 1e20 SOL used to overflow the decimal multiply before the range check ran,
+            // surfacing as OverflowException instead of the documented exception.
+            Action act = () => SolanaUnits.SolToLamports(1e20m);
+
+            // Assert
+            act.Should().Throw<ArgumentOutOfRangeException>();
+        }
+
+        [Test]
+        public void ExactUlongBoundary_Converts()
+        {
+            // 18_446_744_073.709551615 SOL is exactly ulong.MaxValue lamports.
+            SolanaUnits.SolToLamports(18_446_744_073.709551615m).Should().Be(ulong.MaxValue);
+        }
     }
 
     [TestFixture]

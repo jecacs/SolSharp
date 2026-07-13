@@ -24,8 +24,8 @@ public sealed partial class Keypair : ISigner, IDisposable
     {
         _seed = seed;
 
-        var publicKey = new byte[Ed25519.PublicKeySize];
-        Ed25519.GeneratePublicKey(seed, 0, publicKey, 0);
+        Span<byte> publicKey = stackalloc byte[Ed25519.PublicKeySize];
+        Ed25519.GeneratePublicKey(seed, publicKey);
         PublicKey = new PublicKey(publicKey);
     }
 
@@ -84,8 +84,9 @@ public sealed partial class Keypair : ISigner, IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
+        // The span overload signs without copying the message - the only allocation is the signature.
         var signature = new byte[Ed25519.SignatureSize];
-        Ed25519.Sign(_seed, 0, message.ToArray(), 0, message.Length, signature, 0);
+        Ed25519.Sign(_seed, message, signature);
         return signature;
     }
 

@@ -148,6 +148,41 @@ public static class TokenProgramOpsTests
             Check(ix.Accounts[0], Pk(2), signer: false, writable: true);
             Check(ix.Accounts[1], Pk(3), signer: true, writable: false);
         }
+
+        [Test]
+        public void WithToken2022AuthorityType_EncodesItsWireValue()
+        {
+            // Act: change a Token-2022 mint's transfer-fee authority.
+            var token2022 = PublicKey.Parse(SolSharp.Core.Constants.SolanaProgramIds.Token2022Program);
+            var ix = TokenProgram.SetAuthority(Pk(2), Pk(3), AuthorityType.TransferFeeConfig, Pk(4), token2022);
+
+            // Assert
+            ix.ProgramId.Should().Be(token2022);
+            DataHex(ix).Should().Be("0604010404040404040404040404040404040404040404040404040404040404040404");
+        }
+
+        // The numbering mirrors spl-token-2022's AuthorityType (interface/src/instruction.rs); a wrong
+        // value here is a wire bug, so every variant is pinned.
+        [TestCase(AuthorityType.MintTokens, 0)]
+        [TestCase(AuthorityType.FreezeAccount, 1)]
+        [TestCase(AuthorityType.AccountOwner, 2)]
+        [TestCase(AuthorityType.CloseAccount, 3)]
+        [TestCase(AuthorityType.TransferFeeConfig, 4)]
+        [TestCase(AuthorityType.WithheldWithdraw, 5)]
+        [TestCase(AuthorityType.CloseMint, 6)]
+        [TestCase(AuthorityType.InterestRate, 7)]
+        [TestCase(AuthorityType.PermanentDelegate, 8)]
+        [TestCase(AuthorityType.ConfidentialTransferMint, 9)]
+        [TestCase(AuthorityType.TransferHookProgramId, 10)]
+        [TestCase(AuthorityType.ConfidentialTransferFeeConfig, 11)]
+        [TestCase(AuthorityType.MetadataPointer, 12)]
+        [TestCase(AuthorityType.GroupPointer, 13)]
+        [TestCase(AuthorityType.GroupMemberPointer, 14)]
+        [TestCase(AuthorityType.ScaledUiAmount, 15)]
+        [TestCase(AuthorityType.Pause, 16)]
+        [TestCase(AuthorityType.PermissionedBurn, 17)]
+        public void AuthorityType_MatchesSplTokenNumbering(AuthorityType type, int expected)
+            => ((byte)type).Should().Be((byte)expected);
     }
 
     [TestFixture]

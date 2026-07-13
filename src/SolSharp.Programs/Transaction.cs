@@ -46,7 +46,10 @@ public sealed class Transaction
     /// <summary>Parses a transaction from its wire bytes: the signatures followed by a legacy or v0 message.</summary>
     /// <param name="data">The serialized transaction.</param>
     /// <returns>The parsed transaction, carrying its signatures.</returns>
-    /// <exception cref="FormatException">The data is truncated, a compact-u16 length in it is malformed, or the message is invalid.</exception>
+    /// <exception cref="FormatException">
+    /// The data is truncated, a compact-u16 length in it is malformed, the message is invalid, or the
+    /// signature count does not match the message's required signatures.
+    /// </exception>
     public static Transaction Deserialize(ReadOnlySpan<byte> data)
     {
         try
@@ -66,6 +69,13 @@ public sealed class Transaction
             ITransactionMessage message = messageBytes.Length > 0 && (messageBytes[0] & MessageV0.VersionPrefix) != 0
                 ? MessageV0.Deserialize(messageBytes)
                 : global::SolSharp.Programs.Message.Deserialize(messageBytes);
+
+            // Solana's sanitize step requires exactly one signature slot per required signer (a partially
+            // signed transaction carries zeroed slots, never fewer). Accepting a mismatch here would let
+            // Sign index past the slot array and surface as an unrelated IndexOutOfRangeException.
+            if (signatureCount != message.RequiredSignatures)
+                throw new FormatException(
+                    $"The transaction carries {signatureCount} signature slot(s) but its message requires {message.RequiredSignatures}.");
 
             return new Transaction(message, signatures);
         }

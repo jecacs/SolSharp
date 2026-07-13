@@ -46,12 +46,17 @@ public sealed class TransactionBuilder
         return this;
     }
 
-    /// <summary>Sets the recent blockhash (base58) the transaction is anchored to.</summary>
+    /// <summary>
+    /// Sets the recent blockhash (base58) the transaction is anchored to. Replaces any previously set
+    /// durable nonce (<see cref="SetDurableNonce"/>), dropping its prepended advance-nonce instruction -
+    /// the two anchoring modes are mutually exclusive.
+    /// </summary>
     /// <param name="recentBlockhash">A recent blockhash, e.g. from <c>getLatestBlockhash</c>.</param>
     /// <returns>This builder, so calls can be chained.</returns>
     public TransactionBuilder SetRecentBlockhash(string recentBlockhash)
     {
         _recentBlockhash = recentBlockhash;
+        _nonceAdvance = null;
         return this;
     }
 

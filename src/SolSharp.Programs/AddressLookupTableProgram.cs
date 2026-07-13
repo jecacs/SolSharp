@@ -93,6 +93,21 @@ public static class AddressLookupTableProgram
         };
     }
 
+    /// <summary>
+    /// Permanently freezes a lookup table, making it immutable: it can no longer be extended,
+    /// deactivated, or closed, and it loses its authority. Irreversible.
+    /// </summary>
+    /// <param name="lookupTable">The table to freeze (writable).</param>
+    /// <param name="authority">The table's authority (signer).</param>
+    /// <returns>The freeze instruction.</returns>
+    public static Instruction FreezeLookupTable(PublicKey lookupTable, PublicKey authority)
+        => new()
+        {
+            ProgramId = ProgramId,
+            Accounts = [AccountMeta.Writable(lookupTable), AccountMeta.ReadonlySigner(authority)],
+            Data = Discriminator(1)
+        };
+
     /// <summary>Deactivates a lookup table, starting the cool-down after which it can be closed.</summary>
     /// <param name="lookupTable">The table to deactivate (writable).</param>
     /// <param name="authority">The table's authority (signer).</param>

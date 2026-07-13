@@ -194,5 +194,28 @@ public static class TransactionBuilderTests
             instructions[0].Data.Should().Equal(Convert.FromHexString("04000000"));
             instructions[0].Accounts[0].PublicKey.Should().Be(nonceAccount);
         }
+
+        [Test]
+        public void FollowedBySetRecentBlockhash_DropsTheAdvanceNonceInstruction()
+        {
+            // Arrange
+            using var payer = Keypair.FromSeed(Fill(1));
+            var nonceAccount = new PublicKey(Fill(5));
+            var recipient = new PublicKey(Fill(2));
+
+            // Act: the builder switches back to blockhash anchoring, so no nonce instruction may survive.
+            var message = new TransactionBuilder()
+                .SetFeePayer(payer.PublicKey)
+                .SetDurableNonce(nonceAccount, payer.PublicKey, "9zMevzTCu2Q7xJYW4wUqcdF9m6E1qrQuHzLC87uCPmGk")
+                .SetRecentBlockhash(Blockhash)
+                .AddInstruction(SystemProgram.Transfer(payer.PublicKey, recipient, 1))
+                .BuildMessage();
+
+            // Assert
+            message.RecentBlockhash.Should().Be(Blockhash);
+            var instructions = message.DecompileInstructions([]);
+            instructions.Should().HaveCount(1);
+            instructions[0].Data[..4].Should().Equal(Convert.FromHexString("02000000"));
+        }
     }
 }

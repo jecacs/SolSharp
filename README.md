@@ -199,9 +199,10 @@ bool ok = keypair.PublicKey.Verify(message, signature);
   `AllocateWithSeed`, `AssignWithSeed`, `TransferWithSeed` — and the durable-nonce set, including the
   `CreateNonceAccount` pair), `ComputeBudgetProgram` (compute-unit limit, priority fee, `RequestHeapFrame`,
   `SetLoadedAccountsDataSizeLimit`), `TokenProgram` (transfer, mint, burn, approve — checked variants
-  included — revoke, `SetAuthority` via `AuthorityType`, freeze / thaw, initialize mint / account, close,
-  sync-native — each with a `tokenProgram` override for Token-2022), `AssociatedTokenAccount` (create and
-  `CreateIdempotent`), `AddressLookupTableProgram` (create / extend / deactivate / close), and `MemoProgram`.
+  included — revoke, `SetAuthority` via `AuthorityType` (incl. the Token-2022 extension authorities),
+  freeze / thaw, initialize mint / account, close, sync-native — each with a `tokenProgram` override for
+  Token-2022), `AssociatedTokenAccount` (create and `CreateIdempotent`), `AddressLookupTableProgram`
+  (create / extend / freeze / deactivate / close), and `MemoProgram`.
 - `ProgramDerivedAddress` (`FindProgramAddress` / `TryCreateProgramAddress`) and `PublicKey.IsOnCurve()`.
 - `Message` (legacy) and `MessageV0` (versioned, loading extra accounts from address lookup tables),
   `Transaction`, and `TransactionBuilder` (`Build` / `BuildV0`, durable-nonce anchoring via

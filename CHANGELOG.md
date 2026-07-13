@@ -5,6 +5,41 @@ All notable changes to SolSharp are documented here. The format is loosely based
 [semantic versioning](https://semver.org) — from 1.0.0 breaking changes only come with a major
 version (on the earlier 0.x releases, minor versions could carry them).
 
+## [1.2.0]
+
+### Added
+
+- `AddressLookupTableProgram.FreezeLookupTable` — the one Address Lookup Table instruction that was
+  missing (discriminant 1): permanently locks a table immutable.
+- `AuthorityType` now carries the full Token-2022 authority set (`TransferFeeConfig`,
+  `WithheldWithdraw`, `CloseMint`, `InterestRate`, `PermanentDelegate`, `ConfidentialTransferMint`,
+  `TransferHookProgramId`, `ConfidentialTransferFeeConfig`, `MetadataPointer`, `GroupPointer`,
+  `GroupMemberPointer`, `ScaledUiAmount`, `Pause`, `PermissionedBurn`), numbered per
+  `spl-token-2022`, so `TokenProgram.SetAuthority` can change extension authorities on Token-2022
+  mints and accounts. The classic four variants are unchanged.
+
+### Changed
+
+- Signing and verification now use BouncyCastle's span-based Ed25519 APIs: `Keypair.Sign` no longer
+  copies the message (the signature is the only allocation), `PublicKey.Verify` is allocation-free,
+  and keypair construction derives the public key without an intermediate array. Behavior is
+  unchanged; this trims per-transaction allocations on the hot signing path.
+
+### Fixed
+
+- `TransactionBuilder.SetRecentBlockhash` now clears a previously set durable nonce, dropping its
+  prepended `AdvanceNonceAccount` instruction — mirroring how `SetDurableNonce` replaces a previously
+  set blockhash. Before, switching back to blockhash anchoring silently left the advance-nonce
+  instruction in the transaction, which would consume the nonce and demand the nonce authority's
+  signature.
+- `Transaction.Deserialize` now rejects (with `FormatException`) wire bytes whose signature count does
+  not match the message's required signatures — the same rule Solana's sanitize step enforces. Before,
+  such input parsed silently and a later `Sign` could fail with an unrelated
+  `IndexOutOfRangeException`.
+- `SolanaUnits.SolToLamports` now throws the documented `ArgumentOutOfRangeException` for amounts too
+  large to express in lamports; very large inputs previously surfaced as decimal's
+  `OverflowException`.
+
 ## [1.1.0]
 
 ### Added

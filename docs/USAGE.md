@@ -393,6 +393,15 @@ The full op set is available: `Transfer` / `TransferChecked`, `MintTo` / `MintTo
 `InitializeMint`, `InitializeAccount`, `CloseAccount`, `SyncNative` — plus `AssociatedTokenAccount.Create`
 and `CreateIdempotent`.
 
+`AuthorityType` also carries the Token-2022 extension authorities (`TransferFeeConfig`, `CloseMint`,
+`PermanentDelegate`, `MetadataPointer`, ...), valid when the instruction targets the Token-2022 program:
+
+```csharp
+TokenProgram.SetAuthority(
+    mint, currentAuthority, AuthorityType.TransferFeeConfig, newAuthority,
+    tokenProgram: PublicKey.Parse(SolanaProgramIds.Token2022Program));
+```
+
 ```csharp
 TokenProgram.MintTo(mint, destination, mintAuthority, amount: 500_000);
 TokenProgram.Burn(tokenAccount, mint, owner, amount: 100_000);
@@ -444,8 +453,9 @@ await rpc.SendTransactionAsync(tx.Serialize());
 ```
 
 Accounts that appear in the table (and are not signers or program IDs) are drained out of the static keys
-and referenced through the table, shrinking the transaction. Building the table itself is done with
-`AddressLookupTableProgram` (`CreateLookupTable`, `ExtendLookupTable`, `DeactivateLookupTable`, `CloseLookupTable`).
+and referenced through the table, shrinking the transaction. Building and managing the table itself is done
+with `AddressLookupTableProgram` (`CreateLookupTable`, `ExtendLookupTable`, `FreezeLookupTable` — permanently
+locks the table immutable, `DeactivateLookupTable`, `CloseLookupTable`).
 
 ## Decoding a transaction
 
@@ -768,7 +778,10 @@ await rpc.SendTransactionAsync(tx.Serialize());
 ```
 
 `SetDurableNonce` uses the nonce value as the recent blockhash and prepends the required
-`AdvanceNonceAccount` instruction, so each submission consumes the nonce exactly once.
+`AdvanceNonceAccount` instruction, so each submission consumes the nonce exactly once. The two anchoring
+modes are mutually exclusive: calling `SetRecentBlockhash` afterward switches the builder back to blockhash
+anchoring and drops the pending `AdvanceNonceAccount`, just as `SetDurableNonce` replaces a previously set
+blockhash.
 
 ## Program-derived addresses (PDAs)
 

@@ -69,6 +69,40 @@ public static class TransactionDeserializeTests
             act.Should().Throw<FormatException>();
         }
 
+        [Test]
+        public void FewerSignatureSlotsThanRequiredSigners_ThrowsFormatException()
+        {
+            // Arrange: rewrite the signature count to 0 and drop the 64 signature bytes, leaving a message
+            // that still requires one signer - the shape Solana's sanitize step rejects.
+            var signed = Convert.FromHexString(SignedTransferHex);
+            var tampered = new byte[signed.Length - 64];
+            tampered[0] = 0;
+            signed.AsSpan(1 + 64).CopyTo(tampered.AsSpan(1));
+
+            // Act
+            Action act = () => Transaction.Deserialize(tampered);
+
+            // Assert
+            act.Should().Throw<FormatException>().WithMessage("*0 signature slot(s)*requires 1*");
+        }
+
+        [Test]
+        public void MoreSignatureSlotsThanRequiredSigners_ThrowsFormatException()
+        {
+            // Arrange: rewrite the signature count to 2 and insert a second zeroed signature.
+            var signed = Convert.FromHexString(SignedTransferHex);
+            var tampered = new byte[signed.Length + 64];
+            tampered[0] = 2;
+            signed.AsSpan(1, 64).CopyTo(tampered.AsSpan(1));
+            signed.AsSpan(1 + 64).CopyTo(tampered.AsSpan(1 + 128));
+
+            // Act
+            Action act = () => Transaction.Deserialize(tampered);
+
+            // Assert
+            act.Should().Throw<FormatException>().WithMessage("*2 signature slot(s)*requires 1*");
+        }
+
         [TestCase(SignedTransferHex)]
         [TestCase(SignedV0Hex)]
         public void TrySerialize_MatchesSerializeAndReportsExactLength(string hex)

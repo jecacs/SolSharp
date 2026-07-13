@@ -23,7 +23,10 @@ public static class PublicKeyExtensions
         if (signature.Length != Ed25519.SignatureSize)
             return false;
 
-        return Ed25519.Verify(signature.ToArray(), 0, key.ToBytes(), 0, message.ToArray(), 0, message.Length);
+        // The span overload verifies without copying the signature, key, or message - allocation-free.
+        Span<byte> keyBytes = stackalloc byte[PublicKey.Length];
+        key.CopyTo(keyBytes);
+        return Ed25519.Verify(signature, keyBytes, message);
     }
 
     /// <summary>
