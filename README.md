@@ -19,7 +19,7 @@ wire format and the signing path, without dragging in a large dependency graph. 
 writing bots, indexers, or backend services that talk to Solana from .NET and care about
 speed and control, this is aimed at you.
 
-> **Status: 1.0.1 — stable release.** SolSharp ships as a single NuGet package — `SolSharp` —
+> **Status: 1.2.0 — stable release.** SolSharp ships as a single NuGet package — `SolSharp` —
 > bundling the Core (primitives + encodings), Wallet (Ed25519 keys, signing, verification, BIP-39/SLIP-0010
 > mnemonic import), Rpc (the full JSON-RPC HTTP read surface + send/simulate + WebSocket streaming + DI), and
 > Programs (instructions + transaction building + signing, durable nonces) assemblies. JSON is
@@ -80,7 +80,7 @@ dotnet add package SolSharp
 ```
 
 ```xml
-<PackageReference Include="SolSharp" Version="1.0.1" />
+<PackageReference Include="SolSharp" Version="1.2.0" />
 ```
 
 | Assembly           | Purpose                                              |
@@ -205,8 +205,8 @@ bool ok = keypair.PublicKey.Verify(message, signature);
   (create / extend / freeze / deactivate / close), and `MemoProgram`.
 - `ProgramDerivedAddress` (`FindProgramAddress` / `TryCreateProgramAddress`) and `PublicKey.IsOnCurve()`.
 - `Message` (legacy) and `MessageV0` (versioned, loading extra accounts from address lookup tables),
-  `Transaction`, and `TransactionBuilder` (`Build` / `BuildV0`, durable-nonce anchoring via
-  `SetDurableNonce`) — compilation, wire serialization (allocation-free via `Transaction.TrySerialize` and
+  `Transaction`, and `TransactionBuilder` (`Build` / `BuildV0`, `BuildMessage` / `BuildMessageV0` for the
+  unsigned message, durable-nonce anchoring via `SetDurableNonce`) — compilation, wire serialization (allocation-free via `Transaction.TrySerialize` and
   the span `Serialize` overloads, with
   `Transaction.Deserialize` to parse one back, and `DecompileInstructions` to resolve a parsed message's
   instructions to program ids and account keys, loading v0 lookup-table accounts), signing, and base64
@@ -276,6 +276,7 @@ SolSharp/
   samples/             SolSharp.AotSmoke — native-compiled smoke sample, published and run in CI
   tests/               NUnit + FluentAssertions, mirroring each project
                        (+ SolSharp.IntegrationTests: live-cluster read/streaming checks)
+  benchmarks/          SolSharp.Benchmarks — standalone BenchmarkDotNet micro-benchmark harness
   .github/workflows/   ci.yml (build + offline tests) and release.yml (tag → NuGet trusted publishing)
   assets/              package icon and README logo
   .editorconfig        modern C# style, enforced on build

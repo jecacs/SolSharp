@@ -28,6 +28,7 @@ assemblies — the namespaces `SolSharp.Core.*`, `SolSharp.Rpc`, `SolSharp.Walle
 - [Durable nonces](#durable-nonces)
 - [Program-derived addresses (PDAs)](#program-derived-addresses-pdas)
 - [Batching RPC calls](#batching-rpc-calls)
+- [Allocation-free serialization](#allocation-free-serialization)
 - [Rate limits, custom endpoints, and headers](#rate-limits-custom-endpoints-and-headers)
 - [Error handling](#error-handling)
 - [Publishing with Native AOT](#publishing-with-native-aot)
@@ -71,12 +72,22 @@ var provider = new ServiceCollection()
 var rpc = provider.GetRequiredService<SolanaRpcClient>();
 ```
 
-The WebSocket client is standalone — construct and connect it directly:
+The WebSocket client can be constructed directly:
 
 ```csharp
 using SolSharp.Rpc.Streaming;
 
 await using var ws = new SolanaWsClient();
+await ws.ConnectAsync(new Uri("wss://api.mainnet-beta.solana.com"));
+```
+
+Or let the container manage it: `AddSolanaWs` registers `SolanaWsClient` as a singleton wired to the
+registered `ILoggerFactory` and disposes it on shutdown. You still open the connection yourself:
+
+```csharp
+services.AddSolanaWs();   // or: services.AddSolanaWs(new SolanaWsClientOptions { MaxReconnectAttempts = 10 });
+
+var ws = provider.GetRequiredService<SolanaWsClient>();
 await ws.ConnectAsync(new Uri("wss://api.mainnet-beta.solana.com"));
 ```
 
@@ -101,9 +112,13 @@ using var fromPhantom = Keypair.Parse(base58Export);                // wallet ex
 using var fromHex     = Keypair.Parse("0x9d61b19d…");               // hex, 0x optional
 using var fromBase64  = Keypair.Parse("nWGxne/9WmC…");              // base64
 
-// Or be explicit about the format:
+// Or be explicit about the format — each string form takes a 32-byte seed or a 64-byte secret key:
 using var k1 = Keypair.FromBase58String(base58Export);
-using var k2 = Keypair.FromSecretKey(sixtyFourBytes);  // 32-byte seed + 32-byte public key
+using var k2 = Keypair.FromSecretKey(sixtyFourBytes);   // 32-byte seed + 32-byte public key
+using var k3 = Keypair.FromJsonArray(idJsonText);       // the solana-keygen id.json array
+using var k4 = Keypair.FromHexString("0x9d61b19d…");    // 0x optional
+using var k5 = Keypair.FromBase64String(base64Secret);
+using var k6 = Keypair.FromSeed(thirtyTwoBytes);        // just the 32-byte seed
 ```
 
 Import a wallet from a BIP-39 mnemonic. Two schemes exist in the wild — pick the one your source wallet
@@ -313,6 +328,11 @@ Need devnet test funds first?
 await rpc.RequestAirdropAsync(payer.PublicKey, SolanaUnits.LamportsPerSol);
 ```
 
+`SystemProgram` covers more than transfers: `CreateAccount(from, newAccount, lamports, space, owner)`,
+`Allocate` / `Assign`, the seed-derived variants (`CreateAccountWithSeed`, `AllocateWithSeed`,
+`AssignWithSeed`, `TransferWithSeed`), and the durable-nonce instruction set
+(see [Durable nonces](#durable-nonces)).
+
 ## Simulating before sending
 
 Dry-run a transaction to read its logs and compute-unit cost without paying a fee.
@@ -362,6 +382,19 @@ var fees = await rpc.GetRecentPrioritizationFeesAsync([payer.PublicKey, recipien
 var suggested = fees.Max(f => f.Fee);       // micro-lamports per CU; take a max/percentile over ~150 slots
 
 var baseFee = await rpc.GetFeeForMessageAsync(tx.Message.Serialize());  // lamports, null for an unknown blockhash
+```
+
+To price a transaction **before** signing it, compile just the message — `BuildMessage` / `BuildMessageV0`
+skip the signers (set the fee payer explicitly):
+
+```csharp
+var message = new TransactionBuilder()
+    .SetFeePayer(payer.PublicKey)
+    .SetRecentBlockhash(blockhash)
+    .AddInstruction(SystemProgram.Transfer(payer.PublicKey, recipient, lamports))
+    .BuildMessage();               // or BuildMessageV0() with lookup tables set
+
+var fee = await rpc.GetFeeForMessageAsync(message.Serialize());
 ```
 
 ## SPL token transfers
@@ -783,6 +816,12 @@ modes are mutually exclusive: calling `SetRecentBlockhash` afterward switches th
 anchoring and drops the pending `AdvanceNonceAccount`, just as `SetDurableNonce` replaces a previously set
 blockhash.
 
+`CreateNonceAccount` above is a convenience pair — `CreateAccount` + `InitializeNonceAccount`, also
+available separately. The rest of the nonce lifecycle is one instruction each:
+`SystemProgram.WithdrawNonceAccount(nonceAccount, authority, recipient, lamports)` moves lamports out of
+the account, and `SystemProgram.AuthorizeNonceAccount(nonceAccount, authority, newAuthority)` hands it to
+a new authority.
+
 ## Program-derived addresses (PDAs)
 
 ```csharp
@@ -796,6 +835,11 @@ var (pda, bump) = ProgramDerivedAddress.FindProgramAddress(
 
 // Check whether a key is a valid Ed25519 point (PDAs are off-curve):
 bool onCurve = somePublicKey.IsOnCurve();
+
+// The create_program_address counterpart: derive from explicit seeds (bump included, no search).
+// Returns false when the result lands on the curve:
+if (ProgramDerivedAddress.TryCreateProgramAddress([seed, bumpSeed], programId, out var address))
+    Console.WriteLine(address);
 ```
 
 A derivation accepts at most `MaxSeeds` (16) seeds — the bump counts toward the limit — of up to
@@ -821,6 +865,29 @@ Console.WriteLine($"{await balance} lamports at slot {await slot}");
 Sends batch too — submit several signed transactions at once with `batch.SendTransactionAsync(bytes)`.
 Note that some RPC providers disable or cap JSON-RPC batching; a non-batch reply surfaces as an
 `RpcException`.
+
+## Allocation-free serialization
+
+`Serialize()` already allocates exactly one right-sized array per call. For hot paths that want zero
+allocations — or to write straight into a reusable buffer — pair `GetSerializedLength()` with
+`TrySerialize(Span<byte>, out int)`:
+
+```csharp
+Span<byte> buffer = stackalloc byte[1232];   // the network caps a serialized transaction at 1232 bytes
+
+if (!tx.TrySerialize(buffer, out var written))
+    throw new InvalidOperationException("buffer too small");
+
+ReadOnlySpan<byte> wire = buffer[..written]; // hand to your transport without an intermediate array
+```
+
+`TrySerialize` writes nothing and returns `false` when the span is smaller than `GetSerializedLength()`
+bytes. (`SolanaRpcClient.SendTransactionAsync` takes a `byte[]`, so with the typed client plain
+`Serialize()` is the natural fit; the span path pays off with custom transports and pooled buffers.)
+
+The same pattern exists one level down: `Message` / `MessageV0` (via `ITransactionMessage`) expose
+`GetSerializedLength()` and a span-writing `Serialize(Span<byte>)` overload for working with raw message
+bytes before signing.
 
 ## Rate limits, custom endpoints, and headers
 

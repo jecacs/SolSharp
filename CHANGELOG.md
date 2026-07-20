@@ -5,6 +5,17 @@ All notable changes to SolSharp are documented here. The format is loosely based
 [semantic versioning](https://semver.org) — from 1.0.0 breaking changes only come with a major
 version (on the earlier 0.x releases, minor versions could carry them).
 
+## [Unreleased]
+
+### Added
+
+- `docs/USAGE.md`: examples for the previously unillustrated API — `AddSolanaWs` container registration,
+  allocation-free serialization (`GetSerializedLength` / `TrySerialize` and the span `Serialize`
+  overloads), pricing an unsigned message via `BuildMessage` / `BuildMessageV0`, the wider
+  `SystemProgram` op set, the remaining nonce instructions (withdraw, authorize),
+  `TryCreateProgramAddress`, and the explicit `Keypair` factory methods. README's `TransactionBuilder`
+  bullet now names `BuildMessage` / `BuildMessageV0`.
+
 ## [1.2.0]
 
 ### Added
@@ -95,6 +106,8 @@ First stable release. The public API is now covered by the semver compatibility 
   and `PerformanceSample`. `getIdentity` and `getSlotLeader` unwrap to `PublicKey` directly.
 
 ## [0.7.0]
+
+*0.7.0 was folded into the v1.0.0 release — it has no separate tag or NuGet package.*
 
 ### Added
 
@@ -270,6 +283,14 @@ bundles four layered assemblies.
   transaction building, signing and serialization, `Transaction.Deserialize`, and instruction
   decompilation — every wire format validated byte-for-byte against the Rust `solana-sdk`.
 
+[Unreleased]: https://github.com/jecacs/SolSharp/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/jecacs/SolSharp/releases/tag/v1.2.0
+[1.1.0]: https://github.com/jecacs/SolSharp/releases/tag/v1.1.0
+[1.0.1]: https://github.com/jecacs/SolSharp/releases/tag/v1.0.1
+[1.0.0]: https://github.com/jecacs/SolSharp/releases/tag/v1.0.0
+[0.7.0]: https://github.com/jecacs/SolSharp/releases/tag/v1.0.0
+[0.6.0]: https://github.com/jecacs/SolSharp/releases/tag/v0.6.0
+[0.5.0]: https://github.com/jecacs/SolSharp/releases/tag/v0.5.0
 [0.4.1]: https://github.com/jecacs/SolSharp/releases/tag/v0.4.1
 [0.4.0]: https://github.com/jecacs/SolSharp/releases/tag/v0.4.0
 [0.3.0]: https://github.com/jecacs/SolSharp/releases/tag/v0.3.0
