@@ -201,6 +201,63 @@ public static class SolanaRpcClientTests
         }
 
         [Test]
+        public async Task WrongProtocolVersion_ThrowsRpcException()
+        {
+            // Arrange
+            var client = Client("{\"jsonrpc\":\"1.0\",\"result\":123,\"id\":1}");
+
+            // Act
+            var act = async () => await client.GetSlotAsync();
+
+            // Assert
+            await act.Should().ThrowAsync<RpcException>()
+                .WithMessage("RPC error -1: Invalid JSON-RPC response version.");
+        }
+
+        [Test]
+        public async Task MismatchedId_ThrowsRpcException()
+        {
+            // Arrange
+            var client = Client("{\"jsonrpc\":\"2.0\",\"result\":123,\"id\":2}");
+
+            // Act
+            var act = async () => await client.GetSlotAsync();
+
+            // Assert
+            await act.Should().ThrowAsync<RpcException>()
+                .WithMessage("RPC error -1: JSON-RPC response id did not match the request id.");
+        }
+
+        [Test]
+        public async Task MissingResultAndError_ThrowsRpcException()
+        {
+            // Arrange
+            var client = Client("{\"jsonrpc\":\"2.0\",\"id\":1}");
+
+            // Act
+            var act = async () => await client.GetSlotAsync();
+
+            // Assert
+            await act.Should().ThrowAsync<RpcException>()
+                .WithMessage("RPC error -1: JSON-RPC response must contain exactly one of result or error.");
+        }
+
+        [Test]
+        public async Task ResultAndError_ThrowsRpcException()
+        {
+            // Arrange
+            var client = Client(
+                "{\"jsonrpc\":\"2.0\",\"result\":123,\"error\":{\"code\":-1,\"message\":\"bad\"},\"id\":1}");
+
+            // Act
+            var act = async () => await client.GetSlotAsync();
+
+            // Assert
+            await act.Should().ThrowAsync<RpcException>()
+                .WithMessage("RPC error -1: JSON-RPC response must contain exactly one of result or error.");
+        }
+
+        [Test]
         public async Task HttpError_ThrowsHttpRequestException()
         {
             // Arrange

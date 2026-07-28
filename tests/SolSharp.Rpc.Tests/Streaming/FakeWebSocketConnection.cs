@@ -10,7 +10,13 @@ internal sealed class FakeWebSocketConnection : IWebSocketConnection
 
     public List<string> Sent { get; } = [];
 
-    public Task ConnectAsync(Uri uri, CancellationToken cancellationToken) => Task.CompletedTask;
+    public int ConnectCount { get; private set; }
+
+    public Task ConnectAsync(Uri uri, CancellationToken cancellationToken)
+    {
+        ConnectCount++;
+        return Task.CompletedTask;
+    }
 
     public ValueTask SendAsync(string text, CancellationToken cancellationToken)
     {

@@ -48,15 +48,26 @@ public sealed class SolanaWsClient : IAsyncDisposable
     }
 
     /// <summary>Creates a client over a real <see cref="System.Net.WebSockets.ClientWebSocket"/>.</summary>
-    /// <param name="options">Connection options, including the auto-reconnect policy.</param>
+    /// <param name="options">Connection, buffering, and auto-reconnect options.</param>
     /// <param name="loggerFactory">Optional factory for connection/reconnection diagnostics; no logging when null.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">A size, capacity, or timeout option is invalid.</exception>
     public SolanaWsClient(SolanaWsClientOptions options, ILoggerFactory? loggerFactory = null)
-        : this(() => new ClientWebSocketConnection(), options, loggerFactory)
+        : this(() => new ClientWebSocketConnection(options.MaxMessageSizeBytes), options, loggerFactory)
     {
     }
 
     internal SolanaWsClient(Func<IWebSocketConnection> connectionFactory, SolanaWsClientOptions options, ILoggerFactory? loggerFactory = null)
     {
+        ArgumentNullException.ThrowIfNull(connectionFactory);
+        ArgumentNullException.ThrowIfNull(options);
+        if (options.MaxMessageSizeBytes <= 0)
+            throw new ArgumentOutOfRangeException(nameof(options), "Maximum message size must be positive.");
+        if (options.SubscriptionBufferCapacity <= 0)
+            throw new ArgumentOutOfRangeException(nameof(options), "Subscription buffer capacity must be positive.");
+        if (options.ReceiveTimeout != Timeout.InfiniteTimeSpan && options.ReceiveTimeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(options), "Receive timeout must be positive or infinite.");
+
         _connectionFactory = connectionFactory;
         _options = options;
         _logger = loggerFactory?.CreateLogger<SolanaWsClient>() ?? NullLogger<SolanaWsClient>.Instance;
@@ -154,7 +165,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
     {
-        var sink = new SubscriptionSink<RpcContextValue<LogInfo>>();
+        var sink = CreateSubscriptionSink<RpcContextValue<LogInfo>>();
         object[] parameters = [new LogsFilter { Mentions = [program] }, new CommitmentConfig { Commitment = commitment }];
         var subscription = await RegisterAsync("logsSubscribe", parameters, "logsUnsubscribe", sink, cancellationToken);
 
@@ -179,7 +190,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
     {
-        var sink = new SubscriptionSink<RpcContextValue<AccountInfo>>();
+        var sink = CreateSubscriptionSink<RpcContextValue<AccountInfo>>();
         object[] parameters = [account, new AccountInfoConfig { Encoding = "base64", Commitment = commitment }];
         var subscription = await RegisterAsync("accountSubscribe", parameters, "accountUnsubscribe", sink, cancellationToken);
 
@@ -203,7 +214,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
     {
-        var sink = new SubscriptionSink<RpcContextValue<ParsedAccountInfo>>();
+        var sink = CreateSubscriptionSink<RpcContextValue<ParsedAccountInfo>>();
         object[] parameters = [account, new AccountInfoConfig { Encoding = "jsonParsed", Commitment = commitment }];
         var subscription = await RegisterAsync("accountSubscribe", parameters, "accountUnsubscribe", sink, cancellationToken);
 
@@ -231,7 +242,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         IReadOnlyList<AccountFilter>? filters = null,
         CancellationToken cancellationToken = default)
     {
-        var sink = new SubscriptionSink<RpcContextValue<ProgramAccount>>();
+        var sink = CreateSubscriptionSink<RpcContextValue<ProgramAccount>>();
         object[] parameters =
         [
             program,
@@ -289,7 +300,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         Commitment commitment,
         CancellationToken cancellationToken)
     {
-        var sink = new SubscriptionSink<RpcContextValue<BlockNotification>>();
+        var sink = CreateSubscriptionSink<RpcContextValue<BlockNotification>>();
         object[] parameters =
         [
             filter,
@@ -350,7 +361,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         Commitment commitment,
         CancellationToken cancellationToken)
     {
-        var sink = new SubscriptionSink<RpcContextValue<ParsedBlockNotification>>();
+        var sink = CreateSubscriptionSink<RpcContextValue<ParsedBlockNotification>>();
         object[] parameters =
         [
             filter,
@@ -386,7 +397,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
     {
-        var sink = new SubscriptionSink<RpcContextValue<SignatureNotification>>();
+        var sink = CreateSubscriptionSink<RpcContextValue<SignatureNotification>>();
         object[] parameters = [signature, new CommitmentConfig { Commitment = commitment }];
         var subscription = await RegisterAsync("signatureSubscribe", parameters, "signatureUnsubscribe", sink, cancellationToken);
 
@@ -440,7 +451,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         string unsubscribeMethod,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var sink = new SubscriptionSink<T>();
+        var sink = CreateSubscriptionSink<T>();
         var subscription = await RegisterAsync(subscribeMethod, subscribeParams, unsubscribeMethod, sink, cancellationToken);
 
         try
@@ -591,7 +602,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         {
             while (true)
             {
-                var message = await connection.ReceiveAsync(token);
+                var message = await ReceiveWithTimeoutAsync(connection, token);
                 if (message is null)
                     return null;
 
@@ -605,6 +616,26 @@ public sealed class SolanaWsClient : IAsyncDisposable
         catch (Exception exception)
         {
             return exception;
+        }
+    }
+
+    private async ValueTask<string?> ReceiveWithTimeoutAsync(
+        IWebSocketConnection connection,
+        CancellationToken cancellationToken)
+    {
+        if (_options.ReceiveTimeout == Timeout.InfiniteTimeSpan)
+            return await connection.ReceiveAsync(cancellationToken);
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(_options.ReceiveTimeout);
+        try
+        {
+            return await connection.ReceiveAsync(timeout.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException(
+                $"No complete WebSocket message was received within {_options.ReceiveTimeout}.");
         }
     }
 
@@ -836,6 +867,9 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
     private readonly record struct PendingSubscribe(TaskCompletionSource<long> Acked, Subscription Subscription);
 
+    private SubscriptionSink<T> CreateSubscriptionSink<T>()
+        => new(_options.SubscriptionBufferCapacity);
+
     private sealed class Subscription(
         long localId,
         string subscribeMethod,
@@ -867,25 +901,37 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
     private sealed class SubscriptionSink<T> : ISubscriptionSink
     {
-        private readonly Channel<T> _channel = Channel.CreateUnbounded<T>(new UnboundedChannelOptions
-        {
-            SingleWriter = false,
-            SingleReader = true
-        });
+        private readonly Channel<T> _channel;
+        private readonly int _capacity;
 
         // Resolved once per sink so an unregistered notification type fails at subscribe time, not on
-        // the first delivery deep inside the receive loop.
+        // first delivery deep inside the receive loop.
         private readonly JsonTypeInfo<T> _typeInfo = RpcJson.TypeInfo<T>();
+
+        public SubscriptionSink(int capacity)
+        {
+            _capacity = capacity;
+            _channel = Channel.CreateBounded<T>(new BoundedChannelOptions(capacity)
+            {
+                SingleWriter = false,
+                SingleReader = true,
+                FullMode = BoundedChannelFullMode.Wait
+            });
+        }
 
         public ChannelReader<T> Reader => _channel.Reader;
 
         public void Deliver(JsonElement result)
         {
             var value = result.Deserialize(_typeInfo);
-            if (value is not null)
-                _channel.Writer.TryWrite(value);
+            if (value is not null && !_channel.Writer.TryWrite(value))
+            {
+                throw new InvalidOperationException(
+                    $"Subscription notification buffer exceeded its capacity of {_capacity} item(s).");
+            }
         }
 
         public void Complete(Exception? exception) => _channel.Writer.TryComplete(exception);
     }
+
 }

@@ -18,4 +18,23 @@ public sealed record SolanaWsClientOptions
 
     /// <summary>The maximum number of reconnect attempts before giving up; <c>0</c> (the default) retries forever.</summary>
     public int MaxReconnectAttempts { get; init; }
+
+    /// <summary>
+    /// The maximum encoded size of one incoming WebSocket message, in bytes. The default is 64 MiB.
+    /// Messages over the limit close the connection with <c>MessageTooBig</c>.
+    /// </summary>
+    public int MaxMessageSizeBytes { get; init; } = 64 * 1024 * 1024;
+
+    /// <summary>
+    /// The maximum number of unread notifications buffered per subscription. The default is 1,024.
+    /// Exceeding the capacity faults and unsubscribes that subscription instead of growing memory without bound.
+    /// </summary>
+    public int SubscriptionBufferCapacity { get; init; } = 1024;
+
+    /// <summary>
+    /// The maximum time to receive the next complete WebSocket message. The default is five minutes.
+    /// A timeout treats the connection as dropped so auto-reconnect can recover a silent half-open socket.
+    /// Set to <see cref="Timeout.InfiniteTimeSpan"/> to disable the timeout.
+    /// </summary>
+    public TimeSpan ReceiveTimeout { get; init; } = TimeSpan.FromMinutes(5);
 }

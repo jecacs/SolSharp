@@ -87,7 +87,7 @@ dotnet add package SolSharp
 | ------------------ | ---------------------------------------------------- |
 | `SolSharp.Core`    | Primitives, encoding, JSON, program/sysvar constants |
 | `SolSharp.Wallet`  | Ed25519 keys, key parsing, signing and verification  |
-| `SolSharp.Rpc`     | Full HTTP JSON-RPC read surface + WebSocket streaming + DI |
+| `SolSharp.Rpc`     | Full HTTP JSON-RPC read surface + bounded, auto-reconnecting WebSocket streaming + DI |
 | `SolSharp.Programs`| Instructions (System/Token/ATA/Memo/Compute Budget/ALT) + transaction building |
 
 Keeping the split in the source means the layering stays compiler-enforced — dependencies point downward

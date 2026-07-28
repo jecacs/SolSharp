@@ -16,6 +16,23 @@ version (on the earlier 0.x releases, minor versions could carry them).
   `TryCreateProgramAddress`, and the explicit `Keypair` factory methods. README's `TransactionBuilder`
   bullet now names `BuildMessage` / `BuildMessageV0`.
 
+### Changed
+
+- Updated `Microsoft.Extensions.Http.Resilience` from 8.0.0 to 8.10.0, removing the
+  transitive vulnerable `System.Text.Json 8.0.0` dependency.
+
+### Fixed
+
+- Hardened the WebSocket transport with bounded message sizes, text-frame validation, a complete
+  close handshake, bounded disposal, and receive timeouts that recover silent half-open connections.
+- Bounded each subscription notification buffer; a consumer that falls behind is now faulted and
+  unsubscribed instead of allowing unbounded memory growth.
+- Validated JSON-RPC response versions, request ids, and the exclusive `result` / `error` envelope,
+  preventing malformed value-type responses from silently becoming `0`, `false`, or another default.
+- Rejected malformed transaction data tuples and unexpected encodings instead of treating them as
+  nullable or decoding non-base64 payloads.
+- Included the Core, Programs, RPC, and Wallet XML documentation files in the bundled NuGet package.
+
 ## [1.2.0]
 
 ### Added

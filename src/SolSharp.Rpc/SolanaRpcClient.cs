@@ -1232,11 +1232,18 @@ public class SolanaRpcClient(HttpClient httpClient)
         response.EnsureSuccessStatusCode();
 
         var payload = await response.Content
-            .ReadFromJsonAsync(RpcJson.TypeInfo<RpcResponse<T>>(), cancellationToken) ?? throw new RpcException(-1, "Empty response body.");
+            .ReadFromJsonAsync(RpcJson.TypeInfo<RpcResponse>(), cancellationToken) ?? throw new RpcException(-1, "Empty response body.");
+
+        if (payload.JsonRpc != "2.0")
+            throw new RpcException(-1, "Invalid JSON-RPC response version.");
+        if (payload.Id != request.Id)
+            throw new RpcException(-1, "JSON-RPC response id did not match the request id.");
+        if (payload.HasResult == (payload.Error is not null))
+            throw new RpcException(-1, "JSON-RPC response must contain exactly one of result or error.");
 
         if (payload.Error is not null)
             throw new RpcException(payload.Error.Code, payload.Error.Message);
 
-        return payload.Result!;
+        return payload.Result.Deserialize(RpcJson.TypeInfo<T>())!;
     }
 }

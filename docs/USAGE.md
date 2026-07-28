@@ -85,7 +85,13 @@ Or let the container manage it: `AddSolanaWs` registers `SolanaWsClient` as a si
 registered `ILoggerFactory` and disposes it on shutdown. You still open the connection yourself:
 
 ```csharp
-services.AddSolanaWs();   // or: services.AddSolanaWs(new SolanaWsClientOptions { MaxReconnectAttempts = 10 });
+services.AddSolanaWs(new SolanaWsClientOptions
+{
+    MaxReconnectAttempts = 10,
+    ReceiveTimeout = TimeSpan.FromMinutes(2),
+    MaxMessageSizeBytes = 64 * 1024 * 1024,
+    SubscriptionBufferCapacity = 1024
+});
 
 var ws = provider.GetRequiredService<SolanaWsClient>();
 await ws.ConnectAsync(new Uri("wss://api.mainnet-beta.solana.com"));
@@ -757,11 +763,16 @@ await foreach (var vote in ws.SubscribeVotesAsync())
 
 The reconnect policy is tunable through `SolanaWsClientOptions`: `AutoReconnect` (on by default), the
 `ReconnectInitialDelay` → `ReconnectMaxDelay` exponential backoff, and `MaxReconnectAttempts` (`0` retries
-forever). When the attempts are exhausted — or auto-reconnect is off — every subscription completes with the
-connection error. Failure semantics are per-subscription otherwise: a subscribe the node rejects throws
-`InvalidOperationException` carrying the node's error code and message, and a notification that fails to
-decode faults only its own subscription while the connection and the other subscriptions keep going.
-Disposing the client completes every channel and stream.
+forever). `ReceiveTimeout` detects a silent half-open connection; set it to `Timeout.InfiniteTimeSpan` only
+when liveness is managed externally. When reconnect attempts are exhausted — or auto-reconnect is off — every
+subscription completes with the connection error.
+
+Incoming data is bounded in both directions: `MaxMessageSizeBytes` rejects an oversized WebSocket message,
+and `SubscriptionBufferCapacity` limits unread notifications per subscription. A subscription whose consumer
+falls behind is faulted and unsubscribed rather than consuming memory without bound. Other subscriptions and
+the shared connection continue running. A subscribe the node rejects throws `InvalidOperationException`
+carrying the node error code and message; a notification that fails to decode also faults only its own
+subscription. Disposing the client completes every channel and stream.
 
 ## Confirming a transaction
 

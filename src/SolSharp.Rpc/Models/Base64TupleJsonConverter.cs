@@ -16,10 +16,21 @@ internal sealed class Base64TupleJsonConverter : JsonConverter<byte[]>
 
         using var document = JsonDocument.ParseValue(ref reader);
         var root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Array || root.GetArrayLength() != 2)
+            throw new JsonException("Expected base64 transaction data as a two-element array.");
+        if (root[0].ValueKind != JsonValueKind.String)
+            throw new JsonException("Expected base64 transaction data as a string.");
+        if (root[1].ValueKind != JsonValueKind.String || root[1].GetString() != "base64")
+            throw new JsonException("Expected transaction encoding base64.");
 
-        return root.ValueKind == JsonValueKind.Array && root.GetArrayLength() > 0
-            ? Convert.FromBase64String(root[0].GetString() ?? string.Empty)
-            : null;
+        try
+        {
+            return Convert.FromBase64String(root[0].GetString()!);
+        }
+        catch (FormatException exception)
+        {
+            throw new JsonException("Transaction data is not valid base64.", exception);
+        }
     }
 
     public override void Write(Utf8JsonWriter writer, byte[] value, JsonSerializerOptions options)

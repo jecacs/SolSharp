@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FluentAssertions;
 using NUnit.Framework;
 using SolSharp.Core.Primitives;
@@ -109,6 +110,36 @@ public static class SolanaRpcClientGetTransactionTests
                 .Which.Should().Be(PublicKey.Parse("So11111111111111111111111111111111111111112"));
             meta.LoadedAddresses.Readonly.Should().ContainSingle()
                 .Which.Should().Be(PublicKey.Parse("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"));
+        }
+
+        [Test]
+        public async Task UnexpectedTransactionEncoding_ThrowsJsonException()
+        {
+            // Arrange
+            var (client, _) = Make(
+                "{\"jsonrpc\":\"2.0\",\"result\":{\"slot\":100,\"transaction\":[\"AQID\",\"base58\"],\"meta\":null},\"id\":1}");
+
+            // Act
+            var act = async () => await client.GetTransactionAsync("Sig1111");
+
+            // Assert
+            await act.Should().ThrowAsync<JsonException>()
+                .WithMessage("*base64*");
+        }
+
+        [Test]
+        public async Task IncompleteTransactionTuple_ThrowsJsonException()
+        {
+            // Arrange
+            var (client, _) = Make(
+                "{\"jsonrpc\":\"2.0\",\"result\":{\"slot\":100,\"transaction\":[\"AQID\"],\"meta\":null},\"id\":1}");
+
+            // Act
+            var act = async () => await client.GetTransactionAsync("Sig1111");
+
+            // Assert
+            await act.Should().ThrowAsync<JsonException>()
+                .WithMessage("*two-element array*");
         }
     }
 }

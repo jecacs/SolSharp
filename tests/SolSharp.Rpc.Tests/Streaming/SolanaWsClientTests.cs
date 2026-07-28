@@ -706,6 +706,113 @@ public static class SolanaWsClientTests
     }
 
     [TestFixture]
+    public sealed class SubscriptionBuffer
+    {
+        [Test]
+        public async Task CapacityExceeded_FaultsSubscription()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            var options = new SolanaWsClientOptions { SubscriptionBufferCapacity = 1 };
+            await using var client = new SolanaWsClient(() => fake, options);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            await using var subscription = client.SubscribeSlotsAsync().GetAsyncEnumerator();
+            var firstMove = subscription.MoveNextAsync();
+            await WaitUntil(() => fake.Sent.Count > 0);
+            fake.PushFromServer("{\"jsonrpc\":\"2.0\",\"result\":42,\"id\":1}");
+            fake.PushFromServer(
+                "{\"jsonrpc\":\"2.0\",\"method\":\"slotNotification\",\"params\":{\"subscription\":42,\"result\":{\"parent\":10,\"root\":9,\"slot\":11}}}");
+            (await firstMove).Should().BeTrue();
+
+            // Act
+            fake.PushFromServer(
+                "{\"jsonrpc\":\"2.0\",\"method\":\"slotNotification\",\"params\":{\"subscription\":42,\"result\":{\"parent\":11,\"root\":10,\"slot\":12}}}");
+            fake.PushFromServer(
+                "{\"jsonrpc\":\"2.0\",\"method\":\"slotNotification\",\"params\":{\"subscription\":42,\"result\":{\"parent\":12,\"root\":11,\"slot\":13}}}");
+            await WaitUntil(() => fake.Sent.Exists(message => message.Contains("\"method\":\"slotUnsubscribe\"")));
+            (await subscription.MoveNextAsync()).Should().BeTrue();
+            var act = async () => await subscription.MoveNextAsync();
+
+            // Assert
+            await act.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("*capacity*");
+        }
+    }
+
+    [TestFixture]
+    public sealed class ReceiveTimeout
+    {
+        [Test]
+        public async Task SilentConnection_Reconnects()
+        {
+            // Arrange
+            var first = new FakeWebSocketConnection();
+            var second = new FakeWebSocketConnection();
+            var index = -1;
+            var options = new SolanaWsClientOptions
+            {
+                ReceiveTimeout = TimeSpan.FromMilliseconds(20),
+                ReconnectInitialDelay = TimeSpan.FromMilliseconds(1),
+                ReconnectMaxDelay = TimeSpan.FromMilliseconds(1),
+                MaxReconnectAttempts = 1
+            };
+            await using var client = new SolanaWsClient(
+                () => Interlocked.Increment(ref index) == 0 ? first : second,
+                options);
+
+            // Act
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            await WaitUntil(() => second.ConnectCount == 1);
+
+            // Assert
+            second.ConnectCount.Should().Be(1);
+        }
+    }
+
+    [TestFixture]
+    public sealed class Constructor
+    {
+        [Test]
+        public void NonPositiveMessageLimit_ThrowsArgumentOutOfRangeException()
+        {
+            // Arrange
+            var options = new SolanaWsClientOptions { MaxMessageSizeBytes = 0 };
+
+            // Act
+            Action act = () => _ = new SolanaWsClient(options);
+
+            // Assert
+            act.Should().Throw<ArgumentOutOfRangeException>();
+        }
+
+        [Test]
+        public void NonPositiveBufferCapacity_ThrowsArgumentOutOfRangeException()
+        {
+            // Arrange
+            var options = new SolanaWsClientOptions { SubscriptionBufferCapacity = 0 };
+
+            // Act
+            Action act = () => _ = new SolanaWsClient(options);
+
+            // Assert
+            act.Should().Throw<ArgumentOutOfRangeException>();
+        }
+
+        [Test]
+        public void NonPositiveReceiveTimeout_ThrowsArgumentOutOfRangeException()
+        {
+            // Arrange
+            var options = new SolanaWsClientOptions { ReceiveTimeout = TimeSpan.Zero };
+
+            // Act
+            Action act = () => _ = new SolanaWsClient(options);
+
+            // Assert
+            act.Should().Throw<ArgumentOutOfRangeException>();
+        }
+    }
+
+    [TestFixture]
     public sealed class Connect
     {
         [Test]
