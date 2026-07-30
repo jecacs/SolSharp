@@ -222,7 +222,12 @@ public sealed class Message : ITransactionMessage
     /// <summary>Parses a legacy message from its wire bytes.</summary>
     /// <param name="data">The serialized message (no version prefix).</param>
     /// <returns>The parsed message.</returns>
-    /// <exception cref="FormatException">The data is truncated, or a compact-u16 length in it is malformed.</exception>
+    /// <exception cref="FormatException">
+    /// The data is truncated, a compact-u16 length in it is malformed, or the message breaks a rule
+    /// Solana's sanitize enforces: header counts that overlap the account list or leave no writable
+    /// fee-payer signer, an instruction whose program id is the fee payer, or an out-of-range program id
+    /// or account index.
+    /// </exception>
     public static Message Deserialize(ReadOnlySpan<byte> data)
     {
         try
@@ -238,6 +243,10 @@ public sealed class Message : ITransactionMessage
             offset += PublicKey.Length;
 
             var instructions = MessageWire.ReadInstructions(data, ref offset);
+
+            // Mirror Solana's sanitize so a message the network would refuse never parses successfully.
+            MessageWire.SanitizeHeader(requiredSignatures, readonlySignedAccounts, readonlyUnsignedAccounts, accountKeys.Length);
+            MessageWire.SanitizeInstructions(instructions, accountKeys.Length, accountKeys.Length);
 
             return new Message(requiredSignatures, readonlySignedAccounts, readonlyUnsignedAccounts, accountKeys, recentBlockhash, instructions);
         }
