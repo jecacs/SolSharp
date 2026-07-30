@@ -123,6 +123,24 @@ public static class MessageTests
     [TestFixture]
     public sealed class Deserialize
     {
+        // Wire offsets in SerializedTransfer(): the 3 header bytes, the key count, three 32-byte keys,
+        // and the blockhash put the instruction's program id index at 133 and its account indexes at
+        // 135 (the payer) and 136 (the recipient).
+        private const int ProgramIdIndexOffset = 133;
+        private const int SecondAccountIndexOffset = 136;
+
+        // Keys [Key(1), Key(2), Key(9)], header (1, 0, 1), one instruction: program index 2, accounts [0, 1].
+        private static byte[] SerializedTransfer()
+        {
+            var instruction = new Instruction
+            {
+                ProgramId = Key(9),
+                Accounts = [AccountMeta.WritableSigner(Key(1)), AccountMeta.Writable(Key(2))],
+                Data = [7]
+            };
+            return Message.Compile(Key(1), Key(8).ToString(), [instruction]).Serialize();
+        }
+
         [Test]
         public void TruncatedData_ThrowsFormatException()
         {
@@ -136,6 +154,93 @@ public static class MessageTests
 
             // Assert
             act.Should().Throw<FormatException>();
+        }
+
+        [Test]
+        public void ValidCompiledMessage_RoundTrips()
+        {
+            // Arrange
+            var data = SerializedTransfer();
+
+            // Act
+            var message = Message.Deserialize(data);
+
+            // Assert
+            message.Serialize().Should().Equal(data);
+        }
+
+        [Test]
+        public void HeaderAreasOverlapAccountKeys_ThrowsFormatException()
+        {
+            // Arrange: 1 signer plus 3 read-only unsigned accounts cannot fit the 3 account keys.
+            var data = SerializedTransfer();
+            data[2] = 3;
+
+            // Act
+            Action act = () => Message.Deserialize(data);
+
+            // Assert
+            act.Should().Throw<FormatException>().WithMessage("*only 3 account key(s)*");
+        }
+
+        // Solana requires readonlySignedAccounts < requiredSignatures so at least one signer - the fee
+        // payer - stays writable; (0, 0) additionally covers a message demanding no signatures at all.
+        [TestCase((byte)1, (byte)1)]
+        [TestCase((byte)0, (byte)0)]
+        public void NoWritableFeePayerSigner_ThrowsFormatException(byte requiredSignatures, byte readonlySigned)
+        {
+            // Arrange
+            var data = SerializedTransfer();
+            data[0] = requiredSignatures;
+            data[1] = readonlySigned;
+
+            // Act
+            Action act = () => Message.Deserialize(data);
+
+            // Assert
+            act.Should().Throw<FormatException>().WithMessage("*fee payer must be a writable signer*");
+        }
+
+        [Test]
+        public void ProgramIdIndexOutOfRange_ThrowsFormatException()
+        {
+            // Arrange: point the instruction's program id past the 3 account keys.
+            var data = SerializedTransfer();
+            data[ProgramIdIndexOffset] = 3;
+
+            // Act
+            Action act = () => Message.Deserialize(data);
+
+            // Assert
+            act.Should().Throw<FormatException>().WithMessage("*program id index 3*");
+        }
+
+        [Test]
+        public void ProgramIdIndexIsFeePayer_ThrowsFormatException()
+        {
+            // Arrange: point the instruction's program id at account 0, the fee payer.
+            var data = SerializedTransfer();
+            data[ProgramIdIndexOffset] = 0;
+
+            // Act
+            Action act = () => Message.Deserialize(data);
+
+            // Assert
+            act.Should().Throw<FormatException>().WithMessage("*a program cannot be the fee payer*");
+        }
+
+        [Test]
+        public void AccountIndexOutOfRange_ThrowsFormatException()
+        {
+            // Arrange: point the instruction's second account past the 3 account keys.
+            var data = SerializedTransfer();
+            data[SecondAccountIndexOffset] = 3;
+
+            // Act
+            Action act = () => Message.Deserialize(data);
+
+            // Assert
+            act.Should().Throw<FormatException>().WithMessage("*account index 3*");
         }
     }
 }

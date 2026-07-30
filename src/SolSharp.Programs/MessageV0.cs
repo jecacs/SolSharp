@@ -391,8 +391,11 @@ public sealed class MessageV0 : ITransactionMessage
     /// <param name="data">The serialized v0 message.</param>
     /// <returns>The parsed message.</returns>
     /// <exception cref="FormatException">
-    /// The data is not a versioned message, carries a version other than 0, is truncated, or a compact-u16
-    /// length is malformed.
+    /// The data is not a versioned message, carries a version other than 0, is truncated, a compact-u16
+    /// length is malformed, or the message breaks a rule Solana's sanitize enforces: header counts that
+    /// overlap the static account list or leave no writable fee-payer signer, an address table lookup that
+    /// loads no accounts, more than 256 addressable accounts, an instruction whose program id is the fee
+    /// payer or a lookup-loaded account, or an out-of-range program id or account index.
     /// </exception>
     public static MessageV0 Deserialize(ReadOnlySpan<byte> data)
     {
@@ -444,6 +447,31 @@ public sealed class MessageV0 : ITransactionMessage
                     ReadonlyIndexes = readonlyIndexes
                 };
             }
+
+            // Mirror Solana's v0 sanitize so a message the network would refuse never parses successfully.
+            MessageWire.SanitizeHeader(requiredSignatures, readonlySignedAccounts, readonlyUnsignedAccounts, accountKeys.Length);
+
+            var loadedAccounts = 0;
+            foreach (var lookup in addressTableLookups)
+            {
+                var lookupAccounts = lookup.WritableIndexes.Length + lookup.ReadonlyIndexes.Length;
+                if (lookupAccounts == 0)
+                    throw new FormatException($"Address table lookup {lookup.AccountKey} loads no accounts; every lookup must load at least one.");
+
+                loadedAccounts += lookupAccounts;
+            }
+
+            // Unreachable after the header checks (they already force a writable signer), but mirrored
+            // from Solana's sanitize so the rule survives any reordering of the checks above.
+            if (accountKeys.Length == 0)
+                throw new FormatException("The message has no static account keys.");
+
+            var addressableAccounts = accountKeys.Length + loadedAccounts;
+            if (addressableAccounts > MaxAccounts)
+                throw new FormatException(
+                    $"The message addresses {addressableAccounts} accounts (static plus lookup-loaded); indices are single bytes, so at most {MaxAccounts} are addressable.");
+
+            MessageWire.SanitizeInstructions(instructions, accountKeys.Length, addressableAccounts);
 
             return new MessageV0(requiredSignatures, readonlySignedAccounts, readonlyUnsignedAccounts, accountKeys, recentBlockhash, instructions, addressTableLookups);
         }

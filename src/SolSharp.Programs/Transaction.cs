@@ -47,8 +47,9 @@ public sealed class Transaction
     /// <param name="data">The serialized transaction.</param>
     /// <returns>The parsed transaction, carrying its signatures.</returns>
     /// <exception cref="FormatException">
-    /// The data is truncated, a compact-u16 length in it is malformed, the message is invalid, or the
-    /// signature count does not match the message's required signatures.
+    /// The data is truncated, a compact-u16 length in it is malformed, the message is invalid or breaks
+    /// one of Solana's sanitize rules, or the signature count does not match the message's required
+    /// signatures.
     /// </exception>
     public static Transaction Deserialize(ReadOnlySpan<byte> data)
     {
