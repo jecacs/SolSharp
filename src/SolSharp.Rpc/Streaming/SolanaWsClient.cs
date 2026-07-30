@@ -445,6 +445,9 @@ public sealed class SolanaWsClient : IAsyncDisposable
         }
     }
 
+    private SubscriptionSink<T> CreateSubscriptionSink<T>()
+        => new(_options.SubscriptionBufferCapacity);
+
     private async IAsyncEnumerable<T> SubscribeAsync<T>(
         string subscribeMethod,
         object[] subscribeParams,
@@ -692,6 +695,10 @@ public sealed class SolanaWsClient : IAsyncDisposable
             if (token.IsCancellationRequested || Volatile.Read(ref _connectionGeneration) != generation)
                 return;
 
+            // The consumer may have gone away while the connection was down; do not replay for nobody.
+            if (!_active.ContainsKey(subscription.LocalId))
+                continue;
+
             try
             {
                 await EstablishAsync(subscription, token);
@@ -723,6 +730,16 @@ public sealed class SolanaWsClient : IAsyncDisposable
                     pending.Subscription.Established = true;
                     _byServerId[subscriptionId] = pending.Subscription;
                     pending.Acked.TrySetResult(subscriptionId);
+
+                    // The consumer may have gone away while this (re)subscribe was in flight - during a
+                    // replay its cancellation saw ServerId still 0 and could not unsubscribe, so releasing
+                    // the server-side subscription falls to the ack; otherwise it would be resurrected
+                    // with nobody consuming it and nothing ever unsubscribing it.
+                    if (!_active.ContainsKey(pending.Subscription.LocalId) &&
+                        _byServerId.TryRemove(subscriptionId, out _))
+                    {
+                        _ = SendUnsubscribeAsync(pending.Subscription.UnsubscribeMethod, subscriptionId);
+                    }
                 }
                 else
                 {
@@ -789,10 +806,14 @@ public sealed class SolanaWsClient : IAsyncDisposable
         _logger.LogWarning(
             exception, "Solana WS could not decode a '{Method}' notification; faulting that subscription", subscription.SubscribeMethod);
 
+        // Drop the routing entry even when the subscription is already gone from _active (a cancel racing
+        // this fault): a late Cancel may have skipped it, and a stale entry would route notifications to a
+        // completed sink forever.
+        _byServerId.TryRemove(subscription.ServerId, out _);
+
         if (!_active.TryRemove(subscription.LocalId, out _))
             return;
 
-        _byServerId.TryRemove(subscription.ServerId, out _);
         subscription.Sink.Complete(exception);
         _ = SendUnsubscribeAsync(subscription.UnsubscribeMethod, subscription.ServerId);
     }
@@ -867,9 +888,6 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
     private readonly record struct PendingSubscribe(TaskCompletionSource<long> Acked, Subscription Subscription);
 
-    private SubscriptionSink<T> CreateSubscriptionSink<T>()
-        => new(_options.SubscriptionBufferCapacity);
-
     private sealed class Subscription(
         long localId,
         string subscribeMethod,
@@ -903,6 +921,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
     {
         private readonly Channel<T> _channel;
         private readonly int _capacity;
+        private volatile bool _completed;
 
         // Resolved once per sink so an unregistered notification type fails at subscribe time, not on
         // first delivery deep inside the receive loop.
@@ -924,14 +943,22 @@ public sealed class SolanaWsClient : IAsyncDisposable
         public void Deliver(JsonElement result)
         {
             var value = result.Deserialize(_typeInfo);
-            if (value is not null && !_channel.Writer.TryWrite(value))
-            {
-                throw new InvalidOperationException(
-                    $"Subscription notification buffer exceeded its capacity of {_capacity} item(s).");
-            }
+            if (value is null || _channel.Writer.TryWrite(value))
+                return;
+
+            // TryWrite also fails on a channel that was already completed - a notification racing the
+            // subscription's cancellation or fault - which is a benign late delivery, not an overflow.
+            if (_completed)
+                return;
+
+            throw new InvalidOperationException(
+                $"Subscription notification buffer exceeded its capacity of {_capacity} item(s).");
         }
 
-        public void Complete(Exception? exception) => _channel.Writer.TryComplete(exception);
+        public void Complete(Exception? exception)
+        {
+            _completed = true;
+            _channel.Writer.TryComplete(exception);
+        }
     }
-
 }

@@ -136,6 +136,9 @@ public static class ClientWebSocketConnectionTests
 
         public ValueTask<ValueWebSocketReceiveResult> ReceiveAsync(Memory<byte> buffer, CancellationToken cancellationToken)
         {
+            if (_frames.Count == 0)
+                throw new InvalidOperationException("The connection read past the queued frames; push more frames or end the message.");
+
             var frame = _frames.Dequeue();
             frame.Data.CopyTo(buffer);
             if (frame.Type == WebSocketMessageType.Close)

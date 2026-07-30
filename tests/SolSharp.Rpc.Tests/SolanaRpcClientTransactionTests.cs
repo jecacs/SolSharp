@@ -37,6 +37,20 @@ public static class SolanaRpcClientTransactionTests
         }
 
         [Test]
+        public async Task DefaultsPreflightCommitmentToConfirmed()
+        {
+            // Arrange: the node's own preflight default is finalized, where a blockhash fetched at the
+            // client's confirmed default may not exist yet - the pairing must be coherent out of the box.
+            var (client, handler) = Make("""{"jsonrpc":"2.0","result":"Sig2222222222222222222222222222222222222222","id":1}""");
+
+            // Act
+            await client.SendTransactionAsync([1, 2, 3]);
+
+            // Assert
+            handler.CapturedRequestBody.Should().Contain("\"preflightCommitment\":\"confirmed\"");
+        }
+
+        [Test]
         public async Task SendsOptionsWhenProvided()
         {
             // Arrange
@@ -91,6 +105,20 @@ public static class SolanaRpcClientTransactionTests
 
             // Assert
             result.IsError.Should().BeTrue();
+        }
+
+        [Test]
+        public async Task DefaultsCommitmentToConfirmed()
+        {
+            // Arrange
+            var (client, handler) = Make(
+                """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"err":null,"logs":[],"unitsConsumed":0}},"id":1}""");
+
+            // Act
+            await client.SimulateTransactionAsync([1, 2, 3]);
+
+            // Assert
+            handler.CapturedRequestBody.Should().Contain("\"commitment\":\"confirmed\"");
         }
 
         [Test]

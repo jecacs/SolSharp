@@ -32,9 +32,13 @@ public sealed record SolanaWsClientOptions
     public int SubscriptionBufferCapacity { get; init; } = 1024;
 
     /// <summary>
-    /// The maximum time to receive the next complete WebSocket message. The default is five minutes.
-    /// A timeout treats the connection as dropped so auto-reconnect can recover a silent half-open socket.
-    /// Set to <see cref="Timeout.InfiniteTimeSpan"/> to disable the timeout.
+    /// The maximum time to receive the next complete WebSocket message before the connection is treated
+    /// as dropped, letting auto-reconnect replace a silently half-open socket. Disabled by default
+    /// (<see cref="Timeout.InfiniteTimeSpan"/>): only data messages reset the timer (.NET 8 surfaces no
+    /// ping/pong liveness signal), so on a connection whose subscriptions are legitimately quiet - an
+    /// account that rarely changes, a pending signature - a timeout would force a reconnect cycle, and a
+    /// notification gap, at every interval. Enable it only when the subscribed traffic is guaranteed to be
+    /// frequent (slot subscriptions, busy programs) and stuck-connection recovery outweighs idle churn.
     /// </summary>
-    public TimeSpan ReceiveTimeout { get; init; } = TimeSpan.FromMinutes(5);
+    public TimeSpan ReceiveTimeout { get; init; } = Timeout.InfiniteTimeSpan;
 }

@@ -11,8 +11,13 @@ public sealed record SimulateTransactionOptions
     /// <summary>Replaces the transaction's recent blockhash with the latest one before simulating. Default <c>false</c>.</summary>
     public bool ReplaceRecentBlockhash { get; init; }
 
-    /// <summary>The commitment the simulation runs at. The node default is used when <c>null</c>.</summary>
-    public Commitment? Commitment { get; init; }
+    /// <summary>
+    /// The commitment the simulation runs at. Defaults to <see cref="Core.Primitives.Commitment.Confirmed"/>
+    /// to match <see cref="SolanaRpcClient.GetLatestBlockhashAsync"/>: at the node default of
+    /// <c>finalized</c> a blockhash fetched at <c>confirmed</c> may not exist yet, failing the simulation
+    /// with <c>BlockhashNotFound</c>. Set to <c>null</c> for the node default.
+    /// </summary>
+    public Commitment? Commitment { get; init; } = Core.Primitives.Commitment.Confirmed;
 
     /// <summary>The minimum slot at which the request may be evaluated.</summary>
     public ulong? MinContextSlot { get; init; }

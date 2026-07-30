@@ -239,22 +239,51 @@ public static class SolanaRpcClientTests
 
             // Assert
             await act.Should().ThrowAsync<RpcException>()
-                .WithMessage("RPC error -1: JSON-RPC response must contain exactly one of result or error.");
+                .WithMessage("RPC error -1: JSON-RPC response contained neither a result nor an error.");
         }
 
         [Test]
-        public async Task ResultAndError_ThrowsRpcException()
+        public async Task ResultAndError_SurfacesTheNodeError()
         {
-            // Arrange
+            // Arrange: some gateways pad an error response with "result": null; the node's error - the
+            // useful diagnostic - must win over envelope strictness.
             var client = Client(
-                "{\"jsonrpc\":\"2.0\",\"result\":123,\"error\":{\"code\":-1,\"message\":\"bad\"},\"id\":1}");
+                "{\"jsonrpc\":\"2.0\",\"result\":null,\"error\":{\"code\":-32005,\"message\":\"Node is behind\"},\"id\":1}");
 
             // Act
             var act = async () => await client.GetSlotAsync();
 
             // Assert
             await act.Should().ThrowAsync<RpcException>()
-                .WithMessage("RPC error -1: JSON-RPC response must contain exactly one of result or error.");
+                .WithMessage("RPC error -32005: Node is behind");
+        }
+
+        [Test]
+        public async Task ErrorWithNullId_SurfacesTheNodeError()
+        {
+            // Arrange: JSON-RPC 2.0 mandates "id": null when the server could not process the request.
+            var client = Client("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32700,\"message\":\"Parse error\"},\"id\":null}");
+
+            // Act
+            var act = async () => await client.GetSlotAsync();
+
+            // Assert
+            await act.Should().ThrowAsync<RpcException>()
+                .WithMessage("RPC error -32700: Parse error");
+        }
+
+        [Test]
+        public async Task EmptyBody_ThrowsRpcException()
+        {
+            // Arrange
+            var client = Client(string.Empty);
+
+            // Act
+            var act = async () => await client.GetSlotAsync();
+
+            // Assert
+            await act.Should().ThrowAsync<RpcException>()
+                .WithMessage("RPC error -1: Empty response body.");
         }
 
         [Test]

@@ -46,8 +46,9 @@ namespace SolSharp.Rpc.Protocol;
 [JsonSerializable(typeof(DataSizeFilter))]
 [JsonSerializable(typeof(LargestAccountsConfig))]
 [JsonSerializable(typeof(BlockProductionConfig))]
-// HTTP response envelopes - the response envelope and every result shape requested by the client.
-[JsonSerializable(typeof(RpcResponse))]
+// HTTP responses - the JSON-RPC error object plus every result shape requested by the client
+// (the envelope itself is walked with a Utf8JsonReader in SolanaRpcClient, not deserialized).
+[JsonSerializable(typeof(RpcError))]
 [JsonSerializable(typeof(RpcContextValue<ulong?>))]
 [JsonSerializable(typeof(RpcContextValue<bool>))]
 [JsonSerializable(typeof(RpcContextValue<SimulateTransactionResult>))]
