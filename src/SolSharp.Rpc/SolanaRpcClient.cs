@@ -1280,6 +1280,7 @@ public class SolanaRpcClient(HttpClient httpClient)
             {
                 reader.Read();
                 version = reader.TokenType == JsonTokenType.String ? reader.GetString() : null;
+                reader.Skip();
             }
             else if (reader.ValueTextEquals("id"u8))
             {
@@ -1287,6 +1288,7 @@ public class SolanaRpcClient(HttpClient httpClient)
                 idMatches = reader.TokenType == JsonTokenType.Number
                     && reader.TryGetInt32(out var id)
                     && id == requestId;
+                reader.Skip();
             }
             else
             {
@@ -1294,6 +1296,10 @@ public class SolanaRpcClient(HttpClient httpClient)
                 reader.Skip();
             }
         }
+
+        // A second top-level value after the envelope means the body is not one JSON-RPC response.
+        if (reader.Read())
+            throw new JsonException("The JSON-RPC response carries trailing content.");
 
         // The node's error is the most useful diagnostic there is, so it outranks envelope strictness:
         // per JSON-RPC 2.0 an unprocessable request is answered with "id": null, and some gateways pad

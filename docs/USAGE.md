@@ -88,7 +88,7 @@ registered `ILoggerFactory` and disposes it on shutdown. You still open the conn
 services.AddSolanaWs(new SolanaWsClientOptions
 {
     MaxReconnectAttempts = 10,
-    ReceiveTimeout = TimeSpan.FromMinutes(2),
+    ReceiveTimeout = TimeSpan.FromMinutes(2),   // opt-in: only for high-frequency subscriptions
     MaxMessageSizeBytes = 64 * 1024 * 1024,
     SubscriptionBufferCapacity = 1024
 });

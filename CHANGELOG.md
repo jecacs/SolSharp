@@ -46,9 +46,9 @@ version (on the earlier 0.x releases, minor versions could carry them).
   envelope error.
 - `Message.Deserialize` and `MessageV0.Deserialize` (and therefore `Transaction.Deserialize`) enforce
   Solana's `sanitize()` rules — header counts that overlap the account list or leave no writable
-  fee-payer signer, program-id and account-index bounds (for v0, program ids must be static keys and
-  never the fee payer), address-table lookups that load no accounts, and the 256-account ceiling — with
-  the rule set verified against solders.
+  fee-payer signer, out-of-range program-id and account indexes, an instruction whose program id is the
+  fee payer, and for v0 additionally: program ids restricted to static keys, address-table lookups that
+  load no accounts, and the 256-account ceiling — with the rule set verified against solders.
 - Rejected malformed transaction data tuples and unexpected encodings instead of treating them as
   nullable or decoding non-base64 payloads.
 - Included the Core, Programs, RPC, and Wallet XML documentation files in the bundled NuGet package.
