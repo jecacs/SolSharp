@@ -490,6 +490,12 @@ public sealed class SolanaWsClient : IAsyncDisposable
         catch
         {
             _active.TryRemove(localId, out _);
+
+            // The ack may have fully landed just before this cancellation won the race for the pending
+            // task; release whatever it established (mirrors the recheck in Route for the opposite order).
+            if (subscription.ServerId != 0 && _byServerId.TryRemove(subscription.ServerId, out _))
+                _ = SendUnsubscribeAsync(subscription.UnsubscribeMethod, subscription.ServerId);
+
             throw;
         }
 
