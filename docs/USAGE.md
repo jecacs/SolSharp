@@ -328,6 +328,11 @@ Fire-and-forget instead of waiting:
 string signature = await rpc.SendTransactionAsync(tx.Serialize());
 ```
 
+`SendTransactionOptions` tunes the submission (`SkipPreflight`, `PreflightCommitment`, `MaxRetries`,
+`MinContextSlot`). Preflight runs at `confirmed` by default, matching `GetLatestBlockhashAsync` — on the
+node's own `finalized` default a just-fetched blockhash may not exist yet, and preflight would report
+`BlockhashNotFound` for a perfectly valid transaction.
+
 Need devnet test funds first?
 
 ```csharp
@@ -353,6 +358,10 @@ foreach (var line in sim.Logs ?? [])
 if (sim.IsError)
     Console.WriteLine($"would fail: {sim.Err}");
 ```
+
+`SimulateTransactionOptions` controls the run (`SigVerify`, `ReplaceRecentBlockhash`, `Commitment`,
+`MinContextSlot`); like preflight, the simulation runs at `confirmed` by default so a blockhash fetched
+with `GetLatestBlockhashAsync` is visible to it.
 
 ## Priority fees (compute budget)
 
@@ -763,16 +772,23 @@ await foreach (var vote in ws.SubscribeVotesAsync())
 
 The reconnect policy is tunable through `SolanaWsClientOptions`: `AutoReconnect` (on by default), the
 `ReconnectInitialDelay` → `ReconnectMaxDelay` exponential backoff, and `MaxReconnectAttempts` (`0` retries
-forever). `ReceiveTimeout` detects a silent half-open connection; set it to `Timeout.InfiniteTimeSpan` only
-when liveness is managed externally. When reconnect attempts are exhausted — or auto-reconnect is off — every
-subscription completes with the connection error.
+forever). When reconnect attempts are exhausted — or auto-reconnect is off — every subscription completes
+with the connection error.
 
-Incoming data is bounded in both directions: `MaxMessageSizeBytes` rejects an oversized WebSocket message,
-and `SubscriptionBufferCapacity` limits unread notifications per subscription. A subscription whose consumer
-falls behind is faulted and unsubscribed rather than consuming memory without bound. Other subscriptions and
-the shared connection continue running. A subscribe the node rejects throws `InvalidOperationException`
-carrying the node error code and message; a notification that fails to decode also faults only its own
-subscription. Disposing the client completes every channel and stream.
+`ReceiveTimeout` (off by default) treats a connection with no complete message for the given interval as
+dropped, so auto-reconnect can replace a silently half-open socket. Only data messages reset the timer —
+.NET 8 exposes no ping/pong liveness signal — so enable it only when the subscribed traffic is guaranteed
+to be frequent (slot subscriptions, busy programs): on a legitimately quiet subscription, such as an
+account that rarely changes, it would force a reconnect cycle — and a notification gap — every interval.
+
+Incoming data is bounded in both directions. `MaxMessageSizeBytes` (64 MiB by default) rejects an oversized
+WebSocket message; the connection then closes and, with auto-reconnect on, is re-established — raise the
+limit if you stream heavy parsed blocks. `SubscriptionBufferCapacity` (1,024 by default) limits unread
+notifications per subscription: a consumer that falls behind is faulted and unsubscribed rather than
+consuming memory without bound, so raise it for bursty feeds like `programSubscribe` on a busy program.
+Other subscriptions and the shared connection continue running. A subscribe the node rejects throws
+`InvalidOperationException` carrying the node error code and message; a notification that fails to decode
+also faults only its own subscription. Disposing the client completes every channel and stream.
 
 ## Confirming a transaction
 

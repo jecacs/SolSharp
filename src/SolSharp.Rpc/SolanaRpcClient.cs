@@ -1231,19 +1231,82 @@ public class SolanaRpcClient(HttpClient httpClient)
 
         response.EnsureSuccessStatusCode();
 
-        var payload = await response.Content
-            .ReadFromJsonAsync(RpcJson.TypeInfo<RpcResponse>(), cancellationToken) ?? throw new RpcException(-1, "Empty response body.");
+        var body = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+        return DeserializeEnvelope<T>(body, request.Id);
+    }
 
-        if (payload.JsonRpc != "2.0")
+    // Validates the envelope and extracts the result in a single pass: a Utf8JsonReader walk checks
+    // jsonrpc/id/error and records the span of the result value, which is then deserialized directly -
+    // no intermediate JsonElement DOM of the (possibly multi-megabyte) result.
+    private static T DeserializeEnvelope<T>(byte[] body, int requestId)
+    {
+        var span = body.AsSpan();
+        // ReadFromJsonAsync tolerated a UTF-8 BOM; Utf8JsonReader rejects it.
+        if (span.Length >= 3 && span[0] == 0xEF && span[1] == 0xBB && span[2] == 0xBF)
+            span = span[3..];
+
+        if (span.IsEmpty)
+            throw new RpcException(-1, "Empty response body.");
+
+        var reader = new Utf8JsonReader(span);
+        reader.Read();
+        if (reader.TokenType == JsonTokenType.Null)
+            throw new RpcException(-1, "Empty response body.");
+        if (reader.TokenType != JsonTokenType.StartObject)
+            throw new JsonException("The JSON-RPC response is not a JSON object.");
+
+        string? version = null;
+        var idMatches = false;
+        var hasResult = false;
+        var resultStart = 0;
+        var resultLength = 0;
+        RpcError? error = null;
+
+        while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+        {
+            if (reader.ValueTextEquals("result"u8))
+            {
+                reader.Read();
+                hasResult = true;
+                resultStart = (int)reader.TokenStartIndex;
+                reader.Skip();
+                resultLength = (int)reader.BytesConsumed - resultStart;
+            }
+            else if (reader.ValueTextEquals("error"u8))
+            {
+                error = JsonSerializer.Deserialize(ref reader, RpcJson.TypeInfo<RpcError>());
+            }
+            else if (reader.ValueTextEquals("jsonrpc"u8))
+            {
+                reader.Read();
+                version = reader.TokenType == JsonTokenType.String ? reader.GetString() : null;
+            }
+            else if (reader.ValueTextEquals("id"u8))
+            {
+                reader.Read();
+                idMatches = reader.TokenType == JsonTokenType.Number
+                    && reader.TryGetInt32(out var id)
+                    && id == requestId;
+            }
+            else
+            {
+                reader.Read();
+                reader.Skip();
+            }
+        }
+
+        // The node's error is the most useful diagnostic there is, so it outranks envelope strictness:
+        // per JSON-RPC 2.0 an unprocessable request is answered with "id": null, and some gateways pad
+        // error responses with "result": null - neither may mask the real code and message.
+        if (error is not null)
+            throw new RpcException(error.Code, error.Message);
+        if (version != "2.0")
             throw new RpcException(-1, "Invalid JSON-RPC response version.");
-        if (payload.Id != request.Id)
+        if (!idMatches)
             throw new RpcException(-1, "JSON-RPC response id did not match the request id.");
-        if (payload.HasResult == (payload.Error is not null))
-            throw new RpcException(-1, "JSON-RPC response must contain exactly one of result or error.");
+        if (!hasResult)
+            throw new RpcException(-1, "JSON-RPC response contained neither a result nor an error.");
 
-        if (payload.Error is not null)
-            throw new RpcException(payload.Error.Code, payload.Error.Message);
-
-        return payload.Result.Deserialize(RpcJson.TypeInfo<T>())!;
+        return JsonSerializer.Deserialize(span.Slice(resultStart, resultLength), RpcJson.TypeInfo<T>())!;
     }
 }

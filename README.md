@@ -149,12 +149,14 @@ bool ok = PublicKey.TryParse(input, out var key);
   `SubscribeSlotsUpdatesAsync` (slot lifecycle with per-stage stats), and `SubscribeVotesAsync` (gossip
   votes) as `IAsyncEnumerable`; `SubscribeLogsAsync`, `SubscribeAccountAsync`, `SubscribeParsedAccountAsync`,
   `SubscribeProgramAsync`, `SubscribeSignatureAsync`, `SubscribeBlocksAsync`, and `SubscribeParsedBlocksAsync`
-  (`ChannelReader`) — with automatic reconnect and resubscribe across dropped connections.
+  (`ChannelReader`) — with automatic reconnect and resubscribe across dropped connections, and a bounded
+  transport (message-size cap, per-subscription buffers, opt-in receive timeout).
 - DI registration with a built-in resilience pipeline (retry on transient errors and HTTP 429), plus
   `AddSolanaWs` for a container-managed streaming client.
 - JSON-RPC batching — `CreateBatch()` queues reads (and sends) and submits them in one HTTP round-trip.
 - `SendTransactionAsync` / `SimulateTransactionAsync` — submit a signed transaction or dry-run it for logs and
-  compute units; `SendAndConfirmTransactionAsync` sends and waits for confirmation (throwing if the transaction
+  compute units, both running preflight/simulation at `confirmed` by default to match `GetLatestBlockhashAsync`;
+  `SendAndConfirmTransactionAsync` sends and waits for confirmation (throwing if the transaction
   lands but errors). Confirm by polling (`GetSignatureStatusesAsync` / `ConfirmTransactionAsync`) or over the
   WebSocket (`SolanaWsClient.ConfirmSignatureAsync`).
 
@@ -208,7 +210,8 @@ bool ok = keypair.PublicKey.Verify(message, signature);
   `Transaction`, and `TransactionBuilder` (`Build` / `BuildV0`, `BuildMessage` / `BuildMessageV0` for the
   unsigned message, durable-nonce anchoring via `SetDurableNonce`) — compilation, wire serialization (allocation-free via `Transaction.TrySerialize` and
   the span `Serialize` overloads, with
-  `Transaction.Deserialize` to parse one back, and `DecompileInstructions` to resolve a parsed message's
+  `Transaction.Deserialize` to parse one back — enforcing Solana's sanitize rules on malformed input — and
+  `DecompileInstructions` to resolve a parsed message's
   instructions to program ids and account keys, loading v0 lookup-table accounts), signing, and base64
   output. Every encoding is checked byte-for-byte against the Rust `solana-sdk` (via solders) and `solana-py`.
 

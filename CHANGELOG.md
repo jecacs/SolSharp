@@ -5,10 +5,14 @@ All notable changes to SolSharp are documented here. The format is loosely based
 [semantic versioning](https://semver.org) — from 1.0.0 breaking changes only come with a major
 version (on the earlier 0.x releases, minor versions could carry them).
 
-## [Unreleased]
+## [1.3.0]
 
 ### Added
 
+- `SolanaWsClientOptions.MaxMessageSizeBytes` (default 64 MiB), `SubscriptionBufferCapacity`
+  (default 1,024), and `ReceiveTimeout` (off by default): bounds on incoming message size and
+  per-subscription buffering, plus an opt-in idle timeout that lets auto-reconnect replace a silently
+  half-open connection when the subscribed traffic is known to be frequent.
 - `docs/USAGE.md`: examples for the previously unillustrated API — `AddSolanaWs` container registration,
   allocation-free serialization (`GetSerializedLength` / `TrySerialize` and the span `Serialize`
   overloads), pricing an unsigned message via `BuildMessage` / `BuildMessageV0`, the wider
@@ -23,12 +27,28 @@ version (on the earlier 0.x releases, minor versions could carry them).
 
 ### Fixed
 
+- `SendTransactionAsync` preflight and `SimulateTransactionAsync` now run at `confirmed` commitment by
+  default, matching `GetLatestBlockhashAsync` — at the node's own `finalized` default a just-fetched
+  blockhash may not exist yet, failing preflight or simulation with `BlockhashNotFound` for a perfectly
+  valid transaction. Set the option to `null` to fall back to the node default.
 - Hardened the WebSocket transport with bounded message sizes, text-frame validation, a complete
-  close handshake, bounded disposal, and receive timeouts that recover silent half-open connections.
+  close handshake, and bounded disposal.
 - Bounded each subscription notification buffer; a consumer that falls behind is now faulted and
   unsubscribed instead of allowing unbounded memory growth.
-- Validated JSON-RPC response versions, request ids, and the exclusive `result` / `error` envelope,
-  preventing malformed value-type responses from silently becoming `0`, `false`, or another default.
+- A subscription cancelled while the connection was down — or while its reconnect replay was awaiting
+  the node's acknowledgement — is no longer resurrected server-side: the late acknowledgement releases
+  it. A notification racing a cancellation no longer faults the subscription with a spurious
+  buffer-overflow error.
+- Validated the JSON-RPC response envelope (protocol version, request-id echo, result/error presence)
+  in a single parsing pass with no intermediate DOM, preventing malformed value-type responses from
+  silently becoming `0`, `false`, or another default. A node-supplied error always surfaces with its own
+  code and message — including spec-mandated `"id": null` error responses — instead of a generic
+  envelope error.
+- `Message.Deserialize` and `MessageV0.Deserialize` (and therefore `Transaction.Deserialize`) enforce
+  Solana's `sanitize()` rules — header counts that overlap the account list or leave no writable
+  fee-payer signer, program-id and account-index bounds (for v0, program ids must be static keys and
+  never the fee payer), address-table lookups that load no accounts, and the 256-account ceiling — with
+  the rule set verified against solders.
 - Rejected malformed transaction data tuples and unexpected encodings instead of treating them as
   nullable or decoding non-base64 payloads.
 - Included the Core, Programs, RPC, and Wallet XML documentation files in the bundled NuGet package.
