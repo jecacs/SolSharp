@@ -1,5 +1,6 @@
 using FluentAssertions;
 using NUnit.Framework;
+using SolSharp.Core.Constants;
 using SolSharp.Core.Primitives;
 
 namespace SolSharp.Programs.Tests;
@@ -153,7 +154,7 @@ public static class TokenProgramOpsTests
         public void WithToken2022AuthorityType_EncodesItsWireValue()
         {
             // Act: change a Token-2022 mint's transfer-fee authority.
-            var token2022 = PublicKey.Parse(SolSharp.Core.Constants.SolanaProgramIds.Token2022Program);
+            var token2022 = PublicKey.Parse(SolanaProgramIds.Token2022Program);
             var ix = TokenProgram.SetAuthority(Pk(2), Pk(3), AuthorityType.TransferFeeConfig, Pk(4), token2022);
 
             // Assert
@@ -285,6 +286,116 @@ public static class TokenProgramOpsTests
             // Assert
             DataHex(ix).Should().Be(
                 "0006" + "0606060606060606060606060606060606060606060606060606060606060606" + "00");
+        }
+    }
+
+    [TestFixture]
+    public sealed class MultisigAuthority
+    {
+        private static readonly PublicKey[] Members = [Pk(7), Pk(8)];
+
+        [Test]
+        public void TransferChecked_MatchesOfficialMultisigLayout()
+        {
+            // Act
+            var ix = TokenProgram.TransferChecked(
+                Pk(2), Pk(3), Pk(4), Pk(6), 1000, 6, tokenProgram: null, multisigSigners: Members);
+
+            // Assert
+            DataHex(ix).Should().Be("0ce80300000000000006");
+            ix.Accounts.Should().HaveCount(6);
+            Check(ix.Accounts[0], Pk(2), signer: false, writable: true);
+            Check(ix.Accounts[1], Pk(3), signer: false, writable: false);
+            Check(ix.Accounts[2], Pk(4), signer: false, writable: true);
+            Check(ix.Accounts[3], Pk(6), signer: false, writable: false);
+            Check(ix.Accounts[4], Members[0], signer: true, writable: false);
+            Check(ix.Accounts[5], Members[1], signer: true, writable: false);
+        }
+
+        [Test]
+        public void SetAuthority_Token2022_MatchesOfficialMultisigLayout()
+        {
+            // Arrange
+            var token2022 = PublicKey.Parse(SolanaProgramIds.Token2022Program);
+
+            // Act
+            var ix = TokenProgram.SetAuthority(
+                Pk(2), Pk(6), AuthorityType.TransferFeeConfig, Pk(4), token2022, Members);
+
+            // Assert
+            ix.ProgramId.Should().Be(token2022);
+            DataHex(ix).Should().Be("0604010404040404040404040404040404040404040404040404040404040404040404");
+            CheckMultisig(ix, authorityIndex: 1, Pk(6));
+        }
+
+        [Test]
+        public void EveryAuthorityOperation_UsesNonSignerAuthorityThenMemberSigners()
+        {
+            // Act
+            (Instruction Instruction, int AuthorityIndex, PublicKey Authority)[] instructions =
+            [
+                (TokenProgram.Transfer(Pk(2), Pk(3), Pk(6), 1, null, Members), 2, Pk(6)),
+                (TokenProgram.MintTo(Pk(2), Pk(3), Pk(6), 1, null, Members), 2, Pk(6)),
+                (TokenProgram.Burn(Pk(2), Pk(3), Pk(6), 1, null, Members), 2, Pk(6)),
+                (TokenProgram.Approve(Pk(2), Pk(3), Pk(6), 1, null, Members), 2, Pk(6)),
+                (TokenProgram.Revoke(Pk(2), Pk(6), null, Members), 1, Pk(6)),
+                (TokenProgram.CloseAccount(Pk(2), Pk(3), Pk(6), null, Members), 2, Pk(6)),
+                (TokenProgram.FreezeAccount(Pk(2), Pk(3), Pk(6), null, Members), 2, Pk(6)),
+                (TokenProgram.ThawAccount(Pk(2), Pk(3), Pk(6), null, Members), 2, Pk(6)),
+                (TokenProgram.ApproveChecked(Pk(2), Pk(3), Pk(4), Pk(6), 1, 6, null, Members), 3, Pk(6)),
+                (TokenProgram.MintToChecked(Pk(2), Pk(3), Pk(6), 1, 6, null, Members), 2, Pk(6)),
+                (TokenProgram.BurnChecked(Pk(2), Pk(3), Pk(6), 1, 6, null, Members), 2, Pk(6))
+            ];
+
+            // Assert
+            foreach (var (instruction, authorityIndex, authority) in instructions)
+                CheckMultisig(instruction, authorityIndex, authority);
+        }
+
+        [Test]
+        public void EmptyMemberList_Throws()
+        {
+            // Act
+            Action act = () => _ = TokenProgram.Transfer(Pk(2), Pk(3), Pk(6), 1, null, []);
+
+            // Assert
+            act.Should().Throw<ArgumentException>().WithMessage("*at least one*");
+        }
+
+        [Test]
+        public void ElevenMembers_IsAccepted()
+        {
+            // Arrange
+            var members = Enumerable.Range(10, 11).Select(value => Pk((byte)value)).ToArray();
+
+            // Act
+            var instruction = TokenProgram.Transfer(Pk(2), Pk(3), Pk(6), 1, null, members);
+
+            // Assert
+            instruction.Accounts.Should().HaveCount(14);
+        }
+
+        [Test]
+        public void TwelveMembers_Throws()
+        {
+            // Arrange
+            var members = Enumerable.Range(10, 12).Select(value => Pk((byte)value)).ToArray();
+
+            // Act
+            Action act = () => _ = TokenProgram.Transfer(Pk(2), Pk(3), Pk(6), 1, null, members);
+
+            // Assert
+            act.Should().Throw<ArgumentException>()
+                .WithParameterName("multisigSigners")
+                .WithMessage("*at most 11*12*");
+        }
+
+        private static void CheckMultisig(Instruction instruction, int authorityIndex, PublicKey authority)
+        {
+            instruction.Accounts.Should().HaveCount(authorityIndex + 1 + Members.Length);
+            Check(instruction.Accounts[authorityIndex], authority, signer: false, writable: false);
+            Check(instruction.Accounts[authorityIndex + 1], Members[0], signer: true, writable: false);
+            Check(instruction.Accounts[authorityIndex + 2], Members[1], signer: true, writable: false);
         }
     }
 }

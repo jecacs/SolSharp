@@ -60,14 +60,15 @@ internal static class IntegrationEnvironment
 
     /// <summary>
     /// Whether <paramref name="exception"/> reflects a transient transport problem (a rate limit, timeout,
-    /// broken connection or socket, rejected WebSocket handshake, resilience-pipeline rejection, or an
-    /// RPC-level error) as opposed to a real defect.
+    /// broken connection or socket, rejected WebSocket handshake, resilience-pipeline rejection, or a
+    /// specifically transient RPC error) as opposed to a real defect.
     /// </summary>
     /// <param name="exception">The exception to classify.</param>
     /// <returns><c>true</c> when the failure should be treated as transient.</returns>
     public static bool IsTransient(Exception exception)
-        => exception is HttpRequestException or TaskCanceledException or TimeoutException or OperationCanceledException or RpcException
+        => exception is HttpRequestException or TaskCanceledException or TimeoutException or OperationCanceledException
                or WebSocketException or SocketException
+           || exception is RpcException { Code: -32603 or -32004 or -32005 or -32007 or -32009 or -32014 or -32016 }
            || exception.GetType().FullName?.StartsWith("Polly.", StringComparison.Ordinal) == true
            || (exception.InnerException is { } inner && IsTransient(inner));
 

@@ -161,5 +161,18 @@ public static class PublicKeyTests
             Action act = () => JsonSerializer.Deserialize<PublicKey>("\"0\"");
             act.Should().Throw<JsonException>();
         }
+
+        [TestCase("123")]
+        [TestCase("true")]
+        [TestCase("{}")]
+        [TestCase("[]")]
+        public void Deserialize_NonString_ThrowsJsonException(string json)
+        {
+            // Act
+            Action act = () => JsonSerializer.Deserialize<PublicKey>(json);
+
+            // Assert
+            act.Should().Throw<JsonException>();
+        }
     }
 }

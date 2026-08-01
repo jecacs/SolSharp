@@ -14,6 +14,8 @@ namespace SolSharp.Rpc;
 /// </summary>
 public class SolanaRpcClient(HttpClient httpClient)
 {
+    internal static readonly HttpRequestOptionsKey<bool> DisableRetriesKey = new("SolSharp.DisableRetries");
+
     /// <summary>
     /// Returns the latest blockhash, used as the recent blockhash when building a transaction.
     /// See <see href="https://solana.com/docs/rpc/http/getlatestblockhash">getLatestBlockhash</see>.
@@ -534,6 +536,7 @@ public class SolanaRpcClient(HttpClient httpClient)
     /// <param name="cancellationToken">A token to cancel the wait.</param>
     /// <returns>The signature's status once it reaches <paramref name="commitment"/>.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="signature"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="timeout"/> is negative and not infinite.</exception>
     /// <exception cref="TimeoutException">The transaction did not reach <paramref name="commitment"/> in time.</exception>
     /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
     /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
@@ -545,20 +548,44 @@ public class SolanaRpcClient(HttpClient httpClient)
     {
         ArgumentNullException.ThrowIfNull(signature);
 
-        var deadline = DateTimeOffset.UtcNow + (timeout ?? DefaultConfirmationTimeout);
-        var target = CommitmentRank(commitment);
+        var confirmationTimeout = timeout ?? DefaultConfirmationTimeout;
+        if (confirmationTimeout < TimeSpan.Zero && confirmationTimeout != Timeout.InfiniteTimeSpan)
+            throw new ArgumentOutOfRangeException(nameof(timeout), timeout, "The confirmation timeout must be non-negative or infinite.");
 
-        while (true)
+        using var timeoutCts = new CancellationTokenSource();
+        var timeoutTask = confirmationTimeout == Timeout.InfiniteTimeSpan
+            ? Task.CompletedTask
+            : CancelAfterAsync(timeoutCts, confirmationTimeout);
+
+        try
         {
-            var statuses = await GetSignatureStatusesAsync([signature], searchTransactionHistory: false, cancellationToken);
-            var status = statuses.Count > 0 ? statuses[0] : null;
-            if (status is not null && StatusRank(status.ConfirmationStatus) >= target)
-                return status;
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+            var target = CommitmentRank(commitment);
 
-            if (DateTimeOffset.UtcNow >= deadline)
-                throw new TimeoutException($"Transaction {signature} was not confirmed at {commitment} within the timeout.");
+            try
+            {
+                while (true)
+                {
+                    var statuses = await GetSignatureStatusesAsync(
+                        [signature], searchTransactionHistory: false, linkedCts.Token);
+                    var status = statuses.Count > 0 ? statuses[0] : null;
+                    if (status is not null && StatusRank(status.ConfirmationStatus) >= target)
+                        return status;
 
-            await Task.Delay(ConfirmationPollInterval, cancellationToken);
+                    await Task.Delay(ConfirmationPollInterval, linkedCts.Token);
+                }
+            }
+            catch (OperationCanceledException exception)
+                when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+            {
+                throw new TimeoutException(
+                    $"Transaction {signature} was not confirmed at {commitment} within the timeout.", exception);
+            }
+        }
+        finally
+        {
+            await timeoutCts.CancelAsync();
+            await timeoutTask;
         }
     }
 
@@ -613,6 +640,26 @@ public class SolanaRpcClient(HttpClient httpClient)
 
     private static readonly TimeSpan DefaultConfirmationTimeout = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan ConfirmationPollInterval = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan MaximumTimerDelay = TimeSpan.FromMilliseconds(uint.MaxValue - 1d);
+
+    private static async Task CancelAfterAsync(CancellationTokenSource source, TimeSpan timeout)
+    {
+        try
+        {
+            while (timeout > MaximumTimerDelay)
+            {
+                await Task.Delay(MaximumTimerDelay, source.Token);
+                timeout -= MaximumTimerDelay;
+            }
+
+            await Task.Delay(timeout, source.Token);
+            await source.CancelAsync();
+        }
+        catch (OperationCanceledException) when (source.IsCancellationRequested)
+        {
+            // Confirmation finished or caller cancellation won; the timeout task only needs to stop.
+        }
+    }
 
     /// <summary>
     /// Fetches and decodes an SPL Token mint account, or returns <c>null</c> if nothing exists at
@@ -1226,8 +1273,14 @@ public class SolanaRpcClient(HttpClient httpClient)
 
     private async Task<T> SendAsync<T>(RpcRequest request, CancellationToken cancellationToken)
     {
-        using var response = await httpClient
-            .PostAsJsonAsync(string.Empty, request, RpcJson.TypeInfo<RpcRequest>(), cancellationToken);
+        using var message = new HttpRequestMessage(HttpMethod.Post, string.Empty)
+        {
+            Content = JsonContent.Create(request, RpcJson.TypeInfo<RpcRequest>())
+        };
+        if (request.Method == RpcMethods.RequestAirdrop)
+            message.Options.Set(DisableRetriesKey, true);
+
+        using var response = await httpClient.SendAsync(message, cancellationToken);
 
         response.EnsureSuccessStatusCode();
 
@@ -1305,7 +1358,7 @@ public class SolanaRpcClient(HttpClient httpClient)
         // per JSON-RPC 2.0 an unprocessable request is answered with "id": null, and some gateways pad
         // error responses with "result": null - neither may mask the real code and message.
         if (error is not null)
-            throw new RpcException(error.Code, error.Message);
+            throw new RpcException(error.Code, error.Message, error.Data);
         if (version != "2.0")
             throw new RpcException(-1, "Invalid JSON-RPC response version.");
         if (!idMatches)

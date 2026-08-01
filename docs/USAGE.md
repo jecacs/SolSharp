@@ -441,6 +441,27 @@ The full op set is available: `Transfer` / `TransferChecked`, `MintTo` / `MintTo
 `InitializeMint`, `InitializeAccount`, `CloseAccount`, `SyncNative` — plus `AssociatedTokenAccount.Create`
 and `CreateIdempotent`.
 
+Authority-bearing builders also have SPL Multisig overloads. Pass the multisig account as `authority`
+and the member public keys in the same order as their signer account metas; the multisig account itself
+is deliberately not marked as a signer. SPL Token permits between 1 and 11 supplied member signers:
+
+```csharp
+var transfer = TokenProgram.TransferChecked(
+    source,
+    mint,
+    destination,
+    authority: multisigAccount,
+    amount: 1_000_000,
+    decimals: decimals,
+    tokenProgram: null,
+    multisigSigners: [memberA.PublicKey, memberB.PublicKey]);
+
+var tx = new TransactionBuilder()
+    .SetRecentBlockhash(blockhash)
+    .AddInstruction(transfer)
+    .Build(payer, memberA, memberB);
+```
+
 `AuthorityType` also carries the Token-2022 extension authorities (`TransferFeeConfig`, `CloseMint`,
 `PermanentDelegate`, `MetadataPointer`, ...), valid when the instruction targets the Token-2022 program:
 
@@ -773,7 +794,9 @@ await foreach (var vote in ws.SubscribeVotesAsync())
 The reconnect policy is tunable through `SolanaWsClientOptions`: `AutoReconnect` (on by default), the
 `ReconnectInitialDelay` → `ReconnectMaxDelay` exponential backoff, and `MaxReconnectAttempts` (`0` retries
 forever). When reconnect attempts are exhausted — or auto-reconnect is off — every subscription completes
-with the connection error.
+with the connection error. `SubscriptionAckTimeout` (30 seconds by default) bounds both initial subscribe
+and reconnect replay acknowledgement waits, so one unresponsive request cannot stall every subscription
+behind it.
 
 `ReceiveTimeout` (off by default) treats a connection with no complete message for the given interval as
 dropped, so auto-reconnect can replace a silently half-open socket. Only data messages reset the timer —
@@ -936,9 +959,14 @@ services.AddSolanaRpc(
         http.DefaultRequestHeaders.Add("x-api-key", apiKey)); // auth header for the provider
 ```
 
+Transient reads and replay-safe signed transaction submissions use that retry policy. `RequestAirdropAsync`
+is explicitly excluded: if a node executes an airdrop but its response is lost, automatically repeating the
+request would create a second airdrop.
+
 ## Error handling
 
-- **`RpcException`** — the node returned a JSON-RPC error; `Code` and `Message` carry the details.
+- **`RpcException`** — the node returned a JSON-RPC error; `Code` and `Message` carry the summary, while
+  `ErrorData` preserves optional structured diagnostics such as preflight logs and units consumed.
 - **`TransactionFailedException`** — from `SendAndConfirmTransactionAsync` when the transaction is confirmed
   but errored on-chain; `Signature` and the error payload are attached.
 - **`HttpRequestException`** — a transport-level failure or non-success status (after the resilience pipeline
@@ -957,6 +985,8 @@ catch (TransactionFailedException ex)
 catch (RpcException ex)
 {
     Console.WriteLine($"node rejected the request: {ex.Code} {ex.Message}");
+    if (ex.ErrorData is { } data)
+        Console.WriteLine(data.GetRawText());
 }
 ```
 

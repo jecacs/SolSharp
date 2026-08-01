@@ -201,6 +201,23 @@ public static class SolanaRpcClientTests
         }
 
         [Test]
+        public async Task NodeError_PreservesStructuredErrorData()
+        {
+            // Arrange
+            var client = Client(
+                """{"jsonrpc":"2.0","error":{"code":-32002,"message":"Simulation failed","data":{"logs":["Program log: rejected"],"unitsConsumed":321}},"id":1}""");
+
+            // Act
+            var act = async () => await client.GetSlotAsync();
+
+            // Assert
+            var exception = (await act.Should().ThrowAsync<RpcException>()).Which;
+            exception.ErrorData.Should().NotBeNull();
+            exception.ErrorData!.Value.GetProperty("logs")[0].GetString().Should().Be("Program log: rejected");
+            exception.ErrorData.Value.GetProperty("unitsConsumed").GetInt32().Should().Be(321);
+        }
+
+        [Test]
         public async Task WrongProtocolVersion_ThrowsRpcException()
         {
             // Arrange

@@ -11,6 +11,7 @@ namespace SolSharp.Core.Encoding;
 /// </summary>
 public sealed class BorshWriter
 {
+    private static readonly System.Text.Encoding StrictUtf8 = new System.Text.UTF8Encoding(false, true);
     private readonly ArrayBufferWriter<byte> _buffer;
 
     /// <summary>Creates an empty writer.</summary>
@@ -114,10 +115,11 @@ public sealed class BorshWriter
     /// <summary>Writes a length-prefixed UTF-8 string (a u32 byte-length, then the UTF-8 bytes).</summary>
     /// <param name="value">The string to write.</param>
     /// <exception cref="ArgumentNullException"><paramref name="value"/> is <c>null</c>.</exception>
+    /// <exception cref="System.Text.EncoderFallbackException"><paramref name="value"/> contains invalid UTF-16.</exception>
     public void WriteString(string value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        var bytes = System.Text.Encoding.UTF8.GetBytes(value);
+        var bytes = StrictUtf8.GetBytes(value);
         WriteLength(bytes.Length);
         WriteBytes(bytes);
     }

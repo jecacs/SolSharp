@@ -20,6 +20,13 @@ public sealed record SolanaWsClientOptions
     public int MaxReconnectAttempts { get; init; }
 
     /// <summary>
+    /// The maximum time to wait for a subscribe acknowledgement before failing that subscription. The
+    /// default is 30 seconds. This timeout is always finite so one missing acknowledgement cannot block
+    /// reconnect replay for every subscription behind it.
+    /// </summary>
+    public TimeSpan SubscriptionAckTimeout { get; init; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
     /// The maximum encoded size of one incoming WebSocket message, in bytes. The default is 64 MiB.
     /// Messages over the limit close the connection with <c>MessageTooBig</c>.
     /// </summary>

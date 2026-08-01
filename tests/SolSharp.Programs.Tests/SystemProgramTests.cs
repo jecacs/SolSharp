@@ -264,4 +264,67 @@ public static class SystemProgramTests
             Metas(instructions[1]).Should().Equal((Key(2), false, true), (RecentBlockhashes, false, false), (Rent, false, false));
         }
     }
+
+    [TestFixture]
+    public sealed class WithSeedValidation
+    {
+        [TestCase(0)]
+        [TestCase(1)]
+        [TestCase(2)]
+        [TestCase(3)]
+        public void SeedLongerThanThirtyTwoUtf8Bytes_Throws(int operation)
+        {
+            // Arrange
+            var seed = new string('a', 33);
+            Action act = operation switch
+            {
+                0 => () => _ = SystemProgram.CreateAccountWithSeed(Key(1), Key(2), Key(3), seed, 1, 1, Key(9)),
+                1 => () => _ = SystemProgram.AllocateWithSeed(Key(2), Key(3), seed, 1, Key(9)),
+                2 => () => _ = SystemProgram.AssignWithSeed(Key(2), Key(3), seed, Key(9)),
+                _ => () => _ = SystemProgram.TransferWithSeed(Key(2), Key(3), seed, Key(9), Key(4), 1)
+            };
+
+            // Act & Assert
+            act.Should().Throw<ArgumentException>().WithMessage("*at most 32 bytes*33*");
+        }
+
+        [Test]
+        public void ThirtyTwoUtf8Bytes_IsAccepted()
+        {
+            // Act
+            Action act = () => _ = SystemProgram.CreateAccountWithSeed(
+                Key(1), Key(2), Key(3), new string('a', 32), 1, 1, Key(9));
+
+            // Assert
+            act.Should().NotThrow();
+        }
+
+        [Test]
+        public void LimitIsMeasuredInUtf8Bytes_NotCharacters()
+        {
+            // Arrange: seventeen two-byte characters occupy 34 bytes.
+            var seed = new string('\u00E9', 17);
+
+            // Act
+            Action act = () => _ = SystemProgram.AssignWithSeed(Key(2), Key(3), seed, Key(9));
+
+            // Assert
+            act.Should().Throw<ArgumentException>().WithMessage("*34*");
+        }
+
+        [Test]
+        public void UnpairedSurrogate_ThrowsInsteadOfEncodingReplacementCharacter()
+        {
+            // Arrange
+            const string seed = "\uD800";
+
+            // Act
+            Action act = () => _ = SystemProgram.AssignWithSeed(Key(2), Key(3), seed, Key(9));
+
+            // Assert
+            act.Should().Throw<ArgumentException>()
+                .WithParameterName(nameof(seed))
+                .WithMessage("*valid Unicode*");
+        }
+    }
 }

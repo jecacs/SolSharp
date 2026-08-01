@@ -11,6 +11,7 @@ namespace SolSharp.Core.Encoding;
 /// </summary>
 public ref struct BorshReader
 {
+    private static readonly System.Text.Encoding StrictUtf8 = new System.Text.UTF8Encoding(false, true);
     private readonly ReadOnlySpan<byte> _data;
 
     /// <summary>Creates a reader positioned at the start of <paramref name="data"/>.</summary>
@@ -77,10 +78,10 @@ public ref struct BorshReader
     /// <exception cref="FormatException">There are not enough bytes left.</exception>
     public Int128 ReadI128() => BinaryPrimitives.ReadInt128LittleEndian(Take(16));
 
-    /// <summary>Reads a Borsh bool: a single byte, where any non-zero value is <c>true</c>.</summary>
+    /// <summary>Reads a Borsh bool: a single byte, <c>0</c> for <c>false</c> or <c>1</c> for <c>true</c>.</summary>
     /// <returns>The value.</returns>
-    /// <exception cref="FormatException">There are not enough bytes left.</exception>
-    public bool ReadBool() => Take(1)[0] != 0;
+    /// <exception cref="FormatException">There are not enough bytes left, or the value is not <c>0</c> or <c>1</c>.</exception>
+    public bool ReadBool() => ReadDiscriminant("bool");
 
     /// <summary>Reads a 32-byte <see cref="PublicKey"/>.</summary>
     /// <returns>The public key.</returns>
@@ -89,8 +90,20 @@ public ref struct BorshReader
 
     /// <summary>Reads a length-prefixed UTF-8 string (a u32 length, then that many bytes).</summary>
     /// <returns>The decoded string.</returns>
-    /// <exception cref="FormatException">There are not enough bytes left.</exception>
-    public string ReadString() => System.Text.Encoding.UTF8.GetString(Take(ReadLength()));
+    /// <exception cref="FormatException">There are not enough bytes left, or the string is not valid UTF-8.</exception>
+    public string ReadString()
+    {
+        var bytes = Take(ReadLength());
+
+        try
+        {
+            return StrictUtf8.GetString(bytes);
+        }
+        catch (System.Text.DecoderFallbackException exception)
+        {
+            throw new FormatException("Borsh string contains invalid UTF-8.", exception);
+        }
+    }
 
     /// <summary>Reads <paramref name="count"/> raw bytes without copying.</summary>
     /// <param name="count">The number of bytes to read.</param>
@@ -118,15 +131,22 @@ public ref struct BorshReader
         return (int)length;
     }
 
-    /// <summary>Reads a Borsh Option tag: one byte, <c>0</c> for None and non-zero for Some. Read the value next when this returns <c>true</c>.</summary>
+    /// <summary>Reads a Borsh Option tag: one byte, <c>0</c> for None or <c>1</c> for Some. Read the value next when this returns <c>true</c>.</summary>
     /// <returns><c>true</c> if a value follows (Some); <c>false</c> for None.</returns>
-    /// <exception cref="FormatException">There are not enough bytes left.</exception>
-    public bool ReadOption() => Take(1)[0] != 0;
+    /// <exception cref="FormatException">There are not enough bytes left, or the tag is not <c>0</c> or <c>1</c>.</exception>
+    public bool ReadOption() => ReadDiscriminant("Option");
 
     /// <summary>Skips <paramref name="count"/> bytes.</summary>
     /// <param name="count">The number of bytes to skip.</param>
     /// <exception cref="FormatException"><paramref name="count"/> is negative or exceeds the remaining bytes.</exception>
     public void Skip(int count) => Take(count);
+
+    private bool ReadDiscriminant(string type) => Take(1)[0] switch
+    {
+        0 => false,
+        1 => true,
+        var value => throw new FormatException($"Borsh {type} discriminant must be 0 or 1, but was {value}.")
+    };
 
     private ReadOnlySpan<byte> Take(int count)
     {

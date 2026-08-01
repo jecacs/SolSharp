@@ -9,6 +9,12 @@ version (on the earlier 0.x releases, minor versions could carry them).
 
 ### Added
 
+- SPL Token and Token-2022 authority-bearing instruction builders now have additive multisig overloads:
+  the multisig authority remains a non-signer account and the supplied member accounts are appended as
+  readonly signers in caller order.
+- `RpcException.ErrorData` preserves the optional JSON-RPC `error.data` payload (including preflight logs
+  and units consumed), and `SolanaWsClientOptions.SubscriptionAckTimeout` bounds initial and replayed
+  subscription acknowledgements.
 - `SolanaWsClientOptions.MaxMessageSizeBytes` (default 64 MiB), `SubscriptionBufferCapacity`
   (default 1,024), and `ReceiveTimeout` (off by default): bounds on incoming message size and
   per-subscription buffering, plus an opt-in idle timeout that lets auto-reconnect replace a silently
@@ -27,6 +33,30 @@ version (on the earlier 0.x releases, minor versions could carry them).
 
 ### Fixed
 
+- Bounded Token-2022 metadata vector counts before allocation, preventing a malformed four-byte Borsh
+  length from requesting a multi-gigabyte `List` capacity.
+- Kept the durable nonce account in v0 static keys even when it also appears in an Address Lookup Table,
+  matching the Solana SDK and preserving runtime durable-nonce recognition.
+- Hardened batch JSON-RPC handling: every entry must be a valid 2.0 envelope with one known, unique id and
+  exactly one result or error; malformed replies now terminate every queued task instead of leaving calls
+  pending indefinitely.
+- Serialized concurrent WebSocket connects, disposed sockets from failed initial/reconnect attempts,
+  completed one-shot signature subscriptions after their notification, and bounded subscribe acknowledgement
+  waits so one missing ACK cannot stall reconnect replay.
+- `ConfirmTransactionAsync` now applies its timeout to an in-flight HTTP status request as well as the delay
+  between polls. The DI resilience policy no longer retries non-idempotent `requestAirdrop` calls.
+- Compiled messages defensively copy instruction data; transactions snapshot the bytes used for their first
+  signature, validate custom signer output is exactly 64 bytes, and serialize those same signed bytes even if
+  caller-owned message arrays are later mutated.
+- Rejected unrepresentable signer counts before message header conversion, legacy messages whose signer-count
+  high bit collides with the version prefix, trailing bytes in full message and transaction parsers, and
+  System Program seeds longer than 32 UTF-8 bytes.
+- Made Borsh decoding canonical (`bool`/`Option` accept only `0` or `1`) and UTF-8 strict in both directions;
+  malformed text is rejected instead of silently replaced. Core JSON converters now consistently throw
+  `JsonException` for wrong token kinds and the source-generated Core context supports nullable public keys.
+- Tightened secret-buffer cleanup in BIP-39 and key parsing exception paths.
+- CI now validates the packed public API against 1.2.0 and runs the Native AOT smoke test against the actual
+  generated NuGet package rather than direct project references.
 - `SendTransactionAsync` preflight and `SimulateTransactionAsync` now run at `confirmed` commitment by
   default, matching `GetLatestBlockhashAsync` — at the node's own `finalized` default a just-fetched
   blockhash may not exist yet, failing preflight or simulation with `BlockhashNotFound` for a perfectly
@@ -320,7 +350,8 @@ bundles four layered assemblies.
   transaction building, signing and serialization, `Transaction.Deserialize`, and instruction
   decompilation — every wire format validated byte-for-byte against the Rust `solana-sdk`.
 
-[Unreleased]: https://github.com/jecacs/SolSharp/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/jecacs/SolSharp/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/jecacs/SolSharp/releases/tag/v1.3.0
 [1.2.0]: https://github.com/jecacs/SolSharp/releases/tag/v1.2.0
 [1.1.0]: https://github.com/jecacs/SolSharp/releases/tag/v1.1.0
 [1.0.1]: https://github.com/jecacs/SolSharp/releases/tag/v1.0.1

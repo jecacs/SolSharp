@@ -37,5 +37,18 @@ public static class CommitmentTests
             // Assert
             act.Should().Throw<JsonException>();
         }
+
+        [TestCase("123")]
+        [TestCase("true")]
+        [TestCase("{}")]
+        [TestCase("[]")]
+        public void NonStringValue_ThrowsJsonException(string json)
+        {
+            // Act
+            Action act = () => JsonSerializer.Deserialize<Commitment>(json);
+
+            // Assert
+            act.Should().Throw<JsonException>();
+        }
     }
 }

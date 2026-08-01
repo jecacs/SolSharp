@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Polly;
 using SolSharp.Rpc.Streaming;
 
 namespace SolSharp.Rpc;
@@ -55,6 +56,17 @@ public static class ServiceCollectionExtensions
         var resilience = builder.AddStandardResilienceHandler();
         if (configureResilience is not null)
             resilience.Configure(configureResilience);
+        resilience.Configure(options =>
+        {
+            var shouldHandle = options.Retry.ShouldHandle;
+            options.Retry.ShouldHandle = arguments =>
+            {
+                var request = arguments.Outcome.Result?.RequestMessage ?? arguments.Context.GetRequestMessage();
+                return request?.Options.TryGetValue(SolanaRpcClient.DisableRetriesKey, out var disabled) == true && disabled
+                    ? new ValueTask<bool>(false)
+                    : shouldHandle(arguments);
+            };
+        });
 
         return builder;
     }

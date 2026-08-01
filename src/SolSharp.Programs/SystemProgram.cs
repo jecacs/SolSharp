@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Text;
 using SolSharp.Core.Constants;
 using SolSharp.Core.Primitives;
 
@@ -25,12 +26,14 @@ public static class SystemProgram
     private const uint AllocateWithSeedDiscriminator = 9;
     private const uint AssignWithSeedDiscriminator = 10;
     private const uint TransferWithSeedDiscriminator = 11;
+    private const int MaxSeedLength = 32;
 
     /// <summary>The serialized size of a durable nonce account, in bytes (80).</summary>
     public const int NonceAccountLength = 80;
 
     private static readonly PublicKey RentSysvar = PublicKey.Parse(Sysvars.Rent);
     private static readonly PublicKey RecentBlockhashesSysvar = PublicKey.Parse(Sysvars.RecentBlockhashes);
+    private static readonly UTF8Encoding StrictUtf8 = new(false, true);
 
     /// <summary>Builds a transfer of <paramref name="lamports"/> lamports from one account to another.</summary>
     /// <param name="from">The funding account; signs the transaction and is debited.</param>
@@ -87,6 +90,9 @@ public static class SystemProgram
     /// <param name="owner">The program that will own the new account.</param>
     /// <returns>The createAccountWithSeed instruction.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="seed"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="seed"/> contains invalid Unicode text or is longer than 32 bytes when UTF-8 encoded.
+    /// </exception>
     public static Instruction CreateAccountWithSeed(
         PublicKey from,
         PublicKey createdAccount,
@@ -96,8 +102,7 @@ public static class SystemProgram
         ulong space,
         PublicKey owner)
     {
-        ArgumentNullException.ThrowIfNull(seed);
-        var seedBytes = System.Text.Encoding.UTF8.GetBytes(seed);
+        var seedBytes = EncodeSeed(seed);
 
         using var buffer = new MemoryStream(52 + seedBytes.Length);
         Span<byte> word = stackalloc byte[8];
@@ -172,10 +177,12 @@ public static class SystemProgram
     /// <param name="owner">The program that will own the account.</param>
     /// <returns>The allocateWithSeed instruction.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="seed"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="seed"/> contains invalid Unicode text or is longer than 32 bytes when UTF-8 encoded.
+    /// </exception>
     public static Instruction AllocateWithSeed(PublicKey account, PublicKey baseAccount, string seed, ulong space, PublicKey owner)
     {
-        ArgumentNullException.ThrowIfNull(seed);
-        var seedBytes = System.Text.Encoding.UTF8.GetBytes(seed);
+        var seedBytes = EncodeSeed(seed);
 
         using var buffer = new MemoryStream(84 + seedBytes.Length);
         Span<byte> word = stackalloc byte[8];
@@ -208,10 +215,12 @@ public static class SystemProgram
     /// <param name="owner">The program to set as the new owner.</param>
     /// <returns>The assignWithSeed instruction.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="seed"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="seed"/> contains invalid Unicode text or is longer than 32 bytes when UTF-8 encoded.
+    /// </exception>
     public static Instruction AssignWithSeed(PublicKey account, PublicKey baseAccount, string seed, PublicKey owner)
     {
-        ArgumentNullException.ThrowIfNull(seed);
-        var seedBytes = System.Text.Encoding.UTF8.GetBytes(seed);
+        var seedBytes = EncodeSeed(seed);
 
         using var buffer = new MemoryStream(76 + seedBytes.Length);
         Span<byte> word = stackalloc byte[8];
@@ -244,6 +253,9 @@ public static class SystemProgram
     /// <param name="lamports">The amount to transfer, in lamports.</param>
     /// <returns>The transferWithSeed instruction.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="seed"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="seed"/> contains invalid Unicode text or is longer than 32 bytes when UTF-8 encoded.
+    /// </exception>
     public static Instruction TransferWithSeed(
         PublicKey from,
         PublicKey baseAccount,
@@ -252,8 +264,7 @@ public static class SystemProgram
         PublicKey to,
         ulong lamports)
     {
-        ArgumentNullException.ThrowIfNull(seed);
-        var seedBytes = System.Text.Encoding.UTF8.GetBytes(seed);
+        var seedBytes = EncodeSeed(seed);
 
         using var buffer = new MemoryStream(52 + seedBytes.Length);
         Span<byte> word = stackalloc byte[8];
@@ -386,5 +397,26 @@ public static class SystemProgram
             Accounts = [AccountMeta.Writable(nonceAccount), AccountMeta.ReadonlySigner(authority)],
             Data = data
         };
+    }
+
+    private static byte[] EncodeSeed(string seed)
+    {
+        ArgumentNullException.ThrowIfNull(seed);
+        byte[] bytes;
+        try
+        {
+            bytes = StrictUtf8.GetBytes(seed);
+        }
+        catch (EncoderFallbackException exception)
+        {
+            throw new ArgumentException("A system-program seed must contain valid Unicode text.", nameof(seed), exception);
+        }
+
+        if (bytes.Length > MaxSeedLength)
+            throw new ArgumentException(
+                $"A system-program seed may be at most {MaxSeedLength} bytes when UTF-8 encoded, got {bytes.Length}.",
+                nameof(seed));
+
+        return bytes;
     }
 }
