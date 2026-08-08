@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using FluentAssertions;
 using NUnit.Framework;
+using SolSharp.Core.Primitives;
 using SolSharp.Rpc.Protocol;
 
 namespace SolSharp.Rpc.Tests;
@@ -109,6 +110,48 @@ public static class SolanaRpcClientConfirmTests
             // Assert
             status.ConfirmationStatus.Should().Be("confirmed");
         }
+
+        [Test]
+        public async Task MissingConfirmationStatus_UsesUpstreamConfirmationCountThreshold()
+        {
+            var handler = new SequenceHandler(
+                Json(StatusWithoutConfirmationStatus("1")),
+                Json(StatusWithoutConfirmationStatus("2")));
+            var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
+            var client = new SolanaRpcClient(http);
+
+            var status = await client.ConfirmTransactionAsync("Sig111", Commitment.Confirmed);
+
+            status.Confirmations.Should().Be(2);
+            handler.CallCount.Should().Be(2, "one confirmation is still processed in the legacy response shape");
+        }
+
+        [Test]
+        public async Task MissingConfirmationStatus_NullConfirmationsMeansFinalized()
+        {
+            var (client, _) = Make(StatusWithoutConfirmationStatus("null"));
+
+            var status = await client.ConfirmTransactionAsync("Sig111", Commitment.Finalized);
+
+            status.Confirmations.Should().BeNull();
+        }
+
+        [Test]
+        public async Task MissingConfirmationStatus_ZeroConfirmationsMeansProcessed()
+        {
+            var (client, _) = Make(StatusWithoutConfirmationStatus("0"));
+
+            var status = await client.ConfirmTransactionAsync("Sig111", Commitment.Processed);
+
+            status.Confirmations.Should().Be(0);
+        }
+
+        private static string StatusWithoutConfirmationStatus(string confirmations) =>
+            """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":[{"slot":10,"confirmations":__CONFIRMATIONS__,"err":null,"confirmationStatus":null}]} ,"id":1}"""
+                .Replace("__CONFIRMATIONS__", confirmations);
+
+        private static HttpResponseMessage Json(string body)
+            => new(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
     }
 
     [TestFixture]

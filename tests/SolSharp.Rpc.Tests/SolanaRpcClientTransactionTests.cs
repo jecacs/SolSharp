@@ -130,7 +130,6 @@ public static class SolanaRpcClientTransactionTests
             var options = new SimulateTransactionOptions
             {
                 SigVerify = true,
-                ReplaceRecentBlockhash = true,
                 Commitment = Commitment.Processed,
                 MinContextSlot = 7
             };
@@ -140,9 +139,26 @@ public static class SolanaRpcClientTransactionTests
 
             // Assert
             handler.CapturedRequestBody.Should().Contain("\"sigVerify\":true");
-            handler.CapturedRequestBody.Should().Contain("\"replaceRecentBlockhash\":true");
+            handler.CapturedRequestBody.Should().Contain("\"replaceRecentBlockhash\":false");
             handler.CapturedRequestBody.Should().Contain("\"commitment\":\"processed\"");
             handler.CapturedRequestBody.Should().Contain("\"minContextSlot\":7");
+        }
+
+        [Test]
+        public async Task SignatureVerificationAndBlockhashReplacement_ThrowsBeforeSending()
+        {
+            var (client, handler) = Make(
+                """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"err":null,"logs":[],"unitsConsumed":0}},"id":1}""");
+            var options = new SimulateTransactionOptions
+            {
+                SigVerify = true,
+                ReplaceRecentBlockhash = true
+            };
+
+            Func<Task> act = async () => await client.SimulateTransactionAsync([1, 2, 3], options);
+
+            await act.Should().ThrowAsync<ArgumentException>().WithParameterName("options");
+            handler.CapturedRequestBody.Should().BeNull();
         }
     }
 }

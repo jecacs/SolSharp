@@ -15,10 +15,7 @@ internal sealed class AccountInfoJsonConverter : JsonConverter<AccountInfo>
         using var document = JsonDocument.ParseValue(ref reader);
         var root = document.RootElement;
 
-        var data = root.GetProperty("data");
-        var bytes = data.ValueKind == JsonValueKind.Array && data.GetArrayLength() > 0
-            ? Convert.FromBase64String(data[0].GetString() ?? string.Empty)
-            : [];
+        var bytes = DecodeBase64Tuple(root.GetProperty("data"));
 
         return new AccountInfo
         {
@@ -44,5 +41,24 @@ internal sealed class AccountInfoJsonConverter : JsonConverter<AccountInfo>
         writer.WriteEndArray();
 
         writer.WriteEndObject();
+    }
+
+    internal static byte[] DecodeBase64Tuple(JsonElement data)
+    {
+        if (data.ValueKind != JsonValueKind.Array || data.GetArrayLength() != 2)
+            throw new JsonException("Expected account data as a two-element [data, encoding] array.");
+        if (data[0].ValueKind != JsonValueKind.String)
+            throw new JsonException("Expected account data as a string.");
+        if (data[1].ValueKind != JsonValueKind.String || data[1].GetString() != "base64")
+            throw new JsonException("Expected account data encoding base64.");
+
+        try
+        {
+            return Convert.FromBase64String(data[0].GetString()!);
+        }
+        catch (FormatException exception)
+        {
+            throw new JsonException("Account data is not valid base64.", exception);
+        }
     }
 }

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Threading.Channels;
 using FluentAssertions;
@@ -244,6 +245,186 @@ public static class SolanaWsClientTests
     }
 
     [TestFixture]
+    public sealed class SubscribeCancellation
+    {
+        [Test]
+        public async Task DuringPhysicalSend_DoesNotCancelSharedTransport_AndLateAckIsReleased()
+        {
+            // Arrange: keep one routed subscription alive so a caller cancelling another subscribe
+            // cannot hide a connection-wide transport abort.
+            var fake = new FakeWebSocketConnection();
+            var options = new SolanaWsClientOptions { SubscriptionAckTimeout = TimeSpan.FromSeconds(2) };
+            await using var client = new SolanaWsClient(() => fake, options);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            var program = PublicKey.Parse(SolanaProgramIds.TokenProgram);
+
+            var anchorSubscribe = client.SubscribeLogsAsync(program);
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 10));
+            var anchor = await anchorSubscribe;
+
+            var physicalSendEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var releasePhysicalSend = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var physicalSendToken = CancellationToken.None;
+            fake.SendBehavior = async (message, cancellationToken) =>
+            {
+                if (!message.Contains("logsSubscribe"))
+                    return;
+
+                physicalSendToken = cancellationToken;
+                physicalSendEntered.TrySetResult();
+                await releasePhysicalSend.Task;
+            };
+
+            using var cancellation = new CancellationTokenSource();
+            var cancelledSubscribe = client.SubscribeLogsAsync(program, cancellationToken: cancellation.Token);
+            await physicalSendEntered.Task;
+
+            try
+            {
+                // Act
+                await cancellation.CancelAsync();
+
+                // Assert: the API caller stops promptly, but its token never reaches the one shared
+                // physical send and the existing route remains alive.
+                var cancelled = async () =>
+                    await cancelledSubscribe.WaitAsync(TimeSpan.FromSeconds(1));
+                var thrown = await cancelled.Should().ThrowAsync<OperationCanceledException>();
+                thrown.Which.CancellationToken.Should().Be(cancellation.Token);
+                physicalSendToken.IsCancellationRequested.Should().BeFalse();
+                anchor.Completion.IsCompleted.Should().BeFalse();
+            }
+            finally
+            {
+                releasePhysicalSend.TrySetResult();
+            }
+
+            await WaitUntil(() => fake.SentSnapshot().Count(message => message.Contains("logsSubscribe")) == 2);
+            var cancelledRequest = fake.SentSnapshot().Last(message => message.Contains("logsSubscribe"));
+            fake.PushFromServer(Acknowledgement(RequestId(cancelledRequest), subscriptionId: 20));
+            await WaitUntil(() => fake.SentSnapshot().Any(message =>
+                message.Contains("logsUnsubscribe") && message.Contains("[20]")));
+
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"logsNotification","params":{"subscription":10,"result":{"context":{"slot":5},"value":{"signature":"still-live","err":null,"logs":[]}}}}""");
+            (await anchor.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1)))
+                .Value!.Signature.Should().Be("still-live");
+        }
+
+        [Test]
+        public async Task BeforePhysicalSend_RemovesPendingEntriesWithoutUsingTombstoneBudget()
+        {
+            // Arrange: an established subscription's unsubscribe owns the send lock while two new
+            // subscribe requests queue behind it and are therefore definitely not sent.
+            var fake = new FakeWebSocketConnection();
+            var options = new SolanaWsClientOptions
+            {
+                MaxPendingSubscriptionRequests = 2,
+                SubscriptionAckTimeout = TimeSpan.FromSeconds(2)
+            };
+            await using var client = new SolanaWsClient(() => fake, options);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            var program = PublicKey.Parse(SolanaProgramIds.TokenProgram);
+
+            using var seedCancellation = new CancellationTokenSource();
+            var seedSubscribe = client.SubscribeLogsAsync(program, cancellationToken: seedCancellation.Token);
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 10));
+            _ = await seedSubscribe;
+
+            var unsubscribeEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var releaseUnsubscribe = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            fake.SendBehavior = async (message, cancellationToken) =>
+            {
+                if (!message.Contains("logsUnsubscribe"))
+                    return;
+
+                unsubscribeEntered.TrySetResult();
+                await releaseUnsubscribe.Task.WaitAsync(cancellationToken);
+            };
+
+            await seedCancellation.CancelAsync();
+            await unsubscribeEntered.Task;
+
+            try
+            {
+                using var cancelA = new CancellationTokenSource();
+                using var cancelB = new CancellationTokenSource();
+                var subscribeA = client.SubscribeLogsAsync(program, cancellationToken: cancelA.Token);
+                var subscribeB = client.SubscribeLogsAsync(program, cancellationToken: cancelB.Token);
+                await WaitUntil(() => client.RetainedPendingSubscriptionReferenceCount == 2);
+
+                // Act
+                await cancelA.CancelAsync();
+                await cancelB.CancelAsync();
+
+                // Assert
+                var cancelledA = async () => await subscribeA.WaitAsync(TimeSpan.FromSeconds(1));
+                var cancelledB = async () => await subscribeB.WaitAsync(TimeSpan.FromSeconds(1));
+                await cancelledA.Should().ThrowAsync<OperationCanceledException>();
+                await cancelledB.Should().ThrowAsync<OperationCanceledException>();
+                client.RetainedPendingSubscriptionReferenceCount.Should().Be(0);
+                client.RetainedAcknowledgementTombstoneCount.Should().Be(0);
+                fake.SentSnapshot().Count(message => message.Contains("logsSubscribe")).Should().Be(1,
+                    "cancelled requests queued behind the send lock never reached the transport");
+
+                // Freed pre-send entries make the cap immediately reusable.
+                var admitted = client.SubscribeLogsAsync(program);
+                releaseUnsubscribe.TrySetResult();
+                await WaitUntil(() => fake.SentSnapshot().Count(message => message.Contains("logsSubscribe")) == 2);
+                var admittedRequest = fake.SentSnapshot().Last(message => message.Contains("logsSubscribe"));
+                fake.PushFromServer(Acknowledgement(RequestId(admittedRequest), subscriptionId: 30));
+                _ = await admitted;
+            }
+            finally
+            {
+                releaseUnsubscribe.TrySetResult();
+            }
+        }
+
+        [Test]
+        public async Task LateCleanupAck_DoesNotTurnCancellationIntoSuccessfulSubscribe()
+        {
+            // Arrange: hold async continuations off-thread so cancellation wins first, the receive
+            // loop processes a late ACK for cleanup, and only then the subscribe continuation runs.
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            using var cancellation = new CancellationTokenSource();
+            var queuedContext = new QueuedSynchronizationContext();
+            var previousContext = SynchronizationContext.Current;
+            Task subscribe;
+
+            try
+            {
+                SynchronizationContext.SetSynchronizationContext(queuedContext);
+                subscribe = client.SubscribeLogsAsync(
+                    PublicKey.Parse(SolanaProgramIds.TokenProgram),
+                    cancellationToken: cancellation.Token);
+                fake.SentCount.Should().Be(1, "the in-memory send completes synchronously");
+                cancellation.Cancel();
+            }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(previousContext);
+            }
+
+            var request = fake.SentSnapshot().Single(message => message.Contains("logsSubscribe"));
+
+            // Act: route the cleanup ACK while EstablishAsync's cancellation continuation is queued.
+            fake.PushFromServer(Acknowledgement(RequestId(request), subscriptionId: 40));
+            await WaitUntil(() => fake.SentSnapshot().Any(message =>
+                message.Contains("logsUnsubscribe") && message.Contains("[40]")));
+            queuedContext.Drain();
+
+            // Assert
+            var cancelled = async () => await subscribe.WaitAsync(TimeSpan.FromSeconds(1));
+            var thrown = await cancelled.Should().ThrowAsync<OperationCanceledException>();
+            thrown.Which.CancellationToken.Should().Be(cancellation.Token);
+        }
+    }
+
+    [TestFixture]
     public sealed class SubscribeRejection
     {
         [Test]
@@ -425,6 +606,54 @@ public static class SolanaWsClientTests
             // A notification carrying the new id reaches the original, still-open reader.
             second.PushFromServer(AccountNotification(subscription: 22, lamports: 2));
             (await reader.ReadAsync()).Value!.Lamports.Should().Be(2);
+        }
+
+        [Test]
+        public async Task DuplicateServerSubscriptionId_FaultsGenerationAndReplaysExistingRoute()
+        {
+            // Arrange
+            var first = new FakeWebSocketConnection();
+            var second = new FakeWebSocketConnection();
+            var connections = new[] { first, second };
+            var index = -1;
+            var options = new SolanaWsClientOptions
+            {
+                ReconnectInitialDelay = TimeSpan.FromMilliseconds(1),
+                ReconnectMaxDelay = TimeSpan.FromMilliseconds(1)
+            };
+            await using var client = new SolanaWsClient(
+                () => connections[Interlocked.Increment(ref index)], options);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            var program = PublicKey.Parse(SolanaProgramIds.TokenProgram);
+
+            var firstSubscribe = client.SubscribeLogsAsync(program);
+            await WaitUntil(() => first.SentCount == 1);
+            first.PushFromServer(Acknowledgement(RequestId(first.SentSnapshot()[0]), subscriptionId: 41));
+            var reader = await firstSubscribe;
+
+            var collidingSubscribe = client.SubscribeLogsAsync(program);
+            await WaitUntil(() => first.SentCount == 2);
+
+            // Act: assigning the live route's id to another request makes notification and
+            // unsubscribe routing ambiguous, so the entire physical generation is rejected.
+            first.PushFromServer(Acknowledgement(RequestId(first.SentSnapshot()[1]), subscriptionId: 41));
+
+            // Assert: the colliding initial request faults, no unsubscribe is sent for the ambiguous
+            // id, and the pre-existing subscription is safely replayed onto a clean connection.
+            var collision = async () => await collidingSubscribe.WaitAsync(TimeSpan.FromSeconds(1));
+            (await collision.Should().ThrowAsync<InvalidOperationException>())
+                .Which.Message.Should().Contain("duplicate WebSocket subscription id 41");
+            first.SentSnapshot().Should().NotContain(message =>
+                message.Contains("Unsubscribe") && message.Contains("[41]"));
+
+            await WaitUntil(() => second.SentSnapshot().Any(message => message.Contains("logsSubscribe")));
+            var replay = second.SentSnapshot().Single(message => message.Contains("logsSubscribe"));
+            second.PushFromServer(Acknowledgement(RequestId(replay), subscriptionId: 42));
+            second.PushFromServer(
+                """{"jsonrpc":"2.0","method":"logsNotification","params":{"subscription":42,"result":{"context":{"slot":6},"value":{"signature":"replayed","err":null,"logs":[]}}}}""");
+
+            (await reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1)))
+                .Value!.Signature.Should().Be("replayed");
         }
 
         [Test]
@@ -1522,6 +1751,30 @@ public static class SolanaWsClientTests
     public sealed class Dispose
     {
         [Test]
+        public async Task DisposesConnectionBeforeCancellingEpochReceiveToken()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            var receiveTokenWasCancelledAtDispose = true;
+            fake.DisposeBehavior = () =>
+            {
+                receiveTokenWasCancelledAtDispose = fake.LastReceiveCancellationToken.IsCancellationRequested;
+                return ValueTask.CompletedTask;
+            };
+            var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            await fake.ReceiveStarted.Task;
+
+            // Act
+            await client.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1));
+
+            // Assert: the adapter needs the epoch receive alive while its DisposeAsync performs the
+            // close handshake; the epoch token is cancelled immediately after transport disposal.
+            receiveTokenWasCancelledAtDispose.Should().BeFalse();
+            fake.LastReceiveCancellationToken.IsCancellationRequested.Should().BeTrue();
+        }
+
+        [Test]
         public async Task CompletesActiveSubscriptionChannels()
         {
             // Arrange
@@ -1634,6 +1887,28 @@ public static class SolanaWsClientTests
             releaseUnsubscribe.TrySetResult();
             await dispose.WaitAsync(TimeSpan.FromSeconds(1));
             fake.DisposeCount.Should().Be(1);
+        }
+    }
+
+    private sealed class QueuedSynchronizationContext : SynchronizationContext
+    {
+        private readonly ConcurrentQueue<(SendOrPostCallback Callback, object? State)> _callbacks = new();
+
+        public override void Post(SendOrPostCallback d, object? state) => _callbacks.Enqueue((d, state));
+
+        public void Drain()
+        {
+            var previousContext = Current;
+            SetSynchronizationContext(this);
+            try
+            {
+                while (_callbacks.TryDequeue(out var callback))
+                    callback.Callback(callback.State);
+            }
+            finally
+            {
+                SetSynchronizationContext(previousContext);
+            }
         }
     }
 

@@ -1,6 +1,8 @@
 using FluentAssertions;
 using NUnit.Framework;
+using SolSharp.Core.Constants;
 using SolSharp.Core.Primitives;
+using SolSharp.Rpc.Models;
 
 namespace SolSharp.Rpc.Tests;
 
@@ -20,9 +22,10 @@ public static class SolanaRpcClientLookupTableTests
         return (new SolanaRpcClient(http), handler);
     }
 
-    private static string AccountEnvelope(string dataBase64) =>
-        """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"data":["__DATA__","base64"],"executable":false,"lamports":1,"owner":"11111111111111111111111111111111","rentEpoch":0,"space":120}},"id":1}"""
-            .Replace("__DATA__", dataBase64);
+    private static string AccountEnvelope(string dataBase64, string owner = SolanaProgramIds.AddressLookupTableProgram) =>
+        """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"data":["__DATA__","base64"],"executable":false,"lamports":1,"owner":"__OWNER__","rentEpoch":0,"space":120}},"id":1}"""
+            .Replace("__DATA__", dataBase64)
+            .Replace("__OWNER__", owner);
 
     [TestFixture]
     public sealed class GetAddressLookupTableAsync
@@ -75,6 +78,27 @@ public static class SolanaRpcClientLookupTableTests
 
             // Assert
             table.Should().BeNull();
+        }
+
+        [Test]
+        public async Task WrongOwner_ReturnsNull()
+        {
+            var (client, _) = Make(AccountEnvelope(TableDataBase64, SolanaProgramIds.SystemProgram));
+
+            var table = await client.GetAddressLookupTableAsync(PublicKey.Parse(TableAddress));
+
+            table.Should().BeNull();
+        }
+
+        [Test]
+        public void InvalidAuthorityOptionOrUnalignedTail_ReturnsNull()
+        {
+            var invalidOption = Convert.FromBase64String(TableDataBase64);
+            invalidOption[21] = 2;
+            byte[] unalignedTail = [.. Convert.FromBase64String(TableDataBase64), 0];
+
+            AddressLookupTable.Decode(invalidOption).Should().BeNull();
+            AddressLookupTable.Decode(unalignedTail).Should().BeNull();
         }
     }
 }

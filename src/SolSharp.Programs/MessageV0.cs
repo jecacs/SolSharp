@@ -101,7 +101,8 @@ public sealed class MessageV0 : ITransactionMessage
         }
 
         // The runtime resolves a durable nonce before loading address tables, so the nonce account
-        // named by an exact first AdvanceNonceAccount instruction must remain in the static keys.
+        // named by a first System instruction whose data starts with the AdvanceNonceAccount
+        // discriminator must remain in the static keys. Solana permits trailing instruction data here.
         if (TryGetNonceAccount(instructions, out var nonceAccount))
         {
             var current = metas[nonceAccount];
@@ -550,8 +551,8 @@ public sealed class MessageV0 : ITransactionMessage
         {
             var first = instructions[0];
             if (first.ProgramId == SystemProgram.ProgramId
-                && first.Data.Length == sizeof(uint)
-                && BinaryPrimitives.ReadUInt32LittleEndian(first.Data) == 4
+                && first.Data.Length >= sizeof(uint)
+                && BinaryPrimitives.ReadUInt32LittleEndian(first.Data.AsSpan(0, sizeof(uint))) == 4
                 && first.Accounts.Count > 0)
             {
                 nonceAccount = first.Accounts[0].PublicKey;

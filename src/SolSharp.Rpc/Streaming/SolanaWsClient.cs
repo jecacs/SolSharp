@@ -645,7 +645,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
         try
         {
-            await SendAsync(
+            var sendTask = SendAsync(
                 epoch,
                 new RpcRequest
                 {
@@ -653,7 +653,20 @@ public sealed class SolanaWsClient : IAsyncDisposable
                     Method = subscription.SubscribeMethod,
                     Params = subscription.Params
                 },
-                cancellationToken);
+                cancellationToken,
+                pending: pending);
+
+            try
+            {
+                // Once the physical send starts it is owned by the connection rather than this caller.
+                // Keep cancellation prompt for the subscriber while observing the send in the background.
+                await sendTask.WaitAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                _ = SuppressAsync(sendTask);
+                throw;
+            }
 
             await pending.Acked.Task.WaitAsync(_options.SubscriptionAckTimeout, cancellationToken);
         }
@@ -678,7 +691,9 @@ public sealed class SolanaWsClient : IAsyncDisposable
     {
         lock (_stateGate)
         {
-            if (pending.State == PendingState.Acknowledged)
+            // A successful completion is the commit point. A late ACK may already have been routed
+            // for cleanup, but it must not turn the caller's cancellation or timeout into success.
+            if (pending.Acked.Task.IsCompletedSuccessfully)
                 return true;
 
             if (pending.State == PendingState.Awaiting)
@@ -687,16 +702,25 @@ public sealed class SolanaWsClient : IAsyncDisposable
                 pending.Acked.TrySetCanceled();
             }
 
-            // Keep an abandoned request as a generation-scoped tombstone. A late acknowledgement
-            // otherwise creates an unowned server-side subscription that can never be released.
             return false;
         }
     }
 
-    private static void AbandonPendingLocked(PendingSubscribe pending)
+    private void AbandonPendingLocked(PendingSubscribe pending)
     {
         var subscription = pending.Subscription;
-        pending.State = PendingState.Abandoned;
+        if (pending.MayHaveBeenSent)
+        {
+            // A possibly-sent request needs a generation-scoped tombstone so a late successful ACK
+            // can be unsubscribed. Requests cancelled before the physical send need no such entry.
+            pending.State = PendingState.Abandoned;
+        }
+        else
+        {
+            _pending.Remove(pending.RequestId);
+            pending.State = PendingState.Failed;
+        }
+
         if (subscription is not null && ReferenceEquals(subscription.Attempt, pending))
             subscription.Attempt = null;
 
@@ -843,7 +867,8 @@ public sealed class SolanaWsClient : IAsyncDisposable
         ConnectionEpoch epoch,
         RpcRequest request,
         CancellationToken cancellationToken,
-        bool reservationHeld = false)
+        bool reservationHeld = false,
+        PendingSubscribe? pending = null)
     {
         if (!reservationHeld)
         {
@@ -857,18 +882,37 @@ public sealed class SolanaWsClient : IAsyncDisposable
         try
         {
             var json = JsonSerializer.Serialize(request, RpcJson.TypeInfo<RpcRequest>());
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(
+            using var waitCancellation = CancellationTokenSource.CreateLinkedTokenSource(
                 cancellationToken, _lifetimeCts.Token, epoch.Token);
-            await _sendLock.WaitAsync(linked.Token);
+            await _sendLock.WaitAsync(waitCancellation.Token);
             try
             {
                 lock (_stateGate)
                 {
                     if (_phase != ClientPhase.Connected || !ReferenceEquals(_connection, epoch))
                         throw ConnectionChangedBeforeSend();
+
+                    if (pending is not null)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        if (pending.State != PendingState.Awaiting ||
+                            !_pending.TryGetValue(pending.RequestId, out var current) ||
+                            !ReferenceEquals(current, pending))
+                        {
+                            throw new InvalidOperationException(
+                                "The subscription ended before its request was sent.");
+                        }
+
+                        // Cancellation before this point is definitely pre-send and removes the
+                        // pending entry. From here on, retain a tombstone on cancellation because
+                        // the request may reach the server even if the transport later reports failure.
+                        pending.MayHaveBeenSent = true;
+                    }
                 }
 
-                await epoch.Connection.SendAsync(json, linked.Token);
+                using var transportCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+                    _lifetimeCts.Token, epoch.Token);
+                await epoch.Connection.SendAsync(json, transportCancellation.Token);
             }
             finally
             {
@@ -1285,11 +1329,11 @@ public sealed class SolanaWsClient : IAsyncDisposable
                 return;
             }
 
-            _pending.Remove(requestId);
             var subscription = pending.Subscription;
             var wasAwaiting = pending.State == PendingState.Awaiting && subscription is not null;
             if (result.ValueKind != JsonValueKind.Number || !result.TryGetInt64(out var subscriptionId))
             {
+                _pending.Remove(requestId);
                 pending.State = PendingState.Failed;
                 if (subscription is not null && ReferenceEquals(subscription.Attempt, pending))
                     subscription.Attempt = null;
@@ -1298,15 +1342,25 @@ public sealed class SolanaWsClient : IAsyncDisposable
                 return;
             }
 
+            if (_byServerId.ContainsKey((epoch.Generation, subscriptionId)))
+            {
+                // The id is the sole routing key for notifications and unsubscriptions. Accepting
+                // an ambiguous id could misroute data or unsubscribe the existing subscription.
+                // Leave this pending entry intact so EndGeneration can fault its waiter.
+                throw new InvalidDataException(
+                    $"The node assigned duplicate WebSocket subscription id {subscriptionId}.");
+            }
+
             var canAccept = wasAwaiting &&
                             subscription!.Phase != SubscriptionPhase.Terminal &&
                             ReferenceEquals(subscription.Attempt, pending) &&
                             _phase == ClientPhase.Connected &&
                             ReferenceEquals(_connection, epoch);
-            pending.State = PendingState.Acknowledged;
+            _pending.Remove(requestId);
 
             if (canAccept)
             {
+                pending.State = PendingState.Acknowledged;
                 var binding = new RouteBinding(epoch, subscriptionId);
                 subscription!.Attempt = null;
                 subscription.Binding = binding;
@@ -1317,6 +1371,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
             }
             else
             {
+                pending.State = PendingState.LateAcknowledged;
                 lateBinding = new RouteBinding(epoch, subscriptionId);
                 lateUnsubscribeMethod = pending.UnsubscribeMethod;
                 reservationHeld = TryReserveSendLocked(epoch);
@@ -1533,6 +1588,8 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
         public PendingState State { get; set; }
 
+        public bool MayHaveBeenSent { get; set; }
+
         public void DetachSubscription() => Subscription = null;
     }
 
@@ -1565,8 +1622,17 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
         private async Task DisposeCoreAsync()
         {
-            await _closed.CancelAsync();
-            await _disposeConnection(Connection);
+            try
+            {
+                // Keep the epoch receive token alive while the connection performs its close
+                // handshake. Client shutdown cancels the lifetime token separately, so sends and
+                // connects still stop promptly while the active receive can consume the peer close.
+                await _disposeConnection(Connection);
+            }
+            finally
+            {
+                await _closed.CancelAsync();
+            }
         }
     }
 
@@ -1641,6 +1707,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         Awaiting,
         Abandoned,
         Acknowledged,
+        LateAcknowledged,
         Failed
     }
 

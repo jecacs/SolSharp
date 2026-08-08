@@ -118,6 +118,22 @@ public static class ServiceCollectionExtensionsTests
             act.Should().NotThrow();
         }
 
+        [Test]
+        public void RejectsNonPositiveResponseLimit()
+        {
+            var services = new ServiceCollection();
+            services.AddSolanaRpc(options =>
+            {
+                options.Endpoint = "https://api.devnet.solana.com";
+                options.MaximumResponseContentLength = 0;
+            });
+            var provider = services.BuildServiceProvider();
+
+            Action act = () => _ = provider.GetRequiredService<IOptions<SolanaRpcOptions>>().Value;
+
+            act.Should().Throw<OptionsValidationException>();
+        }
+
         private static ServiceProvider ProviderFor(string endpoint)
         {
             var services = new ServiceCollection();

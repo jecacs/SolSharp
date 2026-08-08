@@ -36,8 +36,8 @@ public static class ServiceCollectionExtensions
         Action<HttpStandardResilienceOptions>? configureResilience = null)
     {
         // Validated with an explicit predicate rather than ValidateDataAnnotations: the DataAnnotations
-        // validator reflects over the options type (RequiresUnreferencedCode, not AOT-safe), and this
-        // single check subsumes [Required] and [Url] for the one property anyway.
+        // validator reflects over the options type (RequiresUnreferencedCode, not AOT-safe), so keep the
+        // endpoint and response-limit checks as explicit predicates.
         services
             .AddOptions<SolanaRpcOptions>()
             .Configure(configure)
@@ -45,6 +45,9 @@ public static class ServiceCollectionExtensions
                 options => Uri.TryCreate(options.Endpoint, UriKind.Absolute, out var uri)
                            && uri.Scheme is "http" or "https",
                 "SolanaRpcOptions.Endpoint must be an absolute http(s) URL.")
+            .Validate(
+                options => options.MaximumResponseContentLength > 0,
+                "SolanaRpcOptions.MaximumResponseContentLength must be positive.")
             .ValidateOnStart();
 
         var builder = services.AddHttpClient<SolanaRpcClient>((provider, client) =>

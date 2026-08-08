@@ -1,5 +1,9 @@
+using System.Buffers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using SolSharp.Core.Constants;
 using SolSharp.Core.Primitives;
 using SolSharp.Rpc.Models;
 using SolSharp.Rpc.Models.Parsed;
@@ -12,9 +16,49 @@ namespace SolSharp.Rpc;
 /// BaseAddress set to the RPC endpoint. Read methods only for now; throws <see cref="RpcException"/>
 /// on a node-level error.
 /// </summary>
-public class SolanaRpcClient(HttpClient httpClient)
+public class SolanaRpcClient
 {
     internal static readonly HttpRequestOptionsKey<bool> DisableRetriesKey = new("SolSharp.DisableRetries");
+
+    private static readonly PublicKey SystemProgramOwner = PublicKey.Parse(SolanaProgramIds.SystemProgram);
+    private static readonly PublicKey TokenProgramOwner = PublicKey.Parse(SolanaProgramIds.TokenProgram);
+    private static readonly PublicKey Token2022ProgramOwner = PublicKey.Parse(SolanaProgramIds.Token2022Program);
+    private static readonly PublicKey AddressLookupTableProgramOwner = PublicKey.Parse(SolanaProgramIds.AddressLookupTableProgram);
+
+    private readonly HttpClient _httpClient;
+    private readonly int _maximumResponseContentLength;
+
+    /// <summary>Creates a client with the default 128 MiB HTTP response-body limit.</summary>
+    /// <param name="httpClient">The HTTP client whose base address points at a Solana JSON-RPC endpoint.</param>
+    public SolanaRpcClient(HttpClient httpClient)
+        : this(httpClient, SolanaRpcOptions.DefaultMaximumResponseContentLength)
+    {
+    }
+
+    /// <summary>Creates a client with an explicit HTTP response-body limit.</summary>
+    /// <param name="httpClient">The HTTP client whose base address points at a Solana JSON-RPC endpoint.</param>
+    /// <param name="maximumResponseContentLength">Maximum decoded response body size, in bytes.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="httpClient"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumResponseContentLength"/> is not positive.</exception>
+    public SolanaRpcClient(HttpClient httpClient, int maximumResponseContentLength)
+    {
+        ArgumentNullException.ThrowIfNull(httpClient);
+        if (maximumResponseContentLength <= 0)
+            throw new ArgumentOutOfRangeException(
+                nameof(maximumResponseContentLength), maximumResponseContentLength, "The response-content limit must be positive.");
+
+        _httpClient = httpClient;
+        _maximumResponseContentLength = maximumResponseContentLength;
+    }
+
+    /// <summary>Creates a client from dependency-injection options.</summary>
+    /// <param name="httpClient">The HTTP client whose base address points at a Solana JSON-RPC endpoint.</param>
+    /// <param name="options">The configured RPC options.</param>
+    [ActivatorUtilitiesConstructor]
+    public SolanaRpcClient(HttpClient httpClient, IOptions<SolanaRpcOptions> options)
+        : this(httpClient, (options ?? throw new ArgumentNullException(nameof(options))).Value.MaximumResponseContentLength)
+    {
+    }
 
     /// <summary>
     /// Returns the latest blockhash, used as the recent blockhash when building a transaction.
@@ -226,6 +270,7 @@ public class SolanaRpcClient(HttpClient httpClient)
     /// <param name="cancellationToken">A token to cancel the request.</param>
     /// <returns>The simulation result.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="transaction"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException"><see cref="SimulateTransactionOptions.SigVerify"/> and <see cref="SimulateTransactionOptions.ReplaceRecentBlockhash"/> are both enabled.</exception>
     /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
     /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
     /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
@@ -236,6 +281,9 @@ public class SolanaRpcClient(HttpClient httpClient)
     {
         ArgumentNullException.ThrowIfNull(transaction);
         options ??= new SimulateTransactionOptions();
+        if (options.SigVerify && options.ReplaceRecentBlockhash)
+            throw new ArgumentException(
+                "Signature verification cannot be combined with recent-blockhash replacement.", nameof(options));
 
         var encoded = Convert.ToBase64String(transaction);
         var result = await SendAsync<RpcContextValue<SimulateTransactionResult>>(
@@ -360,7 +408,9 @@ public class SolanaRpcClient(HttpClient httpClient)
         CancellationToken cancellationToken = default)
     {
         var account = await GetAccountInfoAsync(tableAddress, commitment, cancellationToken: cancellationToken);
-        return account is null ? null : AddressLookupTable.Decode(account.Data);
+        return account is { Executable: false } && account.Owner == AddressLookupTableProgramOwner
+            ? AddressLookupTable.Decode(account.Data)
+            : null;
     }
 
     /// <summary>
@@ -569,7 +619,7 @@ public class SolanaRpcClient(HttpClient httpClient)
                     var statuses = await GetSignatureStatusesAsync(
                         [signature], searchTransactionHistory: false, linkedCts.Token);
                     var status = statuses.Count > 0 ? statuses[0] : null;
-                    if (status is not null && StatusRank(status.ConfirmationStatus) >= target)
+                    if (status is not null && StatusRank(status) >= target)
                         return status;
 
                     await Task.Delay(ConfirmationPollInterval, linkedCts.Token);
@@ -630,13 +680,28 @@ public class SolanaRpcClient(HttpClient httpClient)
         _ => 1
     };
 
-    private static int StatusRank(string? confirmationStatus) => confirmationStatus switch
+    private static int StatusRank(SignatureStatus status)
     {
-        "processed" => 0,
-        "confirmed" => 1,
-        "finalized" => 2,
-        _ => -1
-    };
+        if (status.ConfirmationStatus is not null)
+        {
+            return status.ConfirmationStatus switch
+            {
+                "processed" => 0,
+                "confirmed" => 1,
+                "finalized" => 2,
+                _ => -1
+            };
+        }
+
+        // Older nodes omitted confirmationStatus. Match the upstream confirmation loop exactly:
+        // zero or one confirmation is still processed, more than one is confirmed, and null is rooted/finalized.
+        return status.Confirmations switch
+        {
+            null => 2,
+            > 1 => 1,
+            _ => 0
+        };
+    }
 
     private static readonly TimeSpan DefaultConfirmationTimeout = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan ConfirmationPollInterval = TimeSpan.FromSeconds(1);
@@ -662,8 +727,8 @@ public class SolanaRpcClient(HttpClient httpClient)
     }
 
     /// <summary>
-    /// Fetches and decodes an SPL Token mint account, or returns <c>null</c> if nothing exists at
-    /// <paramref name="mint"/> or the account is too short to be a mint.
+    /// Fetches and decodes a classic Token or Token-2022 mint account, or returns <c>null</c> if nothing
+    /// exists at <paramref name="mint"/> or its owner and data layout do not identify a mint.
     /// </summary>
     /// <param name="mint">The mint account's address.</param>
     /// <param name="commitment">The commitment level to query at.</param>
@@ -678,7 +743,13 @@ public class SolanaRpcClient(HttpClient httpClient)
         CancellationToken cancellationToken = default)
     {
         var account = await GetAccountInfoAsync(mint, commitment, cancellationToken: cancellationToken);
-        return account is null ? null : Mint.Decode(account.Data);
+        if (account is not { Executable: false })
+            return null;
+
+        if (account.Owner == TokenProgramOwner)
+            return account.Data.Length == Mint.Length ? Mint.Decode(account.Data) : null;
+
+        return account.Owner == Token2022ProgramOwner ? Mint.Decode(account.Data) : null;
     }
 
     /// <summary>
@@ -699,12 +770,14 @@ public class SolanaRpcClient(HttpClient httpClient)
         CancellationToken cancellationToken = default)
     {
         var account = await GetAccountInfoAsync(nonceAccount, commitment, cancellationToken: cancellationToken);
-        return account is null ? null : NonceAccount.Decode(account.Data);
+        return account is { Executable: false } && account.Owner == SystemProgramOwner
+            ? NonceAccount.Decode(account.Data)
+            : null;
     }
 
     /// <summary>
-    /// Fetches and decodes an SPL Token account, or returns <c>null</c> if nothing exists at
-    /// <paramref name="tokenAccount"/> or the account is too short to be a token account.
+    /// Fetches and decodes a classic Token or Token-2022 holding account, or returns <c>null</c> if nothing
+    /// exists at <paramref name="tokenAccount"/> or its owner and data layout do not identify one.
     /// </summary>
     /// <param name="tokenAccount">The token account's address.</param>
     /// <param name="commitment">The commitment level to query at.</param>
@@ -719,7 +792,13 @@ public class SolanaRpcClient(HttpClient httpClient)
         CancellationToken cancellationToken = default)
     {
         var account = await GetAccountInfoAsync(tokenAccount, commitment, cancellationToken: cancellationToken);
-        return account is null ? null : TokenAccount.Decode(account.Data);
+        if (account is not { Executable: false })
+            return null;
+
+        if (account.Owner == TokenProgramOwner)
+            return account.Data.Length == TokenAccount.Length ? TokenAccount.Decode(account.Data) : null;
+
+        return account.Owner == Token2022ProgramOwner ? TokenAccount.Decode(account.Data) : null;
     }
 
     /// <summary>
@@ -1261,13 +1340,17 @@ public class SolanaRpcClient(HttpClient httpClient)
 
     internal async Task<JsonElement> SendBatchAsync(IReadOnlyList<RpcRequest> requests, CancellationToken cancellationToken)
     {
-        using var response = await httpClient
-            .PostAsJsonAsync(string.Empty, requests, RpcJson.TypeInfo<IReadOnlyList<RpcRequest>>(), cancellationToken);
+        using var message = new HttpRequestMessage(HttpMethod.Post, string.Empty)
+        {
+            Content = JsonContent.Create(requests, RpcJson.TypeInfo<IReadOnlyList<RpcRequest>>())
+        };
+        using var response = await _httpClient.SendAsync(
+            message, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
         response.EnsureSuccessStatusCode();
 
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        var body = await ReadResponseBodyAsync(response.Content, cancellationToken);
+        using var document = JsonDocument.Parse(body);
         return document.RootElement.Clone();
     }
 
@@ -1280,20 +1363,64 @@ public class SolanaRpcClient(HttpClient httpClient)
         if (request.Method == RpcMethods.RequestAirdrop)
             message.Options.Set(DisableRetriesKey, true);
 
-        using var response = await httpClient.SendAsync(message, cancellationToken);
+        using var response = await _httpClient.SendAsync(
+            message, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
         response.EnsureSuccessStatusCode();
 
-        var body = await response.Content.ReadAsByteArrayAsync(cancellationToken);
-        return DeserializeEnvelope<T>(body, request.Id);
+        var body = await ReadResponseBodyAsync(response.Content, cancellationToken);
+        return DeserializeEnvelope<T>(body.Span, request.Id);
     }
+
+    private async Task<ReadOnlyMemory<byte>> ReadResponseBodyAsync(HttpContent content, CancellationToken cancellationToken)
+    {
+        var contentLength = content.Headers.ContentLength;
+        if (contentLength is { } declaredLength && declaredLength > _maximumResponseContentLength)
+            throw ResponseTooLarge(declaredLength);
+
+        await using var stream = await content.ReadAsStreamAsync(cancellationToken);
+        var initialCapacity = contentLength is > 0
+            ? Math.Min((int)contentLength.Value, 64 * 1024)
+            : Math.Min(16 * 1024, _maximumResponseContentLength);
+        using var body = new MemoryStream(initialCapacity);
+        var buffer = ArrayPool<byte>.Shared.Rent(64 * 1024);
+
+        try
+        {
+            long total = 0;
+            while (true)
+            {
+                var remaining = _maximumResponseContentLength - total;
+                var requested = (int)Math.Min(buffer.Length, remaining + 1);
+                var read = await stream.ReadAsync(
+                    buffer.AsMemory(0, requested), cancellationToken);
+                if (read == 0)
+                    return body.GetBuffer().AsMemory(0, checked((int)total));
+
+                total += read;
+                if (total > _maximumResponseContentLength)
+                    throw ResponseTooLarge(total);
+
+                body.Write(buffer, 0, read);
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    private HttpRequestException ResponseTooLarge(long receivedLength)
+        => new(
+            $"The JSON-RPC response body is {receivedLength} bytes, exceeding the configured "
+            + $"{_maximumResponseContentLength}-byte limit ({nameof(SolanaRpcOptions.MaximumResponseContentLength)}).");
 
     // Validates the envelope and extracts the result in a single pass: a Utf8JsonReader walk checks
     // jsonrpc/id/error and records the span of the result value, which is then deserialized directly -
     // no intermediate JsonElement DOM of the (possibly multi-megabyte) result.
-    private static T DeserializeEnvelope<T>(byte[] body, int requestId)
+    private static T DeserializeEnvelope<T>(ReadOnlySpan<byte> body, int requestId)
     {
-        var span = body.AsSpan();
+        var span = body;
         // ReadFromJsonAsync tolerated a UTF-8 BOM; Utf8JsonReader rejects it.
         if (span.Length >= 3 && span[0] == 0xEF && span[1] == 0xBB && span[2] == 0xBF)
             span = span[3..];

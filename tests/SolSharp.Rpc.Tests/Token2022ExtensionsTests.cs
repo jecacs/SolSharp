@@ -133,6 +133,33 @@ public static class Token2022ExtensionsTests
         }
 
         [Test]
+        public void SingleTrailingReallocationByte_IsAccepted()
+        {
+            byte[] data = [.. Extended(accountType: 1), 0xAA];
+
+            TokenExtensionSet.DecodeMint(data).Should().NotBeNull();
+        }
+
+        [Test]
+        public void UninitializedType_StopsWithoutInspectingRemainingBytes()
+        {
+            byte[] data = [.. Extended(accountType: 1), 0, 0, 0xAA, 0xBB];
+
+            TokenExtensionSet.DecodeMint(data).Should().NotBeNull();
+        }
+
+        [Test]
+        public void UnknownFutureExtensionType_IsPreservedAsOpaqueData()
+        {
+            var extensions = TokenExtensionSet.DecodeMint(
+                Extended(accountType: 1, (29, [0xAA, 0xBB])));
+
+            extensions.Should().NotBeNull();
+            extensions!.Extensions.Should().ContainSingle().Which.Should().BeEquivalentTo(
+                new TokenExtension { Type = (ExtensionType)29, Data = [0xAA, 0xBB] });
+        }
+
+        [Test]
         public void TokenMetadata_DecodesBorshContent()
         {
             // Arrange: OptionalNonZeroPubkey (none) + Borsh mint, name, symbol, uri, and one extra pair.

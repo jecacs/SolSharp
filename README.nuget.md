@@ -44,6 +44,8 @@ var signature = await rpc.SendAndConfirmTransactionAsync(tx.Serialize());
 
 ```csharp
 // WebSocket streaming
+using SolSharp.Rpc.Streaming;
+
 await using var ws = new SolanaWsClient();
 await ws.ConnectAsync(new Uri("wss://your-rpc-endpoint"));
 await foreach (var slot in ws.SubscribeSlotsAsync())

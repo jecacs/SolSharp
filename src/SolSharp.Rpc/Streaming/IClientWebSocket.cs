@@ -26,6 +26,11 @@ internal interface IClientWebSocket : IDisposable
         string? statusDescription,
         CancellationToken cancellationToken);
 
+    Task CloseAsync(
+        WebSocketCloseStatus closeStatus,
+        string? statusDescription,
+        CancellationToken cancellationToken);
+
     void Abort();
 }
 
@@ -60,6 +65,12 @@ internal sealed class ClientWebSocketAdapter : IClientWebSocket
         string? statusDescription,
         CancellationToken cancellationToken)
         => _socket.CloseOutputAsync(closeStatus, statusDescription, cancellationToken);
+
+    public Task CloseAsync(
+        WebSocketCloseStatus closeStatus,
+        string? statusDescription,
+        CancellationToken cancellationToken)
+        => _socket.CloseAsync(closeStatus, statusDescription, cancellationToken);
 
     public void Abort() => _socket.Abort();
 

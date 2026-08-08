@@ -16,6 +16,7 @@ public sealed record TokenExtensionSet
     // 165-byte base, and the TLV data follows the account type.
     private const int AccountTypeIndex = 165;
     private const int TlvStartIndex = AccountTypeIndex + 1;
+    private const int MultisigLength = 355;
 
     private const byte MintAccountType = 1;
     private const byte TokenAccountType = 2;
@@ -128,25 +129,30 @@ public sealed record TokenExtensionSet
 
     private static TokenExtensionSet? Decode(ReadOnlySpan<byte> data, int baseLength, byte expectedAccountType)
     {
-        if (data.Length < baseLength)
+        if (data.Length < baseLength || data.Length == MultisigLength)
             return null;
 
         // A bare (non-extended) account is exactly the base length and has no extension section.
         if (data.Length == baseLength)
             return new TokenExtensionSet { Extensions = [] };
 
-        if (data.Length < TlvStartIndex || data[AccountTypeIndex] != expectedAccountType)
+        if (data.Length < TlvStartIndex
+            || data[AccountTypeIndex] != expectedAccountType
+            || baseLength == Mint.Length && data[Mint.Length..AccountTypeIndex].IndexOfAnyExcept((byte)0) >= 0)
             return null;
 
         var extensions = new List<TokenExtension>();
         var offset = TlvStartIndex;
-        while (offset + 2 <= data.Length)
+        while (offset < data.Length)
         {
+            if (data.Length - offset < sizeof(ushort))
+                return new TokenExtensionSet { Extensions = extensions };
+
             var type = BinaryPrimitives.ReadUInt16LittleEndian(data[offset..]);
             if (type == (ushort)ExtensionType.Uninitialized)
-                break; // zero padding marks the end of the TLV data
+                return new TokenExtensionSet { Extensions = extensions };
 
-            if (offset + 4 > data.Length)
+            if (data.Length - offset < 4)
                 return null;
 
             var length = BinaryPrimitives.ReadUInt16LittleEndian(data[(offset + 2)..]);

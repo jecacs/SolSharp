@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FluentAssertions;
 using NUnit.Framework;
 using SolSharp.Core.Primitives;
@@ -68,6 +69,21 @@ public static class SolanaRpcClientParsedAccountTests
 
             // Act & Assert
             (await client.GetParsedAccountInfoAsync(PublicKey.Parse(Owner))).Should().BeNull();
+        }
+
+        [TestCase("[\"AQID\"]")]
+        [TestCase("[\"AQID\",\"base58\"]")]
+        [TestCase("[\"AQID\",\"base64\",\"extra\"]")]
+        public async Task RawFallbackRequiresCanonicalBase64Tuple(string data)
+        {
+            var response =
+                """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"lamports":1,"owner":"11111111111111111111111111111111","executable":false,"rentEpoch":0,"data":__DATA__}},"id":1}"""
+                    .Replace("__DATA__", data);
+            var (client, _) = Make(response);
+
+            Func<Task> act = async () => await client.GetParsedAccountInfoAsync(PublicKey.Parse(Owner));
+
+            await act.Should().ThrowAsync<JsonException>();
         }
     }
 

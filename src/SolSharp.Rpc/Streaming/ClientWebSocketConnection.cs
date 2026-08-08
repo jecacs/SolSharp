@@ -15,6 +15,14 @@ internal sealed class ClientWebSocketConnection : IWebSocketConnection
     private readonly IClientWebSocket _socket;
     private readonly int _maxMessageSizeBytes;
     private readonly TimeSpan _closeTimeout;
+    private readonly object _lifecycleGate = new();
+    private readonly TaskCompletionSource _peerCloseReceived =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private Task? _disposeTask;
+    private bool _receiveActive;
+    private bool _closeOwnsReceive;
+    private bool _disposed;
 
     public ClientWebSocketConnection()
         : this(new ClientWebSocketAdapter(), DefaultMaxMessageSizeBytes, DefaultCloseTimeout)
@@ -45,7 +53,29 @@ internal sealed class ClientWebSocketConnection : IWebSocketConnection
     public ValueTask SendAsync(string text, CancellationToken cancellationToken)
         => _socket.SendAsync(Encoding.UTF8.GetBytes(text).AsMemory(), WebSocketMessageType.Text, endOfMessage: true, cancellationToken);
 
-    public async ValueTask<string?> ReceiveAsync(CancellationToken cancellationToken)
+    public ValueTask<string?> ReceiveAsync(CancellationToken cancellationToken)
+    {
+        lock (_lifecycleGate)
+        {
+            if (_disposed || _disposeTask is not null && _closeOwnsReceive)
+            {
+                return ValueTask.FromException<string?>(
+                    new ObjectDisposedException(nameof(ClientWebSocketConnection)));
+            }
+
+            if (_receiveActive)
+            {
+                return ValueTask.FromException<string?>(
+                    new InvalidOperationException("Only one WebSocket receive may be active at a time."));
+            }
+
+            _receiveActive = true;
+        }
+
+        return ReceiveCoreAsync(cancellationToken);
+    }
+
+    private async ValueTask<string?> ReceiveCoreAsync(CancellationToken cancellationToken)
     {
         var buffer = ArrayPool<byte>.Shared.Rent(BufferSize);
         try
@@ -56,10 +86,17 @@ internal sealed class ClientWebSocketConnection : IWebSocketConnection
                 var result = await _socket.ReceiveAsync(buffer.AsMemory(), cancellationToken);
                 if (result.MessageType == WebSocketMessageType.Close)
                 {
-                    await CloseOutputSafelyAsync(
-                        _socket.CloseStatus ?? WebSocketCloseStatus.NormalClosure,
-                        _socket.CloseStatusDescription,
-                        cancellationToken);
+                    // When the peer initiated the close, acknowledge it here. If local disposal already
+                    // sent our close frame, ManagedWebSocket is CloseSent/Closed and the handshake is done.
+                    if (_socket.State == WebSocketState.CloseReceived)
+                    {
+                        await CloseOutputSafelyAsync(
+                            _socket.CloseStatus ?? WebSocketCloseStatus.NormalClosure,
+                            _socket.CloseStatusDescription,
+                            cancellationToken);
+                    }
+
+                    _peerCloseReceived.TrySetResult();
                     return null;
                 }
 
@@ -89,23 +126,85 @@ internal sealed class ClientWebSocketConnection : IWebSocketConnection
 
             return Encoding.UTF8.GetString(message.ToArray());
         }
+        catch (Exception exception)
+        {
+            // A disposer waiting for the receive loop to consume the peer's close frame cannot make
+            // further progress after a receive failure; wake it so it can abort instead of waiting twice.
+            _peerCloseReceived.TrySetException(exception);
+            throw;
+        }
         finally
         {
             ArrayPool<byte>.Shared.Return(buffer);
+            lock (_lifecycleGate)
+                _receiveActive = false;
         }
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        if (_socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
+        TaskCompletionSource completion;
+        bool receiveLoopOwnsPeerRead;
+        lock (_lifecycleGate)
         {
-            await CloseOutputSafelyAsync(
-                WebSocketCloseStatus.NormalClosure,
-                "bye",
-                CancellationToken.None);
+            if (_disposeTask is not null)
+                return new ValueTask(_disposeTask);
+
+            completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _disposeTask = completion.Task;
+            receiveLoopOwnsPeerRead = _receiveActive;
+            _closeOwnsReceive = !receiveLoopOwnsPeerRead;
         }
 
-        _socket.Dispose();
+        _ = DisposeCoreAsync(completion, receiveLoopOwnsPeerRead);
+        return new ValueTask(completion.Task);
+    }
+
+    private async Task DisposeCoreAsync(TaskCompletionSource completion, bool receiveLoopOwnsPeerRead)
+    {
+        using var timeout = new CancellationTokenSource();
+        timeout.CancelAfter(_closeTimeout);
+        try
+        {
+            switch (_socket.State)
+            {
+                case WebSocketState.Open when receiveLoopOwnsPeerRead:
+                    // CloseOutputAsync only sends our half of the handshake. The already-active receive
+                    // loop owns the one permitted receive and completes the other half below.
+                    await _socket.CloseOutputAsync(
+                        WebSocketCloseStatus.NormalClosure, "bye", timeout.Token);
+                    await _peerCloseReceived.Task.WaitAsync(timeout.Token);
+                    break;
+
+                case WebSocketState.CloseReceived when receiveLoopOwnsPeerRead:
+                case WebSocketState.CloseSent when receiveLoopOwnsPeerRead:
+                    await _peerCloseReceived.Task.WaitAsync(timeout.Token);
+                    break;
+
+                case WebSocketState.Open:
+                case WebSocketState.CloseSent:
+                    // With no external receive in flight, let ClientWebSocket own both halves.
+                    await _socket.CloseAsync(
+                        WebSocketCloseStatus.NormalClosure, "bye", timeout.Token);
+                    break;
+
+                case WebSocketState.CloseReceived:
+                    await _socket.CloseOutputAsync(
+                        WebSocketCloseStatus.NormalClosure, "bye", timeout.Token);
+                    break;
+            }
+        }
+        catch
+        {
+            _socket.Abort();
+        }
+        finally
+        {
+            _socket.Dispose();
+            lock (_lifecycleGate)
+                _disposed = true;
+            completion.TrySetResult();
+        }
     }
 
     private async Task CloseOutputSafelyAsync(

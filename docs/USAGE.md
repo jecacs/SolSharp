@@ -954,7 +954,12 @@ using Microsoft.Extensions.DependencyInjection;
 using SolSharp.Rpc;
 
 services.AddSolanaRpc(
-        options => options.Endpoint = "https://your-node.example/<token>",
+        options =>
+        {
+            options.Endpoint = "https://your-node.example/<token>";
+            // Default: 128 MiB. Raise only when a provider returns larger legitimate block/account payloads.
+            options.MaximumResponseContentLength = 256 * 1024 * 1024;
+        },
         resilience =>
         {
             resilience.Retry.MaxRetryAttempts = 5;          // back off harder on a busy provider
@@ -967,6 +972,9 @@ services.AddSolanaRpc(
 Transient reads and replay-safe signed transaction submissions use that retry policy. `RequestAirdropAsync`
 is explicitly excluded: if a node executes an airdrop but its response is lost, automatically repeating the
 request would create a second airdrop.
+
+The response limit applies to both single and batch calls and is enforced while the HTTP body is streamed,
+before the complete JSON document is buffered.
 
 ## Error handling
 

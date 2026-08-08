@@ -161,30 +161,44 @@ public static class MessageV0Tests
         }
 
         [Test]
-        public void NonExactOrNonFirstAdvanceNonce_DoesNotPinAccountStatic()
+        public void AdvanceNoncePrefixWithTrailingData_RemainsStatic_MatchingUpstream()
         {
             // Arrange
             var payer = Pk(1);
             var nonce = Pk(2);
-            var malformed = new Instruction
+            var canonicalAdvance = SystemProgram.AdvanceNonceAccount(nonce, payer);
+            var advance = new Instruction
             {
-                ProgramId = SystemProgram.ProgramId,
-                Accounts = [AccountMeta.Writable(nonce)],
-                Data = [4, 0, 0, 0, 0]
+                ProgramId = canonicalAdvance.ProgramId,
+                Accounts = canonicalAdvance.Accounts,
+                Data = [.. canonicalAdvance.Data, 0xAA]
             };
-            var advance = SystemProgram.AdvanceNonceAccount(nonce, payer);
-            var first = new Instruction { ProgramId = Pk(9), Accounts = [], Data = [] };
             var table = new AddressLookupTableAccount(Pk(5), [nonce]);
 
             // Act
-            var malformedMessage = MessageV0.Compile(payer, Blockhash(8), [malformed], [table]);
-            var nonFirstMessage = MessageV0.Compile(payer, Blockhash(8), [first, advance], [table]);
+            var message = MessageV0.Compile(payer, Blockhash(8), [advance], [table]);
 
             // Assert
-            malformedMessage.AccountKeys.Should().NotContain(nonce);
-            nonFirstMessage.AccountKeys.Should().NotContain(nonce);
-            malformedMessage.AddressTableLookups.Should().ContainSingle();
-            nonFirstMessage.AddressTableLookups.Should().ContainSingle();
+            message.AccountKeys.Should().Contain(nonce);
+            message.AddressTableLookups.Should().BeEmpty();
+        }
+
+        [Test]
+        public void NonFirstAdvanceNonce_DoesNotPinAccountStatic()
+        {
+            // Arrange
+            var payer = Pk(1);
+            var nonce = Pk(2);
+            var first = new Instruction { ProgramId = Pk(9), Accounts = [], Data = [] };
+            var advance = SystemProgram.AdvanceNonceAccount(nonce, payer);
+            var table = new AddressLookupTableAccount(Pk(5), [nonce]);
+
+            // Act
+            var message = MessageV0.Compile(payer, Blockhash(8), [first, advance], [table]);
+
+            // Assert
+            message.AccountKeys.Should().NotContain(nonce);
+            message.AddressTableLookups.Should().ContainSingle();
         }
 
         [Test]

@@ -34,9 +34,13 @@ internal sealed class ParsedAccountInfoJsonConverter : JsonConverter<ParsedAccou
             if (data.TryGetProperty("space", out var dataSpace) && dataSpace.ValueKind is JsonValueKind.Number)
                 space = dataSpace.GetUInt64();
         }
-        else if (data.ValueKind is JsonValueKind.Array && data.GetArrayLength() > 0)
+        else if (data.ValueKind is JsonValueKind.Array)
         {
-            rawData = Convert.FromBase64String(data[0].GetString() ?? string.Empty);
+            rawData = AccountInfoJsonConverter.DecodeBase64Tuple(data);
+        }
+        else
+        {
+            throw new JsonException("Expected parsed account data as an object or a [data, encoding] array.");
         }
 
         if (space is null && root.TryGetProperty("space", out var topSpace) && topSpace.ValueKind is JsonValueKind.Number)

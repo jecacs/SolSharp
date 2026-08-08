@@ -12,6 +12,7 @@ namespace SolSharp.Rpc.Models;
 public sealed record AddressLookupTable
 {
     private const int MetaSize = 56;
+    private const int MaxAddresses = 256;
 
     /// <summary>The slot the table was deactivated at, or <see cref="ulong.MaxValue"/> while it is still active.</summary>
     public required ulong DeactivationSlot { get; init; }
@@ -36,12 +37,26 @@ public sealed record AddressLookupTable
         // Layout: u32 discriminant (1 = LookupTable), u64 deactivation slot, u64 last-extended slot, u8 start
         // index, Option<Pubkey> authority (1-byte flag + 32-byte key), u16 padding = 56 bytes, then a tightly
         // packed array of 32-byte addresses.
-        if (data.Length < MetaSize || BinaryPrimitives.ReadUInt32LittleEndian(data) != 1)
+        if (data.Length < MetaSize
+            || (data.Length - MetaSize) % PublicKey.Length != 0
+            || (data.Length - MetaSize) / PublicKey.Length > MaxAddresses
+            || BinaryPrimitives.ReadUInt32LittleEndian(data) != 1)
             return null;
 
         var deactivationSlot = BinaryPrimitives.ReadUInt64LittleEndian(data[4..]);
         var lastExtendedSlot = BinaryPrimitives.ReadUInt64LittleEndian(data[12..]);
-        PublicKey? authority = data[21] != 0 ? new PublicKey(data.Slice(22, PublicKey.Length)) : null;
+        PublicKey? authority;
+        switch (data[21])
+        {
+            case 0 when data[22..MetaSize].IndexOfAnyExcept((byte)0) < 0:
+                authority = null;
+                break;
+            case 1 when data[54] == 0 && data[55] == 0:
+                authority = new PublicKey(data.Slice(22, PublicKey.Length));
+                break;
+            default:
+                return null;
+        }
 
         var addressBytes = data[MetaSize..];
         var count = addressBytes.Length / PublicKey.Length;

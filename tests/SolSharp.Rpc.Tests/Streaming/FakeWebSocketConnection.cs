@@ -28,6 +28,11 @@ internal sealed class FakeWebSocketConnection : IWebSocketConnection
     public TaskCompletionSource DisposeStarted { get; } =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+    public TaskCompletionSource ReceiveStarted { get; } =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public CancellationToken LastReceiveCancellationToken { get; private set; }
+
     public Func<CancellationToken, Task>? ConnectBehavior { get; set; }
 
     public Func<string, CancellationToken, ValueTask>? SendBehavior { get; set; }
@@ -53,6 +58,8 @@ internal sealed class FakeWebSocketConnection : IWebSocketConnection
 
     public async ValueTask<string?> ReceiveAsync(CancellationToken cancellationToken)
     {
+        LastReceiveCancellationToken = cancellationToken;
+        ReceiveStarted.TrySetResult();
         try
         {
             var message = await _incoming.Reader.ReadAsync(cancellationToken);

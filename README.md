@@ -60,7 +60,7 @@ from-scratch SDK with different priorities. The differences that actually matter
 | **API shape** | `async`-only; methods return typed values and throw typed exceptions (`RpcException`) | Sync + async; calls return `RequestResult<T>` wrappers to unwrap |
 | **Packaging** | One package, four layered assemblies | Per-area packages (`Solana.Rpc`, `Solana.Wallet`, `Solana.Programs`, ...) |
 | **Program coverage** | Focused core: System, Token + Token-2022 extensions, ATA, Compute Budget, Memo, Address Lookup Table | Broader: also Stake, Governance, StakePool, Name Service, and ecosystem packages (Metaplex, Raydium, Jupiter, ...) |
-| **Footprint** | Hot paths allocation-free; RPC depends on `Logging.Abstractions` only | RPC package pulls full `Logging` + `Logging.Console` |
+| **Footprint** | Hot paths allocation-free; RPC depends on `Microsoft.Extensions.Http`, `Microsoft.Extensions.Http.Resilience`, and `Microsoft.Extensions.Logging.Abstractions` | RPC package pulls full `Logging` + `Logging.Console` |
 
 Pick **Solnet** when you need its program breadth — NFT/DEX integrations and the wider ecosystem
 packages around it. Pick **SolSharp** when you care about native binaries and startup time, typed
@@ -112,7 +112,7 @@ See the [changelog](CHANGELOG.md) for what changed in each release.
 using SolSharp.Core.Primitives;
 
 var mint = PublicKey.Parse("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
-byte[] raw = mint.ToBytes();              // 32 bytes, allocation-free storage
+byte[] raw = mint.ToBytes();              // new 32-byte copy
 bool ok = PublicKey.TryParse(input, out var key);
 ```
 
@@ -162,6 +162,7 @@ bool ok = PublicKey.TryParse(input, out var key);
 
 ```csharp
 using SolSharp.Rpc;
+using SolSharp.Rpc.Streaming;
 
 // typed client with retries; tune the pipeline via the optional callback
 services.AddSolanaRpc("https://your-rpc-endpoint");

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FluentAssertions;
 using NUnit.Framework;
 using SolSharp.Core.Primitives;
@@ -72,6 +73,22 @@ public static class SolanaRpcClientAccountTests
 
             // Assert
             handler.CapturedRequestBody.Should().Contain("\"dataSlice\":{\"offset\":8,\"length\":32}");
+        }
+
+        [TestCase("[\"AQID\"]")]
+        [TestCase("[\"AQID\",\"base58\"]")]
+        [TestCase("[\"AQID\",\"base64\",\"extra\"]")]
+        [TestCase("{\"bytes\":\"AQID\"}")]
+        public async Task MalformedOrUnsupportedDataTuple_ThrowsJsonException(string data)
+        {
+            var value =
+                """{"data":__DATA__,"executable":false,"lamports":1,"owner":"11111111111111111111111111111111","rentEpoch":0}"""
+                    .Replace("__DATA__", data);
+            var (client, _) = Make(ContextEnvelope(value));
+
+            Func<Task> act = async () => await client.GetAccountInfoAsync(PublicKey.Parse(OwnerBase58));
+
+            await act.Should().ThrowAsync<JsonException>();
         }
     }
 
