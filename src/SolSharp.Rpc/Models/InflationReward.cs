@@ -25,4 +25,8 @@ public sealed record InflationReward
     /// <summary>The vote account commission applied to this reward, when it is a voting reward; otherwise <c>null</c>.</summary>
     [JsonPropertyName("commission")]
     public byte? Commission { get; init; }
+
+    /// <summary>The reward commission in basis points, when reported by nodes supporting SIMD-0291.</summary>
+    [JsonPropertyName("commissionBps")]
+    public ushort? CommissionBps { get; init; }
 }

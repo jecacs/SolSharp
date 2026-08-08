@@ -67,7 +67,7 @@ public sealed partial class Keypair : ISigner, IDisposable
 
         Span<byte> derived = stackalloc byte[PublicKey.Length];
         keypair.PublicKey.CopyTo(derived);
-        if (!secretKey[SeedLength..].SequenceEqual(derived))
+        if (!CryptographicOperations.FixedTimeEquals(secretKey[SeedLength..], derived))
         {
             keypair.Dispose();
             throw new ArgumentException("Secret key's public-key half does not match its seed.", nameof(secretKey));

@@ -1,3 +1,4 @@
+using System.Text;
 using SolSharp.Core.Primitives;
 
 namespace SolSharp.Programs;
@@ -5,6 +6,8 @@ namespace SolSharp.Programs;
 /// <summary>Builds instructions for the SPL Memo program: attaches a UTF-8 memo to a transaction, optionally signed.</summary>
 public static class MemoProgram
 {
+    private static readonly UTF8Encoding StrictUtf8 = new(false, true);
+
     /// <summary>The SPL Memo program's address.</summary>
     public static readonly PublicKey ProgramId = PublicKey.Parse("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 
@@ -17,10 +20,21 @@ public static class MemoProgram
     /// <param name="signers">The accounts that must sign the memo; pass none for an unsigned memo.</param>
     /// <returns>The memo instruction.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="text"/> or <paramref name="signers"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="text"/> contains invalid Unicode text.</exception>
     public static Instruction Memo(string text, params PublicKey[] signers)
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(signers);
+
+        byte[] data;
+        try
+        {
+            data = StrictUtf8.GetBytes(text);
+        }
+        catch (EncoderFallbackException exception)
+        {
+            throw new ArgumentException("A memo must contain valid Unicode text.", nameof(text), exception);
+        }
 
         // Read-only signers, matching the Rust spl-memo builder (AccountMeta::new_readonly(pubkey, true));
         // a writable flag would needlessly write-lock the signer accounts. (solana-py marks them writable.)
@@ -32,7 +46,7 @@ public static class MemoProgram
         {
             ProgramId = ProgramId,
             Accounts = accounts,
-            Data = System.Text.Encoding.UTF8.GetBytes(text)
+            Data = data
         };
     }
 }

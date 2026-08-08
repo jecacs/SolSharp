@@ -36,7 +36,7 @@ public static class SolanaRpcClientConfirmTests
         {
             // Arrange
             var (client, handler) = Make(
-                """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":[{"slot":10,"confirmations":5,"err":null,"confirmationStatus":"confirmed"},null]},"id":1}""");
+                """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":[{"slot":10,"confirmations":5,"status":{"Ok":null},"err":null,"confirmationStatus":"confirmed"},null]},"id":1}""");
 
             // Act
             var statuses = await client.GetSignatureStatusesAsync(["Sig111", "Sig222"]);
@@ -45,6 +45,7 @@ public static class SolanaRpcClientConfirmTests
             statuses.Should().HaveCount(2);
             statuses[0]!.Slot.Should().Be(10ul);
             statuses[0]!.Confirmations.Should().Be(5);
+            statuses[0]!.Status!.Value.GetProperty("Ok").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
             statuses[0]!.ConfirmationStatus.Should().Be("confirmed");
             statuses[0]!.IsError.Should().BeFalse();
             statuses[1].Should().BeNull();

@@ -16,9 +16,19 @@ public sealed record TransactionResponse
     [JsonPropertyName("blockTime")]
     public long? BlockTime { get; init; }
 
+    /// <summary>The transaction's index within the block, when reported.</summary>
+    [JsonPropertyName("transactionIndex")]
+    public uint? TransactionIndex { get; init; }
+
     /// <summary>
-    /// The transaction's wire bytes, decoded from the node's base64 form; pass to
-    /// <c>Transaction.Deserialize</c> (in SolSharp.Programs) to read its message, accounts, and instructions.
+    /// The wire transaction version: the JSON string <c>"legacy"</c> or a numeric version such as <c>0</c>.
+    /// </summary>
+    [JsonPropertyName("version")]
+    public JsonElement? Version { get; init; }
+
+    /// <summary>
+    /// The transaction's wire bytes, decoded from the node's base64 form. Legacy and v0 bytes can be passed
+    /// to <c>Transaction.Deserialize</c> (in SolSharp.Programs) to read their message, accounts, and instructions.
     /// </summary>
     [JsonPropertyName("transaction")]
     [JsonConverter(typeof(Base64TupleJsonConverter))]
@@ -36,6 +46,13 @@ public sealed record TransactionMeta
     /// <summary>The transaction error, or <c>null</c> if it succeeded.</summary>
     [JsonPropertyName("err")]
     public JsonElement? Err { get; init; }
+
+    /// <summary>
+    /// The deprecated result-shaped status field retained by the node for compatibility; prefer
+    /// <see cref="Err"/> or <see cref="Error"/> for new code.
+    /// </summary>
+    [JsonPropertyName("status")]
+    public JsonElement? Status { get; init; }
 
     /// <summary>The fee charged, in lamports.</summary>
     [JsonPropertyName("fee")]
@@ -72,6 +89,18 @@ public sealed record TransactionMeta
     /// <summary>The compute units the transaction consumed, if the node reported it.</summary>
     [JsonPropertyName("computeUnitsConsumed")]
     public ulong? ComputeUnitsConsumed { get; init; }
+
+    /// <summary>The transaction cost units, when reported.</summary>
+    [JsonPropertyName("costUnits")]
+    public ulong? CostUnits { get; init; }
+
+    /// <summary>Data returned by a program, or <c>null</c> when no program set return data.</summary>
+    [JsonPropertyName("returnData")]
+    public TransactionReturnData? ReturnData { get; init; }
+
+    /// <summary>Rewards and debits recorded while processing the transaction, when reported.</summary>
+    [JsonPropertyName("rewards")]
+    public IReadOnlyList<Reward>? Rewards { get; init; }
 
     /// <summary>True when the transaction failed (<see cref="Err"/> is present).</summary>
     [JsonIgnore]

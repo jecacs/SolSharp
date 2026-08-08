@@ -30,7 +30,7 @@ public static class AssociatedTokenAccount
     /// <param name="tokenProgram">The token program; SPL Token by default, or pass Token-2022 for its mints.</param>
     /// <returns>The create-account instruction.</returns>
     public static Instruction Create(PublicKey payer, PublicKey owner, PublicKey mint, PublicKey? tokenProgram = null)
-        => Build(payer, owner, mint, tokenProgram, data: []);
+        => Build(payer, owner, mint, tokenProgram, data: [0]);
 
     /// <summary>
     /// Builds the idempotent create instruction: like <see cref="Create"/>, but succeeds as a no-op when the
@@ -44,7 +44,7 @@ public static class AssociatedTokenAccount
     public static Instruction CreateIdempotent(PublicKey payer, PublicKey owner, PublicKey mint, PublicKey? tokenProgram = null)
         => Build(payer, owner, mint, tokenProgram, data: [1]);
 
-    // Create and CreateIdempotent differ only in the instruction tag: empty data is Create, [1] is CreateIdempotent.
+    // Create and CreateIdempotent differ only in the instruction tag: [0] is Create, [1] is CreateIdempotent.
     private static Instruction Build(PublicKey payer, PublicKey owner, PublicKey mint, PublicKey? tokenProgram, byte[] data)
     {
         var program = tokenProgram ?? DefaultTokenProgram;

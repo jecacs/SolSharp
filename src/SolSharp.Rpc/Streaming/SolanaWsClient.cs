@@ -28,7 +28,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
     private readonly object _stateGate = new();
     private readonly Dictionary<int, PendingSubscribe> _pending = [];
     private readonly Dictionary<long, Subscription> _active = [];
-    private readonly Dictionary<(long Generation, long ServerId), Subscription> _byServerId = [];
+    private readonly Dictionary<(long Generation, ulong ServerId), Subscription> _byServerId = [];
     private readonly SemaphoreSlim _sendLock = new(1, 1);
     private readonly CancellationTokenSource _lifetimeCts = new();
     private readonly ILogger _logger;
@@ -519,6 +519,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
     /// <param name="cancellationToken">A token to cancel the wait.</param>
     /// <returns>The signature's result once it reaches <paramref name="commitment"/>.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="signature"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="timeout"/> is negative and not infinite.</exception>
     /// <exception cref="TimeoutException">The signature was not confirmed in time.</exception>
     /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
     public async Task<SignatureNotification> ConfirmSignatureAsync(
@@ -529,22 +530,51 @@ public sealed class SolanaWsClient : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(signature);
 
-        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeoutCts.CancelAfter(timeout ?? TimeSpan.FromSeconds(60));
+        var confirmationTimeout = timeout ?? TimeSpan.FromSeconds(60);
+        if (confirmationTimeout < TimeSpan.Zero && confirmationTimeout != Timeout.InfiniteTimeSpan)
+            throw new ArgumentOutOfRangeException(nameof(timeout), timeout, "The confirmation timeout must be non-negative or infinite.");
 
-        var reader = await SubscribeSignatureAsync(signature, commitment, timeoutCts.Token);
+        using var timeoutCts = new CancellationTokenSource();
+        var timeoutTask = confirmationTimeout == Timeout.InfiniteTimeSpan
+            ? Task.CompletedTask
+            : CancelAfterAsync(timeoutCts, confirmationTimeout);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
         try
         {
-            var notification = await reader.ReadAsync(timeoutCts.Token);
+            var reader = await SubscribeSignatureAsync(signature, commitment, linkedCts.Token);
+            var notification = await reader.ReadAsync(linkedCts.Token);
             return notification.Value!;
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException exception)
+            when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
-            throw new TimeoutException($"Signature {signature} was not confirmed at {commitment} within the timeout.");
+            throw new TimeoutException(
+                $"Signature {signature} was not confirmed at {commitment} within the timeout.", exception);
         }
         finally
         {
             await timeoutCts.CancelAsync();
+            await timeoutTask;
+        }
+    }
+
+    private static async Task CancelAfterAsync(CancellationTokenSource source, TimeSpan timeout)
+    {
+        try
+        {
+            while (timeout > MaximumTimerDuration)
+            {
+                await Task.Delay(MaximumTimerDuration, source.Token);
+                timeout -= MaximumTimerDuration;
+            }
+
+            await Task.Delay(timeout, source.Token);
+            await source.CancelAsync();
+        }
+        catch (OperationCanceledException) when (source.IsCancellationRequested)
+        {
+            // Confirmation finished or caller cancellation won; the timeout task only needs to stop.
         }
     }
 
@@ -1210,8 +1240,8 @@ public sealed class SolanaWsClient : IAsyncDisposable
                 lock (_stateGate)
                 {
                     generationEnded = exception is ConnectionEpochEndedException ||
-                                      exception is OperationCanceledException &&
-                                      (token.IsCancellationRequested || _lifetimeCts.IsCancellationRequested);
+                                      (exception is OperationCanceledException &&
+                                       (token.IsCancellationRequested || _lifetimeCts.IsCancellationRequested));
                     work = generationEnded
                         ? null
                         : TryTerminateLocked(subscription, exception, unsubscribe: true);
@@ -1257,7 +1287,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         if (!root.TryGetProperty("params", out var paramsElement) ||
             !paramsElement.TryGetProperty("subscription", out var subscriptionElement) ||
             !paramsElement.TryGetProperty("result", out var notification) ||
-            !subscriptionElement.TryGetInt64(out var notified))
+            !subscriptionElement.TryGetUInt64(out var notified))
         {
             return;
         }
@@ -1331,7 +1361,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
             var subscription = pending.Subscription;
             var wasAwaiting = pending.State == PendingState.Awaiting && subscription is not null;
-            if (result.ValueKind != JsonValueKind.Number || !result.TryGetInt64(out var subscriptionId))
+            if (result.ValueKind != JsonValueKind.Number || !result.TryGetUInt64(out var subscriptionId))
             {
                 _pending.Remove(requestId);
                 pending.State = PendingState.Failed;
@@ -1583,7 +1613,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
         public bool Initial { get; } = initial;
 
-        public TaskCompletionSource<long> Acked { get; } =
+        public TaskCompletionSource<ulong> Acked { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public PendingState State { get; set; }
@@ -1636,7 +1666,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         }
     }
 
-    private readonly record struct RouteBinding(ConnectionEpoch Epoch, long ServerId);
+    private readonly record struct RouteBinding(ConnectionEpoch Epoch, ulong ServerId);
 
     private sealed record TerminalWork(
         Subscription Subscription,
@@ -1744,7 +1774,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
             _channel = Channel.CreateBounded<T>(new BoundedChannelOptions(capacity)
             {
                 SingleWriter = false,
-                SingleReader = true,
+                SingleReader = false,
                 FullMode = BoundedChannelFullMode.Wait
             });
         }

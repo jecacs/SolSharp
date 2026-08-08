@@ -29,9 +29,14 @@ public sealed record ParsedBlock
     [JsonPropertyName("blockTime")]
     public long? BlockTime { get; init; }
 
+    /// <summary>The number of partitions used for epoch rewards in this block, when applicable.</summary>
+    [JsonPropertyName("numRewardPartitions")]
+    public ulong? NumRewardPartitions { get; init; }
+
     /// <summary>
     /// The block's transactions, decoded. <see cref="ParsedTransaction.Slot"/> and
-    /// <see cref="ParsedTransaction.BlockTime"/> are filled in from the block by <c>GetParsedBlockAsync</c>.
+    /// <see cref="ParsedTransaction.BlockTime"/> are filled in from the block, and
+    /// <see cref="ParsedTransaction.TransactionIndex"/> from its ledger order, by <c>GetParsedBlockAsync</c>.
     /// </summary>
     [JsonPropertyName("transactions")]
     public IReadOnlyList<ParsedTransaction> Transactions { get; init; } = [];

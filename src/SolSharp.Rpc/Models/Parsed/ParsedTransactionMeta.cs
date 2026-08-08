@@ -14,6 +14,13 @@ public sealed record ParsedTransactionMeta
     [JsonPropertyName("err")]
     public JsonElement? Err { get; init; }
 
+    /// <summary>
+    /// The deprecated result-shaped status field retained by the node for compatibility; prefer
+    /// <see cref="Err"/> or <see cref="Error"/> for new code.
+    /// </summary>
+    [JsonPropertyName("status")]
+    public JsonElement? Status { get; init; }
+
     /// <summary>The fee charged, in lamports.</summary>
     [JsonPropertyName("fee")]
     public ulong Fee { get; init; }
@@ -45,6 +52,22 @@ public sealed record ParsedTransactionMeta
     /// <summary>The accounts a versioned transaction loaded from address lookup tables, or <c>null</c> for a legacy transaction.</summary>
     [JsonPropertyName("loadedAddresses")]
     public LoadedAddresses? LoadedAddresses { get; init; }
+
+    /// <summary>The compute units the transaction consumed, when reported.</summary>
+    [JsonPropertyName("computeUnitsConsumed")]
+    public ulong? ComputeUnitsConsumed { get; init; }
+
+    /// <summary>The transaction cost units, when reported.</summary>
+    [JsonPropertyName("costUnits")]
+    public ulong? CostUnits { get; init; }
+
+    /// <summary>Data returned by a program, or <c>null</c> when no program set return data.</summary>
+    [JsonPropertyName("returnData")]
+    public TransactionReturnData? ReturnData { get; init; }
+
+    /// <summary>Rewards and debits recorded while processing the transaction, when reported.</summary>
+    [JsonPropertyName("rewards")]
+    public IReadOnlyList<Reward>? Rewards { get; init; }
 
     /// <summary>True when the transaction failed (<see cref="Err"/> is present).</summary>
     [JsonIgnore]

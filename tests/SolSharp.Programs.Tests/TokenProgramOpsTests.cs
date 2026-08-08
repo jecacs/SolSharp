@@ -162,6 +162,46 @@ public static class TokenProgramOpsTests
             DataHex(ix).Should().Be("0604010404040404040404040404040404040404040404040404040404040404040404");
         }
 
+        [Test]
+        public void UndefinedAuthorityType_Throws()
+        {
+            // Act
+            Action act = () => _ = TokenProgram.SetAuthority(Pk(2), Pk(3), (AuthorityType)byte.MaxValue);
+
+            // Assert
+            act.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("authorityType");
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void Token2022AuthorityWithClassicProgram_Throws(bool explicitProgram)
+        {
+            // Arrange
+            PublicKey? tokenProgram = explicitProgram ? TokenProgram.ProgramId : null;
+
+            // Act
+            Action act = () => _ = TokenProgram.SetAuthority(
+                Pk(2), Pk(3), AuthorityType.TransferFeeConfig, Pk(4), tokenProgram);
+
+            // Assert
+            act.Should().Throw<ArgumentException>().WithParameterName("authorityType");
+        }
+
+        [Test]
+        public void Token2022AuthorityWithCustomProgram_IsCallerOwned()
+        {
+            // Arrange
+            var customProgram = Pk(9);
+
+            // Act
+            var instruction = TokenProgram.SetAuthority(
+                Pk(2), Pk(3), AuthorityType.TransferFeeConfig, Pk(4), customProgram);
+
+            // Assert
+            instruction.ProgramId.Should().Be(customProgram);
+            instruction.Data[1].Should().Be((byte)AuthorityType.TransferFeeConfig);
+        }
+
         // The numbering mirrors spl-token-2022's AuthorityType (interface/src/instruction.rs); a wrong
         // value here is a wire bug, so every variant is pinned.
         [TestCase(AuthorityType.MintTokens, 0)]

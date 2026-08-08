@@ -63,6 +63,52 @@ public static class MessageDecompileTests
             // Assert
             message.Instructions[0].Data.Should().Equal(7);
         }
+
+        [Test]
+        public void PreservesMultipleInstructionOrderAndRepeatedAccounts()
+        {
+            // Arrange
+            var repeated = Pk(3);
+            var first = new Instruction
+            {
+                ProgramId = Pk(9),
+                Accounts = [AccountMeta.Writable(repeated), AccountMeta.Writable(repeated)],
+                Data = [1]
+            };
+            var second = new Instruction
+            {
+                ProgramId = Pk(10),
+                Accounts = [AccountMeta.Readonly(Pk(4))],
+                Data = [2, 3]
+            };
+            var message = Message.Compile(Pk(1), Pk(8).ToString(), [first, second]);
+
+            // Act
+            var decompiled = message.DecompileInstructions([]);
+
+            // Assert
+            decompiled.Select(instruction => instruction.ProgramId).Should().Equal(Pk(9), Pk(10));
+            decompiled.Select(instruction => instruction.Data).Should().SatisfyRespectively(
+                data => data.Should().Equal(1),
+                data => data.Should().Equal(2, 3));
+            Metas(decompiled[0]).Should().Equal(
+                (repeated, false, true),
+                (repeated, false, true));
+            Metas(decompiled[1]).Should().Equal((Pk(4), false, false));
+        }
+
+        [Test]
+        public void NullLookupTableList_ThrowsDocumentedException()
+        {
+            // Arrange
+            var message = Message.Compile(Pk(1), Pk(8).ToString(), []);
+
+            // Act
+            Action act = () => _ = message.DecompileInstructions(null!);
+
+            // Assert
+            act.Should().Throw<ArgumentNullException>().WithParameterName("lookupTables");
+        }
     }
 
     [TestFixture]
@@ -122,6 +168,69 @@ public static class MessageDecompileTests
 
             // Assert
             act.Should().Throw<ArgumentException>();
+        }
+
+        [Test]
+        public void ResolvesMultipleTablesAndPreservesOriginalAccountOrder()
+        {
+            // Arrange
+            var instruction = new Instruction
+            {
+                ProgramId = Pk(9),
+                Accounts =
+                [
+                    AccountMeta.Readonly(Pk(13)),
+                    AccountMeta.Writable(Pk(4)),
+                    AccountMeta.Writable(Pk(12)),
+                    AccountMeta.Readonly(Pk(3)),
+                    AccountMeta.ReadonlySigner(Pk(6)),
+                    AccountMeta.Writable(Pk(2)),
+                    AccountMeta.WritableSigner(Pk(1)),
+                    AccountMeta.Readonly(Pk(13))
+                ],
+                Data = [4, 5]
+            };
+            var firstTable = new AddressLookupTableAccount(Pk(5), [Pk(2), Pk(3)]);
+            var secondTable = new AddressLookupTableAccount(Pk(15), [Pk(12), Pk(13)]);
+            var message = MessageV0.Compile(
+                Pk(1), Pk(8).ToString(), [instruction], [firstTable, secondTable]);
+
+            // Act
+            var decompiled = message.DecompileInstructions([firstTable, secondTable])
+                .Should().ContainSingle().Subject;
+
+            // Assert
+            message.AddressTableLookups.Should().HaveCount(2);
+            Metas(decompiled).Should().Equal(
+                (Pk(13), false, false),
+                (Pk(4), false, true),
+                (Pk(12), false, true),
+                (Pk(3), false, false),
+                (Pk(6), true, false),
+                (Pk(2), false, true),
+                (Pk(1), true, true),
+                (Pk(13), false, false));
+        }
+
+        [Test]
+        public void SuppliedTableWithMissingAddress_Throws()
+        {
+            // Arrange
+            var instruction = new Instruction
+            {
+                ProgramId = Pk(9),
+                Accounts = [AccountMeta.Writable(Pk(2))],
+                Data = []
+            };
+            var completeTable = new AddressLookupTableAccount(Pk(5), [Pk(2)]);
+            var message = MessageV0.Compile(Pk(1), Pk(8).ToString(), [instruction], [completeTable]);
+            var truncatedTable = new AddressLookupTableAccount(Pk(5), []);
+
+            // Act
+            Action act = () => _ = message.DecompileInstructions([truncatedTable]);
+
+            // Assert
+            act.Should().Throw<ArgumentException>().WithMessage("Lookup index 0 is out of range*");
         }
     }
 }

@@ -141,7 +141,8 @@ using var account1 = Keypair.FromMnemonicAtPath("abandon abandon … about", "m/
 ```
 
 The building blocks are public too: `Bip39.ToSeed(mnemonic, passphrase)` and
-`Slip10.DeriveEd25519(seed, path)`.
+`Slip10.DeriveEd25519(seed, path)`. SLIP-0010 path segments use canonical ASCII digits followed by
+`'`; signs, whitespace, and non-hardened segments are rejected.
 
 Sign and verify:
 
@@ -151,6 +152,9 @@ byte[] signature = wallet.Sign(message);
 
 bool ok = wallet.PublicKey.Verify(message, signature);   // Verify lives in SolSharp.Wallet
 ```
+
+Verification follows Solana's strict Ed25519 rules and rejects small-order public keys and signature
+points instead of accepting malleable signatures.
 
 Public keys on their own:
 
@@ -185,6 +189,7 @@ if (info is not null)
     Console.WriteLine($"owner:    {info.Owner}");
     Console.WriteLine($"lamports: {info.Lamports}");
     Console.WriteLine($"data:     {info.Data.Length} bytes"); // already base64-decoded
+    Console.WriteLine($"full size: {info.Space} bytes");     // still the full size when DataSlice was used
 }
 
 // Several at once (order preserved; missing accounts come back null):
@@ -350,7 +355,13 @@ await rpc.RequestAirdropAsync(payer.PublicKey, SolanaUnits.LamportsPerSol);
 Dry-run a transaction to read its logs and compute-unit cost without paying a fee.
 
 ```csharp
-var sim = await rpc.SimulateTransactionAsync(tx.Serialize());
+var sim = await rpc.SimulateTransactionAsync(
+    tx.Serialize(),
+    new SimulateTransactionOptions
+    {
+        Accounts = [payer.PublicKey], // base64 account snapshots after simulation
+        InnerInstructions = true
+    });
 
 Console.WriteLine($"compute units: {sim.UnitsConsumed}");
 foreach (var line in sim.Logs ?? [])
@@ -358,11 +369,17 @@ foreach (var line in sim.Logs ?? [])
 
 if (sim.IsError)
     Console.WriteLine($"would fail: {sim.Err}");
+
+Console.WriteLine($"fee: {sim.Fee}; loaded bytes: {sim.LoadedAccountsDataSize}");
+Console.WriteLine($"returned accounts: {sim.Accounts?.Count ?? 0}");
+Console.WriteLine($"CPI groups: {sim.InnerInstructions?.Count ?? 0}");
 ```
 
 `SimulateTransactionOptions` controls the run (`SigVerify`, `ReplaceRecentBlockhash`, `Commitment`,
-`MinContextSlot`); like preflight, the simulation runs at `confirmed` by default so a blockhash fetched
-with `GetLatestBlockhashAsync` is visible to it.
+`MinContextSlot`, `Accounts`, `InnerInstructions`); like preflight, the simulation runs at `confirmed` by
+default so a blockhash fetched with `GetLatestBlockhashAsync` is visible to it. When the node reports them,
+the result also preserves replacement blockhashes, pre/post SOL and token balances, loaded addresses,
+program return data, and cost details.
 
 ## Priority fees (compute budget)
 
@@ -436,7 +453,7 @@ var tx = new TransactionBuilder()
 await rpc.SendAndConfirmTransactionAsync(tx.Serialize());
 ```
 
-The full op set is available: `Transfer` / `TransferChecked`, `MintTo` / `MintToChecked`,
+The supported builders include `Transfer` / `TransferChecked`, `MintTo` / `MintToChecked`,
 `Burn` / `BurnChecked`, `Approve` / `ApproveChecked`, `Revoke`, `SetAuthority` (pick the authority with
 `AuthorityType`; pass no new authority to remove it permanently), `FreezeAccount` / `ThawAccount`,
 `InitializeMint`, `InitializeAccount`, `CloseAccount`, `SyncNative` — plus `AssociatedTokenAccount.Create`
@@ -464,9 +481,12 @@ var tx = new TransactionBuilder()
 ```
 
 `AuthorityType` also carries the Token-2022 extension authorities (`TransferFeeConfig`, `CloseMint`,
-`PermanentDelegate`, `MetadataPointer`, ...), valid when the instruction targets the Token-2022 program:
+`PermanentDelegate`, `MetadataPointer`, ...), valid when the instruction targets the Token-2022 program.
+Passing one while targeting classic SPL Token is rejected before an invalid instruction can be built:
 
 ```csharp
+using SolSharp.Core.Constants;
+
 TokenProgram.SetAuthority(
     mint, currentAuthority, AuthorityType.TransferFeeConfig, newAuthority,
     tokenProgram: PublicKey.Parse(SolanaProgramIds.Token2022Program));
@@ -527,6 +547,9 @@ and referenced through the table, shrinking the transaction. Building and managi
 with `AddressLookupTableProgram` (`CreateLookupTable`, `ExtendLookupTable`, `FreezeLookupTable` — permanently
 locks the table immutable, `DeactivateLookupTable`, `CloseLookupTable`).
 
+For canonical table creation, only the payer signs; the future table authority is a read-only non-signer,
+matching the currently activated Solana runtime behavior.
+
 ## Decoding a transaction
 
 Parse a serialized transaction (from `getTransaction`, a log, or a wallet) back into a `Transaction`.
@@ -574,6 +597,11 @@ if (fetched is not null)
     foreach (var post in fetched.Meta?.PostTokenBalances ?? [])
         Console.WriteLine($"{post.Mint}: {post.UiTokenAmount.UiAmountString}");
 
+    Console.WriteLine($"version={fetched.Version} index={fetched.TransactionIndex} " +
+                      $"compute={fetched.Meta?.ComputeUnitsConsumed} cost={fetched.Meta?.CostUnits}");
+    if (fetched.Meta?.ReturnData is { } returned)
+        Console.WriteLine($"{returned.ProgramId} returned {returned.Data.Length} bytes");
+
     if (fetched.Meta?.Error is { } error)   // typed failure reason
         Console.WriteLine(error.InstructionError?.CustomCode is { } code
             ? $"failed with program error {code}"
@@ -596,6 +624,21 @@ static async Task<IReadOnlyList<AddressLookupTableAccount>> FetchTablesAsync(Sol
 
 `MessageV0.GetAccountKeys(tables)` gives the full resolved account list (static + lookup-loaded), so you can
 map a balance entry's `accountIndex` back to a public key.
+
+The default raw read advertises legacy/v0 support, matching `Transaction.Deserialize`. To archive or forward
+a newer wire transaction without decoding it locally, opt into that numeric version explicitly and treat the
+returned bytes as opaque:
+
+```csharp
+var v1 = await rpc.GetTransactionWithMaxVersionAsync(
+    signature,
+    maxSupportedTransactionVersion: 1,
+    commitment: Commitment.Confirmed);
+byte[] opaqueV1 = v1?.Transaction ?? [];
+```
+
+`Transaction.Deserialize`, `GetParsedTransactionAsync`, parsed blocks, and block subscriptions remain scoped
+to legacy/v0; advertising version 1 does not add a local v1 parser.
 
 ### Walking an address's history, or a whole block
 
@@ -686,6 +729,9 @@ var schedule = await rpc.GetLeaderScheduleAsync();          // leader slots by v
 var nodes = await rpc.GetClusterNodesAsync();               // gossip / TPU / RPC addresses + versions
 var blocks = await rpc.GetBlocksAsync(startSlot, endSlot);  // confirmed slots in a range
 
+foreach (var node in nodes)
+    Console.WriteLine($"{node.ClientId} {node.TpuQuic} {node.Pubsub}");
+
 // Staking rewards paid to a set of addresses for a given epoch (null per address when there were none):
 var rewards = await rpc.GetInflationRewardAsync([voteAccount], epoch: 600);
 ```
@@ -697,6 +743,7 @@ var epochSchedule = await rpc.GetEpochScheduleAsync();      // slots per epoch, 
 var governor = await rpc.GetInflationGovernorAsync();       // inflation parameters
 var rate = await rpc.GetInflationRateAsync();               // current total/validator/foundation split
 var genesis = await rpc.GetGenesisHashAsync();              // identifies the network (mainnet/devnet/...)
+var agGenesis = await rpc.GetAgGenesisCertificateAsync();   // null until Alpenglow consensus is active
 var identity = await rpc.GetIdentityAsync();                // the queried node's identity key
 var leader = await rpc.GetSlotLeaderAsync();                // current slot leader
 var minStake = await rpc.GetStakeMinimumDelegationAsync();  // minimum stake delegation, lamports
@@ -775,7 +822,8 @@ await foreach (var note in accounts.ReadAllAsync())
 Also available: `SubscribeRootsAsync` (rooted slots, like `SubscribeSlotsAsync`), `SubscribeProgramAsync`
 (with memcmp / data-size filters), `SubscribeSignatureAsync`, `SubscribeBlocksAsync`, and the `jsonParsed`
 streams `SubscribeParsedBlocksAsync` / `SubscribeParsedAccountAsync`. Cancel any channel subscription by
-cancelling the `CancellationToken` you pass in.
+cancelling the `CancellationToken` you pass in. A returned `ChannelReader` supports multiple concurrent
+consumers; each notification is delivered to one reader.
 
 Two more streams cover the slot lifecycle in depth — both are marked *unstable* by Solana, so their
 wire shape can change between node versions:
@@ -836,6 +884,9 @@ if (result.IsError)
 `SendAndConfirmTransactionAsync` wraps the send-then-poll flow and throws `TransactionFailedException` if the
 transaction lands but errors.
 
+Both confirmation paths accept any non-negative timeout (or `Timeout.InfiniteTimeSpan`); long WebSocket
+timeouts are chunked internally instead of hitting the platform timer limit.
+
 ## Durable nonces
 
 A blockhash expires after roughly a minute; a durable nonce lets a transaction be signed now and submitted
@@ -869,13 +920,15 @@ await rpc.SendTransactionAsync(tx.Serialize());
 `AdvanceNonceAccount` instruction, so each submission consumes the nonce exactly once. The two anchoring
 modes are mutually exclusive: calling `SetRecentBlockhash` afterward switches the builder back to blockhash
 anchoring and drops the pending `AdvanceNonceAccount`, just as `SetDurableNonce` replaces a previously set
-blockhash.
+blockhash. A nonce-advance-only transaction is valid too; no additional instruction is required.
 
 `CreateNonceAccount` above is a convenience pair — `CreateAccount` + `InitializeNonceAccount`, also
 available separately. The rest of the nonce lifecycle is one instruction each:
 `SystemProgram.WithdrawNonceAccount(nonceAccount, authority, recipient, lamports)` moves lamports out of
 the account, and `SystemProgram.AuthorizeNonceAccount(nonceAccount, authority, newAuthority)` hands it to
-a new authority.
+a new authority. To migrate a legacy nonce-state account, add
+`SystemProgram.UpgradeNonceAccount(nonceAccount)` to a transaction; the nonce account is writable but no
+authority signature is required by that instruction.
 
 ## Program-derived addresses (PDAs)
 

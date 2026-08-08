@@ -170,7 +170,7 @@ public sealed class Message : ITransactionMessage
     public int GetSerializedLength()
     {
         var length = 3 // the header counts
-            + ShortVec.GetByteCount(AccountKeys.Count) + AccountKeys.Count * PublicKey.Length
+            + ShortVec.GetByteCount(AccountKeys.Count) + (AccountKeys.Count * PublicKey.Length)
             + PublicKey.Length // the recent blockhash
             + ShortVec.GetByteCount(Instructions.Count);
 

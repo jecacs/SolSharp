@@ -51,6 +51,22 @@ internal sealed record SimulateTransactionConfig
 
     [JsonPropertyName("minContextSlot")]
     public ulong? MinContextSlot { get; init; }
+
+    [JsonPropertyName("accounts")]
+    public SimulateTransactionAccountsConfig? Accounts { get; init; }
+
+    [JsonPropertyName("innerInstructions")]
+    public bool? InnerInstructions { get; init; }
+}
+
+/// <summary>The optional post-simulation accounts requested from <c>simulateTransaction</c>.</summary>
+internal sealed record SimulateTransactionAccountsConfig
+{
+    [JsonPropertyName("encoding")]
+    public required string Encoding { get; init; }
+
+    [JsonPropertyName("addresses")]
+    public required PublicKey[] Addresses { get; init; }
 }
 
 /// <summary>

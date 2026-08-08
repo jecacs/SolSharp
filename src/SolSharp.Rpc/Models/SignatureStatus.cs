@@ -19,6 +19,13 @@ public sealed record SignatureStatus
     [JsonPropertyName("err")]
     public JsonElement? Err { get; init; }
 
+    /// <summary>
+    /// The deprecated result-shaped status field retained by the node for compatibility; prefer
+    /// <see cref="Err"/> or <see cref="Error"/> for new code.
+    /// </summary>
+    [JsonPropertyName("status")]
+    public JsonElement? Status { get; init; }
+
     /// <summary>The cluster confirmation level reached: <c>processed</c>, <c>confirmed</c>, or <c>finalized</c>.</summary>
     [JsonPropertyName("confirmationStatus")]
     public string? ConfirmationStatus { get; init; }

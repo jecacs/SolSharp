@@ -29,6 +29,10 @@ public sealed record Block
     [JsonPropertyName("blockTime")]
     public long? BlockTime { get; init; }
 
+    /// <summary>The number of partitions used for epoch rewards in this block, when applicable.</summary>
+    [JsonPropertyName("numRewardPartitions")]
+    public ulong? NumRewardPartitions { get; init; }
+
     /// <summary>The signatures of the transactions in the block, in order.</summary>
     [JsonPropertyName("signatures")]
     public IReadOnlyList<string>? Signatures { get; init; }

@@ -149,6 +149,41 @@ public static class Token2022ExtensionsTests
         }
 
         [Test]
+        public void OverlongFixedSizeExtensions_ReturnNullFromTypedViews()
+        {
+            // Arrange: StateWithExtensions returns the TLV bytes, but its typed Pod view requires
+            // each fixed-size extension's declared length to equal size_of::<V>() exactly.
+            var data = Extended(
+                accountType: 1,
+                ((ushort)ExtensionType.TransferFeeConfig, new byte[TransferFeeConfig.Length + 1]),
+                ((ushort)ExtensionType.MintCloseAuthority, new byte[PublicKey.Length + 1]),
+                ((ushort)ExtensionType.PermanentDelegate, new byte[PublicKey.Length + 1]),
+                ((ushort)ExtensionType.DefaultAccountState, new byte[2]),
+                ((ushort)ExtensionType.MetadataPointer, new byte[MetadataPointer.Length + 1]));
+
+            // Act
+            var extensions = TokenExtensionSet.DecodeMint(data)!;
+
+            // Assert
+            extensions.GetTransferFeeConfig().Should().BeNull();
+            extensions.GetMintCloseAuthority().Should().BeNull();
+            extensions.GetPermanentDelegate().Should().BeNull();
+            extensions.GetDefaultAccountState().Should().BeNull();
+            extensions.GetMetadataPointer().Should().BeNull();
+        }
+
+        [TestCase((byte)3)]
+        [TestCase(byte.MaxValue)]
+        public void UndefinedDefaultAccountState_ReturnsNull(byte state)
+        {
+            var extensions = TokenExtensionSet.DecodeMint(
+                Extended(accountType: 1, ((ushort)ExtensionType.DefaultAccountState, [state])));
+
+            extensions.Should().NotBeNull();
+            extensions!.GetDefaultAccountState().Should().BeNull();
+        }
+
+        [Test]
         public void UnknownFutureExtensionType_IsPreservedAsOpaqueData()
         {
             var extensions = TokenExtensionSet.DecodeMint(
@@ -258,5 +293,31 @@ public static class Token2022ExtensionsTests
         [Test]
         public void TooShort_ReturnsNull()
             => TokenExtensionSet.DecodeAccount(new byte[10]).Should().BeNull();
+
+        [Test]
+        public void OverlongFixedSizeExtensions_ReturnNullFromTypedViews()
+        {
+            // Arrange
+            var data = Extended(
+                accountType: 2,
+                ((ushort)ExtensionType.TransferFeeAmount, new byte[sizeof(ulong) + 1]),
+                ((ushort)ExtensionType.MemoTransfer, new byte[2]));
+
+            // Act
+            var extensions = TokenExtensionSet.DecodeAccount(data)!;
+
+            // Assert
+            extensions.GetWithheldTransferFee().Should().BeNull();
+            extensions.GetMemoTransferRequired().Should().BeNull();
+        }
+
+        [Test]
+        public void MemoTransferPodBool_NonZeroValueReturnsTrue()
+        {
+            var extensions = TokenExtensionSet.DecodeAccount(
+                Extended(accountType: 2, ((ushort)ExtensionType.MemoTransfer, [byte.MaxValue])));
+
+            extensions!.GetMemoTransferRequired().Should().BeTrue();
+        }
     }
 }

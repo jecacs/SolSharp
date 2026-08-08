@@ -85,6 +85,19 @@ public static class TransactionDeserializeTests
         }
 
         [Test]
+        public void ImpossibleSignatureCount_ThrowsBeforeAllocatingDeclaredArray()
+        {
+            // Arrange: max compact-u16 signature count with no signatures or message.
+            byte[] data = [0xff, 0xff, 0x03];
+
+            // Act
+            Action act = () => Transaction.Deserialize(data);
+
+            // Assert
+            act.Should().Throw<FormatException>().WithMessage("*declares 65535 signature slot(s)*");
+        }
+
+        [Test]
         public void FewerSignatureSlotsThanRequiredSigners_ThrowsFormatException()
         {
             // Arrange: rewrite the signature count to 0 and drop the 64 signature bytes, leaving a message

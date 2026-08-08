@@ -22,13 +22,13 @@ public static class BorshReaderTests
         {
             // Arrange
             var data = Convert.FromHexString(
-                "2a" +                      // u8 = 42
-                "78563412" +                // u32 = 0x12345678
-                "40420f0000000000" +        // u64 = 1_000_000
-                "01" +                      // bool = true
+                "2a" + // u8 = 42
+                "78563412" + // u32 = 0x12345678
+                "40420f0000000000" + // u64 = 1_000_000
+                "01" + // bool = true
                 "01" + "0700000000000000" + // Option Some, u64 = 7
-                "00" +                      // Option None
-                "02000000" + "6869" +       // string "hi" (length 2, then "hi")
+                "00" + // Option None
+                "02000000" + "6869" + // string "hi" (length 2, then "hi")
                 "0909090909090909090909090909090909090909090909090909090909090909" + // pubkey [9]*32
                 "03000000" + "010203");     // Vec<u8> length 3, then 1, 2, 3
 

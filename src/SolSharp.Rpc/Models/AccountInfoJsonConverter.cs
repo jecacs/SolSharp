@@ -23,6 +23,9 @@ internal sealed class AccountInfoJsonConverter : JsonConverter<AccountInfo>
             Owner = new PublicKey(root.GetProperty("owner").GetString()!),
             Executable = root.GetProperty("executable").GetBoolean(),
             RentEpoch = root.GetProperty("rentEpoch").GetUInt64(),
+            Space = root.TryGetProperty("space", out var space) && space.ValueKind is JsonValueKind.Number
+                ? space.GetUInt64()
+                : null,
             Data = bytes
         };
     }
@@ -34,6 +37,8 @@ internal sealed class AccountInfoJsonConverter : JsonConverter<AccountInfo>
         writer.WriteString("owner", value.Owner.ToString());
         writer.WriteBoolean("executable", value.Executable);
         writer.WriteNumber("rentEpoch", value.RentEpoch);
+        if (value.Space is { } space)
+            writer.WriteNumber("space", space);
 
         writer.WriteStartArray("data");
         writer.WriteStringValue(Convert.ToBase64String(value.Data));

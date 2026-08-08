@@ -70,6 +70,50 @@ public static class PublicKeyExtensionsTests
             Key(Test1PublicKey).Verify([], new byte[length]).Should().BeFalse();
         }
 
+        // C2SP CCTV Ed25519 test 5, also pinned by Agave's strict-verification regression test:
+        // R is a low-order point, so accepting this signature would make verification malleable.
+        [Test]
+        public void LowOrderRSignature_ReturnsFalse()
+        {
+            // Arrange
+            var publicKey = Key("10eb7c3acfb2bed3e0d6ab89bf5a3d6afddd1176ce4812e38d9fd485058fdb1f");
+            var signature = Hex(
+                "0000000000000000000000000000000000000000000000000000000000000000" +
+                "9472a69cd9a701a50d130ed52189e2455b23767db52cacb8716fb896ffeeac09");
+
+            // Act & Assert
+            publicKey.Verify("ed25519vectors 3"u8, signature).Should().BeFalse();
+        }
+
+        // C2SP CCTV Ed25519 vector 3 has a small-order public key and an otherwise non-small-order R.
+        [Test]
+        public void LowOrderPublicKey_ReturnsFalse()
+        {
+            // Arrange
+            var publicKey = Key("0000000000000000000000000000000000000000000000000000000000000000");
+            var signature = Hex(
+                "36684ea91032ba5b1dbab2d02f4debc74c3327f2b3802e2e4d371aa42b12b56b" +
+                "05ba9a796274d80437afa36f1236563f2f3b0aa84cecddc3d20914615ba4fe02");
+
+            // Act & Assert
+            publicKey.Verify("ed25519vectors 3"u8, signature).Should().BeFalse();
+        }
+
+        // C2SP CCTV Ed25519 vector 7 contains low-order components in A and R, but neither point
+        // is itself small-order. Solana strict verification accepts it; a full-subgroup check would not.
+        [Test]
+        public void MixedTorsionPoints_ReturnsTrue()
+        {
+            // Arrange
+            var publicKey = Key("10eb7c3acfb2bed3e0d6ab89bf5a3d6afddd1176ce4812e38d9fd485058fdb1f");
+            var signature = Hex(
+                "36684ea91032ba5b1dbab2d02f4debc74c3327f2b3802e2e4d371aa42b12b56b" +
+                "bbfd00bd9c259d8d222d15e67a3d8228585050dbb9b9585be20d8fadc721da03");
+
+            // Act & Assert
+            publicKey.Verify("ed25519vectors"u8, signature).Should().BeTrue();
+        }
+
         [Test]
         public void RoundTripsWithKeypairSignature()
         {

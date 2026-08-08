@@ -126,7 +126,8 @@ bool ok = PublicKey.TryParse(input, out var key);
   `getBlock`, `getBlockHeight`, `getBlockTime`, `getBlockCommitment`, `getBlockProduction`,
   `getTransactionCount`, `getFeeForMessage`), and cluster state (`getBalance`, `getSlot`,
   `getLatestBlockhash`, `isBlockhashValid`, `getEpochInfo`, `getEpochSchedule`, `getVersion`,
-  `getHealth`, `getIdentity`, `getGenesisHash`, `getSupply`, `getSlotLeader`, `getSlotLeaders`,
+  `getHealth`, `getIdentity`, `getGenesisHash`, `getAgGenesisCert`, `getSupply`, `getSlotLeader`,
+  `getSlotLeaders`,
   `getRecentPrioritizationFees`, `getRecentPerformanceSamples`, `getTokenSupply`,
   `getMinimumBalanceForRentExemption`, `getVoteAccounts`, `getInflationReward`,
   `getInflationGovernor`, `getInflationRate`, `getLeaderSchedule`, `getBlocks`,
@@ -139,9 +140,12 @@ bool ok = PublicKey.TryParse(input, out var key);
   metadata pointer / in-mint metadata, permanent delegate, and more); for other programs, pair
   `getAccountInfo` with Core's `BorshReader`.
 - `getTransaction` returns the decoded transaction bytes (feed to `Transaction.Deserialize`) alongside rich
-  metadata — pre/post SOL and token balances, inner (CPI) instructions, loaded lookup-table addresses, logs,
-  and compute units. Failures decode to a typed `TransactionError` (exposing the program's `Custom` code) on
-  `TransactionMeta`, `SignatureStatus`, and `SimulateTransactionResult`.
+  metadata — transaction version/index, pre/post SOL and token balances, inner (CPI) instructions, loaded
+  lookup-table addresses, logs, compute/cost units, program return data, and rewards. Failures decode to a
+  typed `TransactionError` (including parameterized runtime errors and the program's `Custom` code) on
+  `TransactionMeta`, `SignatureStatus`, and `SimulateTransactionResult`. The default read stays at legacy/v0;
+  `GetTransactionWithMaxVersionAsync` can opt into opaque newer transaction bytes without claiming local parser
+  support for them.
 - `GetParsedTransactionAsync` / `GetParsedBlockAsync` / `GetParsedAccountInfoAsync` return the node's
   `jsonParsed` decoding — typed instructions, token balances, account state, and logs without local Borsh
   work — each instruction keeping both its parsed form and its raw program id / accounts / data.
@@ -154,8 +158,9 @@ bool ok = PublicKey.TryParse(input, out var key);
 - DI registration with a built-in resilience pipeline (retry on transient errors and HTTP 429), plus
   `AddSolanaWs` for a container-managed streaming client.
 - JSON-RPC batching — `CreateBatch()` queues reads (and sends) and submits them in one HTTP round-trip.
-- `SendTransactionAsync` / `SimulateTransactionAsync` — submit a signed transaction or dry-run it for logs and
-  compute units, both running preflight/simulation at `confirmed` by default to match `GetLatestBlockhashAsync`;
+- `SendTransactionAsync` / `SimulateTransactionAsync` — submit a signed transaction or dry-run it for logs,
+  compute units, account snapshots, parsed inner instructions, balances, fees, and return data; both run
+  preflight/simulation at `confirmed` by default to match `GetLatestBlockhashAsync`;
   `SendAndConfirmTransactionAsync` sends and waits for confirmation (throwing if the transaction
   lands but errors). Confirm by polling (`GetSignatureStatusesAsync` / `ConfirmTransactionAsync`) or over the
   WebSocket (`SolanaWsClient.ConfirmSignatureAsync`).
@@ -185,7 +190,8 @@ await foreach (var slot in ws.SubscribeSlotsAsync())
   Phantom / Solflare SLIP-0010 scheme), built on the public `Bip39` and `Slip10` helpers and validated
   against the official test vectors.
 - `ISigner` — the signing abstraction the transaction builder depends on, so the key stays swappable.
-- `PublicKey.Verify(message, signature)` — Ed25519 verification, kept in Wallet so Core stays crypto-free.
+- `PublicKey.Verify(message, signature)` — Solana-compatible strict Ed25519 verification (including rejection
+  of small-order public keys and signature points), kept in Wallet so Core stays crypto-free.
 
 ```csharp
 using SolSharp.Wallet;
@@ -200,7 +206,8 @@ bool ok = keypair.PublicKey.Verify(message, signature);
 
 - Instruction builders: `SystemProgram` (transfer, create / allocate / assign — plus `CreateAccountWithSeed`,
   `AllocateWithSeed`, `AssignWithSeed`, `TransferWithSeed` — and the durable-nonce set, including the
-  `CreateNonceAccount` pair), `ComputeBudgetProgram` (compute-unit limit, priority fee, `RequestHeapFrame`,
+  `CreateNonceAccount` pair and `UpgradeNonceAccount`), `ComputeBudgetProgram` (compute-unit limit,
+  priority fee, `RequestHeapFrame`,
   `SetLoadedAccountsDataSizeLimit`), `TokenProgram` (transfer, mint, burn, approve — checked variants
   included — revoke, `SetAuthority` via `AuthorityType` (incl. the Token-2022 extension authorities),
   additive SPL Multisig-authority overloads,

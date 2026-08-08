@@ -9,18 +9,28 @@ namespace SolSharp.Wallet;
 /// </summary>
 public static class PublicKeyExtensions
 {
-    /// <summary>Verifies an Ed25519 signature of <paramref name="message"/> against this public key.</summary>
+    /// <summary>
+    /// Verifies an Ed25519 signature of <paramref name="message"/> against this public key using
+    /// Solana-compatible strict validation, including rejection of small-order public-key and
+    /// signature <c>R</c> points.
+    /// </summary>
     /// <param name="key">The public key the signature must verify under.</param>
     /// <param name="message">The signed message bytes.</param>
     /// <param name="signature">The 64-byte Ed25519 signature to check.</param>
     /// <returns>
     /// <c>true</c> if <paramref name="signature"/> is a valid Ed25519 signature of <paramref name="message"/>
     /// by <paramref name="key"/>; <c>false</c> otherwise, including when <paramref name="signature"/> is not
-    /// 64 bytes long.
+    /// 64 bytes long or contains a small-order point.
     /// </returns>
     public static bool Verify(this PublicKey key, ReadOnlySpan<byte> message, ReadOnlySpan<byte> signature)
     {
         if (signature.Length != Ed25519.SignatureSize)
+            return false;
+
+        // Bouncy Castle's verifier rejects small-order public keys but accepts a small-order R.
+        // Solana's strict verifier rejects both; Partial rejects torsion-only points without the
+        // prime-subgroup requirement of ValidatePublicKeyFull, so mixed-torsion points remain valid.
+        if (!Ed25519.ValidatePublicKeyPartial(signature[..PublicKey.Length]))
             return false;
 
         // The span overload verifies without copying the signature, key, or message - allocation-free.

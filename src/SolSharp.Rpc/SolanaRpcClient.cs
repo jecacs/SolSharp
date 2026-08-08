@@ -12,9 +12,9 @@ using SolSharp.Rpc.Protocol;
 namespace SolSharp.Rpc;
 
 /// <summary>
-/// Minimal Solana JSON-RPC client over HTTP. The supplied <see cref="HttpClient"/> must have its
-/// BaseAddress set to the RPC endpoint. Read methods only for now; throws <see cref="RpcException"/>
-/// on a node-level error.
+/// Solana JSON-RPC client over HTTP for chain reads, transaction submission and simulation, confirmation,
+/// and supported node operations. The supplied <see cref="HttpClient"/> must have its BaseAddress set to
+/// the RPC endpoint. Node-level errors are surfaced as <see cref="RpcException"/>.
 /// </summary>
 public class SolanaRpcClient
 {
@@ -74,8 +74,9 @@ public class SolanaRpcClient
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
     {
-        var result = await SendAsync<RpcContextValue<LatestBlockhash>>(RpcRequests
-            .GetLatestBlockhash(commitment), cancellationToken);
+        var result = await SendAsync<RpcContextValue<LatestBlockhash>>(
+            RpcRequests.GetLatestBlockhash(commitment),
+            cancellationToken);
 
         return result.Value!;
     }
@@ -96,8 +97,9 @@ public class SolanaRpcClient
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
     {
-        var result = await SendAsync<RpcContextValue<ulong>>(RpcRequests
-            .GetBalance(account, commitment), cancellationToken);
+        var result = await SendAsync<RpcContextValue<ulong>>(
+            RpcRequests.GetBalance(account, commitment),
+            cancellationToken);
 
         return result.Value;
     }
@@ -240,7 +242,7 @@ public class SolanaRpcClient
     /// See <see href="https://solana.com/docs/rpc/http/sendtransaction">sendTransaction</see>.
     /// </summary>
     /// <param name="transaction">The signed transaction's serialized wire bytes; base64-encoded for the request.</param>
-    /// <param name="options">Send options (skip preflight, retries, commitment); node defaults are used when null.</param>
+    /// <param name="options">Send options (skip preflight, retries, commitment); client defaults are used when <c>null</c>.</param>
     /// <param name="cancellationToken">A token to cancel the request.</param>
     /// <returns>The transaction signature (base58).</returns>
     /// <exception cref="ArgumentNullException"><paramref name="transaction"/> is <c>null</c>.</exception>
@@ -262,11 +264,15 @@ public class SolanaRpcClient
     }
 
     /// <summary>
-    /// Simulates a transaction without submitting it, returning its logs, compute units, and any error.
+    /// Simulates a transaction without submitting it, returning its error, logs, resource usage, optional
+    /// account states, inner instructions, balances, fee, loaded addresses, blockhash replacement, and return data.
     /// See <see href="https://solana.com/docs/rpc/http/simulatetransaction">simulateTransaction</see>.
     /// </summary>
     /// <param name="transaction">The transaction's serialized wire bytes; base64-encoded for the request.</param>
-    /// <param name="options">Simulation options (signature verification, blockhash replacement, commitment); node defaults are used when null.</param>
+    /// <param name="options">
+    /// Simulation options including signature verification, blockhash replacement, commitment, requested
+    /// post-simulation accounts, and parsed inner instructions; client defaults are used when <c>null</c>.
+    /// </param>
     /// <param name="cancellationToken">A token to cancel the request.</param>
     /// <returns>The simulation result.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="transaction"/> is <c>null</c>.</exception>
@@ -287,7 +293,14 @@ public class SolanaRpcClient
 
         var encoded = Convert.ToBase64String(transaction);
         var result = await SendAsync<RpcContextValue<SimulateTransactionResult>>(
-            RpcRequests.SimulateTransaction(encoded, options.SigVerify, options.ReplaceRecentBlockhash, options.Commitment, options.MinContextSlot),
+            RpcRequests.SimulateTransaction(
+                encoded,
+                options.SigVerify,
+                options.ReplaceRecentBlockhash,
+                options.Commitment,
+                options.MinContextSlot,
+                options.Accounts,
+                options.InnerInstructions),
             cancellationToken);
 
         return result.Value!;
@@ -533,7 +546,7 @@ public class SolanaRpcClient
 
     /// <summary>
     /// Returns a confirmed transaction by signature, or <c>null</c> if the cluster has not seen it. Supports
-    /// versioned (v0) transactions. See
+    /// legacy and versioned-v0 transactions. See
     /// <see href="https://solana.com/docs/rpc/http/gettransaction">getTransaction</see>.
     /// </summary>
     /// <param name="signature">The transaction signature (base58).</param>
@@ -547,7 +560,31 @@ public class SolanaRpcClient
         string signature,
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
-        => SendAsync<TransactionResponse?>(RpcRequests.GetTransaction(signature, commitment), cancellationToken);
+        => SendAsync<TransactionResponse?>(RpcRequests.GetTransaction(signature, commitment, 0), cancellationToken);
+
+    /// <summary>
+    /// Returns a confirmed transaction while explicitly opting into a newer transaction version. The
+    /// transaction remains opaque wire bytes on <see cref="TransactionResponse.Transaction"/>; callers must
+    /// only advertise versions whose bytes they can handle.
+    /// </summary>
+    /// <param name="signature">The transaction signature (base58).</param>
+    /// <param name="maxSupportedTransactionVersion">
+    /// The highest numeric transaction version the caller accepts. This byte is sent unchanged; the node
+    /// decides whether the requested transaction is available at that version.
+    /// </param>
+    /// <param name="commitment">The commitment level to query at.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The transaction and its execution metadata, or <c>null</c> if it was not found.</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<TransactionResponse?> GetTransactionWithMaxVersionAsync(
+        string signature,
+        byte maxSupportedTransactionVersion,
+        Commitment commitment = Commitment.Confirmed,
+        CancellationToken cancellationToken = default)
+        => SendAsync<TransactionResponse?>(
+            RpcRequests.GetTransaction(signature, commitment, maxSupportedTransactionVersion), cancellationToken);
 
     /// <summary>
     /// Returns the processing status of each signature, in order; an entry is <c>null</c> if the cluster has
@@ -645,7 +682,7 @@ public class SolanaRpcClient
     /// on-chain, so a returned signature always means success.
     /// </summary>
     /// <param name="transaction">The signed transaction's serialized wire bytes.</param>
-    /// <param name="options">Send options; node defaults are used when null.</param>
+    /// <param name="options">Send options; client defaults are used when <c>null</c>.</param>
     /// <param name="commitment">The commitment level to wait for.</param>
     /// <param name="timeout">How long to wait for confirmation before giving up; defaults to 60 seconds.</param>
     /// <param name="cancellationToken">A token to cancel the send or wait.</param>
@@ -819,6 +856,20 @@ public class SolanaRpcClient
         => await SendAsync<PublicKey[]>(RpcRequests.GetSlotLeaders(startSlot, limit), cancellationToken);
 
     /// <summary>
+    /// Returns the Alpenglow genesis block certificate, or <c>null</c> while the cluster is still using
+    /// Tower BFT consensus.
+    /// See <see href="https://solana.com/docs/rpc/http/getaggenesiscert">getAgGenesisCert</see>.
+    /// </summary>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The Alpenglow genesis certificate, or <c>null</c> when Alpenglow is not active.</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<AgGenesisCertificate?> GetAgGenesisCertificateAsync(
+        CancellationToken cancellationToken = default)
+        => SendAsync<AgGenesisCertificate?>(RpcRequests.GetAgGenesisCert(), cancellationToken);
+
+    /// <summary>
     /// Returns the cluster's total, circulating, and non-circulating token supply.
     /// See <see href="https://solana.com/docs/rpc/http/getsupply">getSupply</see>.
     /// </summary>
@@ -918,8 +969,15 @@ public class SolanaRpcClient
         if (block is null)
             return null;
 
+        // getBlock emits the flattened transaction vector in ledger order. Upstream derives
+        // transactionIndex from this same zero-based order when serving getTransaction.
         var transactions = block.Transactions
-            .Select(transaction => transaction with { Slot = slot, BlockTime = block.BlockTime })
+            .Select((transaction, index) => transaction with
+            {
+                Slot = slot,
+                BlockTime = block.BlockTime,
+                TransactionIndex = (uint)index
+            })
             .ToArray();
 
         return block with { Transactions = transactions };

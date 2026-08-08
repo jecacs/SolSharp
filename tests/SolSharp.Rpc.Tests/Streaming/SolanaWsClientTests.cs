@@ -242,6 +242,37 @@ public static class SolanaWsClientTests
             await WaitUntil(() => fake.Sent.Exists(sent => sent.Contains("logsUnsubscribe")));
             fake.Sent.Should().Contain(sent => sent.Contains("\"method\":\"logsUnsubscribe\""));
         }
+
+        [Test]
+        public async Task SupportsConcurrentReadersAndUnsignedSubscriptionIds()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            using var cancellation = new CancellationTokenSource();
+            var subscribe = client.SubscribeLogsAsync(
+                PublicKey.Parse(SolanaProgramIds.TokenProgram), cancellationToken: cancellation.Token);
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), ulong.MaxValue));
+            var reader = await subscribe;
+            var firstRead = reader.ReadAsync().AsTask();
+            var secondRead = reader.ReadAsync().AsTask();
+
+            // Act
+            fake.PushFromServer(LogNotification(ulong.MaxValue, "sig-a"));
+            fake.PushFromServer(LogNotification(ulong.MaxValue, "sig-b"));
+            var notifications = await Task.WhenAll(firstRead, secondRead);
+
+            // Assert
+            notifications.Select(static notification => notification.Value!.Signature)
+                .Should().BeEquivalentTo("sig-a", "sig-b");
+            await cancellation.CancelAsync();
+            await WaitUntil(() => fake.SentSnapshot().Any(static message => message.Contains("logsUnsubscribe")));
+            var unsubscribe = fake.SentSnapshot().Single(static message => message.Contains("logsUnsubscribe"));
+            using var document = System.Text.Json.JsonDocument.Parse(unsubscribe);
+            document.RootElement.GetProperty("params")[0].GetUInt64().Should().Be(ulong.MaxValue);
+        }
     }
 
     [TestFixture]
@@ -365,7 +396,8 @@ public static class SolanaWsClientTests
                 await cancelledB.Should().ThrowAsync<OperationCanceledException>();
                 client.RetainedPendingSubscriptionReferenceCount.Should().Be(0);
                 client.RetainedAcknowledgementTombstoneCount.Should().Be(0);
-                fake.SentSnapshot().Count(message => message.Contains("logsSubscribe")).Should().Be(1,
+                fake.SentSnapshot().Count(message => message.Contains("logsSubscribe")).Should().Be(
+                    1,
                     "cancelled requests queued behind the send lock never reached the transport");
 
                 // Freed pre-send entries make the cap immediately reusable.
@@ -1083,7 +1115,8 @@ public static class SolanaWsClientTests
             reader.Completion.IsCompletedSuccessfully.Should().BeTrue();
             reader.TryRead(out _).Should().BeFalse();
             client.RetainedCancellationRegistrationCount.Should().Be(0);
-            fake.Sent.Should().NotContain(entry => entry.Contains("signatureUnsubscribe"),
+            fake.Sent.Should().NotContain(
+                entry => entry.Contains("signatureUnsubscribe"),
                 "the Solana node automatically removes signature subscriptions after their notification");
         }
 
@@ -1150,6 +1183,90 @@ public static class SolanaWsClientTests
 
             // Assert
             result.IsError.Should().BeFalse();
+        }
+
+        [Test]
+        public async Task TimeoutLongerThanBclTimerMaximum_IsAcceptedAndCallerCancellationWins()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            using var cancellation = new CancellationTokenSource();
+            await cancellation.CancelAsync();
+
+            // Act
+            var act = async () => await client.ConfirmSignatureAsync(
+                "Sig111", timeout: TimeSpan.FromDays(60), cancellationToken: cancellation.Token);
+
+            // Assert
+            await act.Should().ThrowAsync<OperationCanceledException>();
+        }
+
+        [Test]
+        public async Task FiniteTimeoutAfterAcknowledgement_UnsubscribesAndReleasesState()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+
+            var confirm = client.ConfirmSignatureAsync("Sig111", timeout: TimeSpan.FromSeconds(1));
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 44));
+            await WaitUntil(() => client.RetainedPendingSubscriptionReferenceCount == 0);
+
+            // Act
+            var act = async () => await confirm;
+
+            // Assert
+            await act.Should().ThrowAsync<TimeoutException>();
+            await WaitUntil(() => fake.SentSnapshot().Any(
+                static message => message.Contains("signatureUnsubscribe") && message.Contains("44")));
+            client.RetainedCancellationRegistrationCount.Should().Be(0);
+            client.RetainedPendingSubscriptionReferenceCount.Should().Be(0);
+            client.RetainedAcknowledgementTombstoneCount.Should().Be(0);
+        }
+
+        [Test]
+        public async Task InfiniteTimeout_WaitsForNotificationWithoutSchedulingCancellation()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+
+            var confirm = client.ConfirmSignatureAsync("Sig111", timeout: Timeout.InfiniteTimeSpan);
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 45));
+            await WaitUntil(() => client.RetainedPendingSubscriptionReferenceCount == 0 &&
+                                  client.RetainedCancellationRegistrationCount == 1);
+
+            // Act
+            confirm.IsCompleted.Should().BeFalse();
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"signatureNotification","params":{"subscription":45,"result":{"context":{"slot":101},"value":{"err":null}}}}""");
+            var result = await confirm;
+
+            // Assert
+            result.IsError.Should().BeFalse();
+            await WaitUntil(() => client.RetainedCancellationRegistrationCount == 0);
+        }
+
+        [Test]
+        public async Task NegativeFiniteTimeout_ThrowsArgumentOutOfRange()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+
+            // Act
+            var act = async () => await client.ConfirmSignatureAsync(
+                "Sig111", timeout: TimeSpan.FromMilliseconds(-2));
+
+            // Assert
+            await act.Should().ThrowAsync<ArgumentOutOfRangeException>().WithParameterName("timeout");
         }
     }
 
@@ -1729,7 +1846,8 @@ public static class SolanaWsClientTests
             var capFailure = async () => await rejectedAtCap;
             (await capFailure.Should().ThrowAsync<InvalidOperationException>())
                 .Which.Message.Should().Contain("maximum of 2 pending subscription requests");
-            fake.SentSnapshot().Count(message => message.Contains("logsSubscribe")).Should().Be(2,
+            fake.SentSnapshot().Count(message => message.Contains("logsSubscribe")).Should().Be(
+                2,
                 "the cap must be checked before another request is sent");
 
             // Act: a late ACK consumes one tombstone and releases the server-side subscription.
@@ -1918,15 +2036,15 @@ public static class SolanaWsClientTests
         return document.RootElement.GetProperty("id").GetInt32();
     }
 
-    private static string Acknowledgement(int requestId, long subscriptionId) =>
+    private static string Acknowledgement(int requestId, ulong subscriptionId) =>
         $$"""{"jsonrpc":"2.0","result":{{subscriptionId}},"id":{{requestId}}}""";
 
     private static void AcknowledgeAccountRequest(
         FakeWebSocketConnection connection,
         string request,
         PublicKey accountA,
-        long serverIdA,
-        long serverIdB)
+        ulong serverIdA,
+        ulong serverIdB)
     {
         using var document = System.Text.Json.JsonDocument.Parse(request);
         var root = document.RootElement;
@@ -1937,10 +2055,15 @@ public static class SolanaWsClientTests
 
     // A plain (non-interpolated) raw string so the four trailing literal braces stay content; the two
     // values are substituted afterwards (an interpolated raw string cannot mix {{ }} holes with }}}} here).
-    private static string AccountNotification(long subscription, ulong lamports) =>
+    private static string AccountNotification(ulong subscription, ulong lamports) =>
         """{"jsonrpc":"2.0","method":"accountNotification","params":{"subscription":__SUB__,"result":{"context":{"slot":1},"value":{"data":["","base64"],"executable":false,"lamports":__LAMP__,"owner":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA","rentEpoch":0,"space":0}}}}"""
             .Replace("__SUB__", subscription.ToString(CultureInfo.InvariantCulture))
             .Replace("__LAMP__", lamports.ToString(CultureInfo.InvariantCulture));
+
+    private static string LogNotification(ulong subscription, string signature) =>
+        """{"jsonrpc":"2.0","method":"logsNotification","params":{"subscription":__SUB__,"result":{"context":{"slot":1},"value":{"signature":"__SIG__","err":null,"logs":[]}}}}"""
+            .Replace("__SUB__", subscription.ToString(CultureInfo.InvariantCulture))
+            .Replace("__SIG__", signature, StringComparison.Ordinal);
 
     private static string ProgramNotification(long subscription, ulong lamports) =>
         """{"jsonrpc":"2.0","method":"programNotification","params":{"subscription":__SUB__,"result":{"context":{"slot":1},"value":{"pubkey":"11111111111111111111111111111111","account":{"data":["AQID","base64"],"executable":false,"lamports":__LAMP__,"owner":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA","rentEpoch":0,"space":3}}}}}"""

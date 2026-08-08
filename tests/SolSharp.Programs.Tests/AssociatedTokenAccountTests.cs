@@ -43,7 +43,7 @@ public static class AssociatedTokenAccountTests
 
             // Assert
             instruction.ProgramId.Should().Be(AssociatedTokenAccount.ProgramId);
-            instruction.Data.Should().BeEmpty();
+            instruction.Data.Should().Equal((byte)0);
             instruction.Accounts.Should().HaveCount(6);
 
             instruction.Accounts[0].PublicKey.Should().Be(payer);

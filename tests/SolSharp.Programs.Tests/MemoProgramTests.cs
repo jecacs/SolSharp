@@ -45,5 +45,16 @@ public static class MemoProgramTests
             instruction.Accounts.Should().BeEmpty();
             Convert.ToHexString(instruction.Data).ToLowerInvariant().Should().Be("68656c6c6f");
         }
+
+        [Test]
+        public void LoneSurrogate_ThrowsInsteadOfEncodingReplacementCharacter()
+        {
+            // Act
+            Action act = () => MemoProgram.Memo("\ud800");
+
+            // Assert
+            act.Should().Throw<ArgumentException>()
+                .Which.ParamName.Should().Be("text");
+        }
     }
 }

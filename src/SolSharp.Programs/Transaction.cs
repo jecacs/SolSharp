@@ -68,6 +68,10 @@ public sealed class Transaction
             var offset = 0;
             var signatureCount = ShortVec.Decode(data[offset..], out var read);
             offset += read;
+            var signatureBytes = (long)signatureCount * SignatureLength;
+            if (signatureBytes >= data.Length - offset)
+                throw new FormatException(
+                    $"The transaction declares {signatureCount} signature slot(s), but the remaining data cannot hold the signatures and a message.");
 
             var signatures = new byte[signatureCount][];
             for (var i = 0; i < signatureCount; i++)
@@ -168,7 +172,7 @@ public sealed class Transaction
     /// <returns>The serialized length.</returns>
     public int GetSerializedLength()
         => ShortVec.GetByteCount(_signatures.Length)
-           + _signatures.Length * SignatureLength
+           + (_signatures.Length * SignatureLength)
            + (_signedMessageBytes?.Length ?? Message.GetSerializedLength());
 
     /// <summary>
@@ -203,6 +207,7 @@ public sealed class Transaction
         {
             offset += Message.Serialize(destination[offset..]);
         }
+
         written = offset;
         return true;
     }

@@ -57,7 +57,7 @@ internal sealed class ClientWebSocketConnection : IWebSocketConnection
     {
         lock (_lifecycleGate)
         {
-            if (_disposed || _disposeTask is not null && _closeOwnsReceive)
+            if (_disposed || (_disposeTask is not null && _closeOwnsReceive))
             {
                 return ValueTask.FromException<string?>(
                     new ObjectDisposedException(nameof(ClientWebSocketConnection)));

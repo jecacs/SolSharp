@@ -29,7 +29,7 @@ public static class ProgramDerivedAddressTests
         [Test]
         public void SixteenSeeds_Throws()
         {
-            // Arrange: 16 caller seeds leave no slot for the bump, so every derivation attempt exceeds MaxSeeds.
+            // Arrange: 16 caller seeds leave no slot for the bump.
             var seeds = Enumerable.Range(0, ProgramDerivedAddress.MaxSeeds).Select(i => new byte[] { (byte)i }).ToArray();
 
             // Act
@@ -37,6 +37,20 @@ public static class ProgramDerivedAddressTests
 
             // Assert
             act.Should().Throw<ArgumentException>();
+        }
+
+        [Test]
+        public void NullSeed_ThrowsDocumentedArgumentNullException()
+        {
+            // Arrange
+            byte[][] seeds = [null!];
+
+            // Act
+            Action act = () => ProgramDerivedAddress.FindProgramAddress(seeds, Key(9));
+
+            // Assert
+            act.Should().Throw<ArgumentNullException>()
+                .Which.ParamName.Should().Be(nameof(seeds));
         }
     }
 
@@ -81,6 +95,20 @@ public static class ProgramDerivedAddressTests
 
             // Assert
             act.Should().NotThrow();
+        }
+
+        [Test]
+        public void NullSeed_ThrowsDocumentedArgumentNullException()
+        {
+            // Arrange
+            byte[][] seeds = [null!];
+
+            // Act
+            Action act = () => ProgramDerivedAddress.TryCreateProgramAddress(seeds, Key(9), out _);
+
+            // Assert
+            act.Should().Throw<ArgumentNullException>()
+                .Which.ParamName.Should().Be(nameof(seeds));
         }
     }
 }

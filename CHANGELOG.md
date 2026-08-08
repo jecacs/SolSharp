@@ -9,6 +9,9 @@ version (on the earlier 0.x releases, minor versions could carry them).
 
 ### Added
 
+- Added centrally configured StyleCop analysis to every project. Rider, Roslyn, and StyleCop now share an
+  explicit modifier order, while repository-conflicting documentation and legacy-layout rules are suppressed
+  in `.editorconfig` instead of producing misleading IDE warnings.
 - SPL Token and Token-2022 authority-bearing instruction builders now have additive multisig overloads:
   the multisig authority remains a non-signer account and the supplied member accounts are appended as
   readonly signers in caller order.
@@ -16,13 +19,42 @@ version (on the earlier 0.x releases, minor versions could carry them).
   and units consumed). `SolanaWsClientOptions.SubscriptionAckTimeout` bounds initial and replayed
   subscription acknowledgements, while `MaxPendingSubscriptionRequests` caps live ACK waits plus compact
   late-ACK cleanup records.
+- Added the current Agave `getAgGenesisCert` read as `GetAgGenesisCertificateAsync`, including typed
+  Alpenglow block-certificate and aggregate-signature models.
+- Added source- and binary-compatible `GetTransactionWithMaxVersionAsync`, which explicitly advertises a
+  caller-selected maximum transaction version and returns newer wire bytes opaquely; `GetTransactionAsync`
+  remains pinned to legacy/v0 so it never returns bytes the local transaction parser cannot decode.
+- `SimulateTransactionOptions` can now request post-simulation account snapshots and parsed inner
+  instructions. Simulation and transaction models preserve current node fields including transaction
+  version/index, cost and loaded-data units, fees, balances, return data, rewards, loaded addresses,
+  parsed v0 lookup references, RPC API version, validator endpoints/client id, and basis-point commissions.
+- Added `SystemProgram.UpgradeNonceAccount`, matching the generated System Program client's discriminator
+  and account layout for migrating legacy nonce state.
 
 ### Fixed
 
 - Bounded Token-2022 metadata vector counts before allocation, preventing a malformed four-byte Borsh
   length from requesting a multi-gigabyte `List` capacity.
 - Kept the durable nonce account in v0 static keys even when it also appears in an Address Lookup Table,
-  matching the Solana SDK and preserving runtime durable-nonce recognition.
+  matching the Solana SDK and preserving runtime durable-nonce recognition, including valid advance-nonce
+  instructions with trailing data. Durable-nonce-only legacy and v0 builders are now accepted.
+- Matched current canonical program builders: Address Lookup Table creation no longer requires the future
+  authority to sign, Associated Token Account creation emits its explicit `[0]` discriminator, memo text
+  rejects invalid Unicode instead of encoding replacement characters, and undefined Token/Token-2022
+  authority discriminators are rejected before serialization.
+- Hardened Ed25519 verification against small-order public-key/signature points accepted by the underlying
+  crypto backend, closing a signature-malleability edge while retaining Solana-compatible mixed-torsion
+  behavior. Secret-key public-half validation is constant-time, and SLIP-0010 paths now reject signed or
+  whitespace-padded numeric segments.
+- Preserved parameter payloads for all current transaction-error variants instead of dropping their
+  instruction/account indexes, and retained the current optional fields returned by account, transaction,
+  simulation, cluster-node, inflation, token, and parsed-message RPC responses.
+- Validated account ownership, executable state, canonical fixed/TLV layouts, nonce versions, Address
+  Lookup Table option tags/padding/address alignment, and classic Token account sizes before typed decode.
+  Confirmation polling now falls back to the upstream `confirmations` semantics when an older node omits
+  `confirmationStatus`.
+- Added a configurable 128 MiB default limit for single and batch HTTP response bodies, enforced while
+  streaming even when `Content-Length` is absent, so a provider cannot cause an unbounded response buffer.
 - Hardened batch JSON-RPC handling: every entry must be a valid 2.0 envelope with one known, unique id and
   exactly one result or error member (including rejecting `result` together with `error: null`); malformed
   replies now terminate every queued task instead of leaving calls pending indefinitely.
@@ -30,6 +62,10 @@ version (on the earlier 0.x releases, minor versions could carry them).
   completed one-shot signature subscriptions after their notification, bounded subscribe acknowledgement
   waits, isolated cancellation and acknowledgement failures during reconnect replay, and bounded abandoned-ACK
   state so one failed subscription cannot stall the replay queue or leak retained subscription state.
+- WebSocket routing now accepts the protocol's full unsigned 64-bit subscription-id range, returned channel
+  subscriptions support concurrent consumers, and signature confirmation accepts arbitrarily long or
+  infinite timeouts without overflowing the platform timer. Shared-socket sends isolate one subscriber's
+  cancellation, duplicate server IDs fail the corrupted generation, and disposal completes the close handshake.
 - `ConfirmTransactionAsync` now applies its timeout to an in-flight HTTP status request as well as the delay
   between polls. The DI resilience policy no longer retries non-idempotent `requestAirdrop` calls.
 - Compiled messages defensively copy instruction data; transactions snapshot the bytes used for their first
@@ -37,7 +73,8 @@ version (on the earlier 0.x releases, minor versions could carry them).
   caller-owned message arrays are later mutated.
 - Rejected unrepresentable signer counts before message header conversion, legacy messages whose signer-count
   high bit collides with the version prefix, trailing bytes in full message and transaction parsers, and
-  System Program seeds longer than 32 UTF-8 bytes.
+  System Program seeds longer than 32 UTF-8 bytes. Transaction builders now report null signer elements as
+  argument errors instead of failing indirectly while selecting the fee payer.
 - Made Borsh decoding canonical (`bool`/`Option` accept only `0` or `1`) and UTF-8 strict in both directions;
   malformed text is rejected instead of silently replaced. Core JSON converters now consistently throw
   `JsonException` for wrong token kinds and the source-generated Core context supports nullable public keys.

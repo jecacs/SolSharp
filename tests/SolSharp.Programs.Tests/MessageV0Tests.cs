@@ -272,6 +272,19 @@ public static class MessageV0Tests
         }
 
         [Test]
+        public void ImpossibleLookupCount_ThrowsBeforeAllocatingDeclaredArray()
+        {
+            // Arrange: replace the zero lookup count with max compact-u16, without adding lookup data.
+            byte[] data = [.. SerializedV0()[..^1], 0xff, 0xff, 0x03];
+
+            // Act
+            Action act = () => MessageV0.Deserialize(data);
+
+            // Assert
+            act.Should().Throw<FormatException>().WithMessage("*declares 65535 address table lookup(s)*");
+        }
+
+        [Test]
         public void ValidCompiledMessage_RoundTrips()
         {
             // Arrange

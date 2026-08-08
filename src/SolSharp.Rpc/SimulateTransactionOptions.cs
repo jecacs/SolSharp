@@ -21,4 +21,13 @@ public sealed record SimulateTransactionOptions
 
     /// <summary>The minimum slot at which the request may be evaluated.</summary>
     public ulong? MinContextSlot { get; init; }
+
+    /// <summary>
+    /// Accounts whose post-simulation state the node should return, encoded as base64. The node limits
+    /// the number of requested addresses to the transaction's account count; no states are requested when <c>null</c>.
+    /// </summary>
+    public IReadOnlyList<PublicKey>? Accounts { get; init; }
+
+    /// <summary>Requests parsed inner instructions from the simulation. Default <c>false</c>.</summary>
+    public bool InnerInstructions { get; init; }
 }

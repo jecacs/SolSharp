@@ -217,6 +217,33 @@ public static class MessageTests
         }
 
         [Test]
+        public void ImpossibleAccountKeyCount_ThrowsBeforeAllocatingDeclaredArray()
+        {
+            // Arrange: max compact-u16 account count with no account bytes following it.
+            byte[] data = [1, 0, 0, 0xff, 0xff, 0x03];
+
+            // Act
+            Action act = () => Message.Deserialize(data);
+
+            // Assert
+            act.Should().Throw<FormatException>().WithMessage("*declares 65535 account key(s)*");
+        }
+
+        [Test]
+        public void ImpossibleInstructionCount_ThrowsBeforeAllocatingDeclaredArray()
+        {
+            // Arrange: one fee-payer key and blockhash followed by max compact-u16 instructions,
+            // but no bytes for even one instruction's minimum representation.
+            byte[] data = [1, 0, 0, 1, .. Key(1).ToBytes(), .. Key(8).ToBytes(), 0xff, 0xff, 0x03];
+
+            // Act
+            Action act = () => Message.Deserialize(data);
+
+            // Assert
+            act.Should().Throw<FormatException>().WithMessage("*declares 65535 instruction(s)*");
+        }
+
+        [Test]
         public void ValidCompiledMessage_RoundTrips()
         {
             // Arrange

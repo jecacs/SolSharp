@@ -66,13 +66,14 @@ public static class SolanaRpcClientChainTests
         {
             // Arrange
             var (client, handler) = Make(
-                """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":[{"address":"11111111111111111111111111111111","amount":"500","decimals":6,"uiAmountString":"0.0005"}]},"id":1}""");
+                """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":[{"address":"11111111111111111111111111111111","amount":"500","decimals":6,"uiAmount":0.0005,"uiAmountString":"0.0005"}]},"id":1}""");
 
             // Act
             var accounts = await client.GetTokenLargestAccountsAsync(PublicKey.Parse(TokenProgram));
 
             // Assert
             accounts.Should().ContainSingle();
+            accounts[0].UiAmount.Should().Be(0.0005m);
             accounts[0].Address.Should().Be(PublicKey.Parse(SystemProgram));
             accounts[0].Amount.Should().Be("500");
             accounts[0].Decimals.Should().Be(6);
@@ -88,7 +89,7 @@ public static class SolanaRpcClientChainTests
         {
             // Arrange
             var (client, handler) = Make(
-                """{"jsonrpc":"2.0","result":{"blockhash":"Ckt","previousBlockhash":"Prev","parentSlot":99,"blockHeight":90,"blockTime":1700000000,"signatures":["sig1","sig2"]},"id":1}""");
+                """{"jsonrpc":"2.0","result":{"blockhash":"Ckt","previousBlockhash":"Prev","parentSlot":99,"blockHeight":90,"blockTime":1700000000,"numRewardPartitions":8,"signatures":["sig1","sig2"]},"id":1}""");
 
             // Act
             var block = await client.GetBlockAsync(100);
@@ -100,6 +101,7 @@ public static class SolanaRpcClientChainTests
             block.ParentSlot.Should().Be(99);
             block.BlockHeight.Should().Be(90);
             block.BlockTime.Should().Be(1700000000);
+            block.NumRewardPartitions.Should().Be(8);
             block.Signatures.Should().Equal("sig1", "sig2");
             handler.CapturedRequestBody.Should().Contain("\"getBlock\"");
             handler.CapturedRequestBody.Should().Contain("\"transactionDetails\":\"signatures\"");

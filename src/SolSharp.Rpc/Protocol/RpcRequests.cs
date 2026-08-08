@@ -68,7 +68,9 @@ internal static class RpcRequests
         bool sigVerify,
         bool replaceRecentBlockhash,
         Commitment? commitment,
-        ulong? minContextSlot) =>
+        ulong? minContextSlot,
+        IReadOnlyList<PublicKey>? accounts,
+        bool innerInstructions) =>
         new()
         {
             Method = RpcMethods.SimulateTransaction,
@@ -81,7 +83,15 @@ internal static class RpcRequests
                     SigVerify = sigVerify,
                     ReplaceRecentBlockhash = replaceRecentBlockhash,
                     Commitment = commitment,
-                    MinContextSlot = minContextSlot
+                    MinContextSlot = minContextSlot,
+                    Accounts = accounts is null
+                        ? null
+                        : new SimulateTransactionAccountsConfig
+                        {
+                            Encoding = "base64",
+                            Addresses = [.. accounts]
+                        },
+                    InnerInstructions = innerInstructions ? true : null
                 }
             ]
         };
@@ -106,11 +116,15 @@ internal static class RpcRequests
         => new()
         {
             Method = RpcMethods.GetMultipleAccounts,
-            Params = [accounts.ToArray(), new AccountInfoConfig
-            {
-                Encoding = "base64",
-                Commitment = commitment
-            }]
+            Params =
+            [
+                accounts.ToArray(),
+                new AccountInfoConfig
+                {
+                    Encoding = "base64",
+                    Commitment = commitment
+                }
+            ]
         };
 
     public static RpcRequest GetSignaturesForAddress(
@@ -182,14 +196,22 @@ internal static class RpcRequests
     public static RpcRequest GetRecentPrioritizationFees(IReadOnlyList<PublicKey> accounts) =>
         new() { Method = RpcMethods.GetRecentPrioritizationFees, Params = [accounts.ToArray()] };
 
-    public static RpcRequest GetTransaction(string signature, Commitment commitment) =>
+    public static RpcRequest GetTransaction(
+        string signature,
+        Commitment commitment,
+        byte maxSupportedTransactionVersion) =>
         new()
         {
             Method = RpcMethods.GetTransaction,
             Params =
             [
                 signature,
-                new TransactionConfig { Commitment = commitment, MaxSupportedTransactionVersion = 0, Encoding = "base64" }
+                new TransactionConfig
+                {
+                    Commitment = commitment,
+                    MaxSupportedTransactionVersion = maxSupportedTransactionVersion,
+                    Encoding = "base64"
+                }
             ]
         };
 
@@ -202,6 +224,9 @@ internal static class RpcRequests
 
     public static RpcRequest GetSlotLeaders(ulong startSlot, ulong limit) =>
         new() { Method = RpcMethods.GetSlotLeaders, Params = [startSlot, limit] };
+
+    public static RpcRequest GetAgGenesisCert() =>
+        new() { Method = RpcMethods.GetAgGenesisCert };
 
     public static RpcRequest GetSupply(Commitment commitment) =>
         new()
@@ -420,6 +445,7 @@ internal static class RpcMethods
     public const string GetTransaction = "getTransaction";
     public const string GetSignatureStatuses = "getSignatureStatuses";
     public const string GetSlotLeaders = "getSlotLeaders";
+    public const string GetAgGenesisCert = "getAgGenesisCert";
     public const string GetSupply = "getSupply";
     public const string GetTokenLargestAccounts = "getTokenLargestAccounts";
     public const string GetBlock = "getBlock";

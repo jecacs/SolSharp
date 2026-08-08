@@ -43,6 +43,7 @@ public static class SolanaRpcClientParsedTransactionTests
             tx.Should().NotBeNull();
             tx!.Slot.Should().Be(250000000);
             tx.BlockTime.Should().Be(1700000000);
+            tx.Version!.Value.GetString().Should().Be("legacy");
             tx.Signatures.Should().ContainSingle().Which.Should().Be("sig1aaaa");
             tx.Message.RecentBlockhash.Should().Be("RBh1transfer1111111111111111111111111111111");
 
@@ -118,10 +119,35 @@ public static class SolanaRpcClientParsedTransactionTests
 
             // Assert
             tx.Should().NotBeNull();
-            tx!.Meta!.LoadedAddresses.Should().NotBeNull();
+            tx!.Version!.Value.GetInt32().Should().Be(0);
+            tx.Meta!.LoadedAddresses.Should().NotBeNull();
             tx.Meta.LoadedAddresses!.Writable.Should().ContainSingle().Which.Should().Be(Key(V0Writable));
             tx.Meta.LoadedAddresses.Readonly.Should().ContainSingle().Which.Should().Be(Key(V0Readonly));
             tx.Message.AccountKeys.Should().Contain(account => account.Source == "lookupTable");
+        }
+
+        [Test]
+        public async Task ParsesCurrentMetadataAndMessageLookupReferences()
+        {
+            // Arrange
+            var (client, _) = Make(
+                """{"jsonrpc":"2.0","result":{"slot":8,"blockTime":9,"transactionIndex":3,"transaction":{"signatures":["sig-current"],"message":{"accountKeys":[],"instructions":[],"recentBlockhash":"CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8","addressTableLookups":[{"accountKey":"11111111111111111111111111111111","writableIndexes":[1,2],"readonlyIndexes":[3]}]}},"meta":{"err":null,"status":{"Ok":null},"fee":5000,"computeUnitsConsumed":50,"costUnits":60,"returnData":{"programId":"11111111111111111111111111111111","data":["AQID","base64"]},"rewards":[{"pubkey":"11111111111111111111111111111111","lamports":-1,"postBalance":99,"rewardType":"Rent","commission":null}]},"version":0},"id":1}""");
+
+            // Act
+            var transaction = await client.GetParsedTransactionAsync("sig-current");
+
+            // Assert
+            transaction!.TransactionIndex.Should().Be(3);
+            transaction.Version!.Value.GetInt32().Should().Be(0);
+            var lookup = transaction.Message.AddressTableLookups.Should().ContainSingle().Subject;
+            lookup.AccountKey.Should().Be(Key(SystemId));
+            lookup.WritableIndexes.Should().Equal(1, 2);
+            lookup.ReadonlyIndexes.Should().Equal(3);
+            transaction.Meta!.ComputeUnitsConsumed.Should().Be(50);
+            transaction.Meta.Status!.Value.GetProperty("Ok").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+            transaction.Meta.CostUnits.Should().Be(60);
+            transaction.Meta.ReturnData!.Data.Should().Equal(1, 2, 3);
+            transaction.Meta.Rewards.Should().ContainSingle().Which.Lamports.Should().Be(-1);
         }
 
         [Test]
@@ -223,13 +249,16 @@ public static class SolanaRpcClientParsedTransactionTests
             block.ParentSlot.Should().Be(249999999);
             block.BlockHeight.Should().Be(123456);
             block.BlockTime.Should().Be(1700000005);
+            block.NumRewardPartitions.Should().Be(4);
             block.Transactions.Should().HaveCount(2);
 
             var first = block.Transactions[0];
             first.Slot.Should().Be(250000000);       // patched from the requested slot
             first.BlockTime.Should().Be(1700000005);  // patched from the block
+            first.TransactionIndex.Should().Be(0);    // derived from ledger order
             first.Message.Instructions[0].Parsed!.Type.Should().Be("transfer");
 
+            block.Transactions[1].TransactionIndex.Should().Be(1);
             block.Transactions[1].Meta.Should().BeNull();
 
             handler.CapturedRequestBody.Should().Contain("getBlock");
@@ -262,5 +291,5 @@ public static class SolanaRpcClientParsedTransactionTests
         """{"jsonrpc":"2.0","result":{"transaction":{"signatures":["sigX"],"message":{"accountKeys":[{"pubkey":"3x9az88Dkbxa6tkKByxqEn7jBTJCJCD4dVvou49L24ET","signer":true,"writable":true}],"instructions":[],"recentBlockhash":"RBh4mal111111111111111111111111111111111111"}}},"id":1}""";
 
     private const string BlockJson =
-        """{"jsonrpc":"2.0","result":{"blockhash":"BHash5block11111111111111111111111111111111","previousBlockhash":"BHash6parent1111111111111111111111111111111","parentSlot":249999999,"blockHeight":123456,"blockTime":1700000005,"transactions":[{"transaction":{"signatures":["sigA"],"message":{"accountKeys":[{"pubkey":"3x9az88Dkbxa6tkKByxqEn7jBTJCJCD4dVvou49L24ET","signer":true,"writable":true,"source":"transaction"},{"pubkey":"9jLkNAaW9E47LQMHvjohy2uAAyr1331bAxgJKFRU7wF6","signer":false,"writable":true,"source":"transaction"},{"pubkey":"11111111111111111111111111111111","signer":false,"writable":false,"source":"transaction"}],"instructions":[{"program":"system","programId":"11111111111111111111111111111111","parsed":{"type":"transfer","info":{"lamports":42}},"stackHeight":null}],"recentBlockhash":"RBh7blktx111111111111111111111111111111111"}},"meta":{"err":null,"fee":5000,"preBalances":[1,1,1],"postBalances":[1,1,1],"innerInstructions":[],"logMessages":[],"preTokenBalances":[],"postTokenBalances":[],"loadedAddresses":{"writable":[],"readonly":[]}},"version":"legacy"},{"transaction":{"signatures":["sigB"],"message":{"accountKeys":[{"pubkey":"67vHA8qZGCJKw1UNGUJZME4MwEWDRGWzp7MGvsut43A8","signer":true,"writable":true,"source":"transaction"}],"instructions":[],"recentBlockhash":"RBh8blktx211111111111111111111111111111111"}},"meta":null,"version":0}]},"id":1}""";
+        """{"jsonrpc":"2.0","result":{"blockhash":"BHash5block11111111111111111111111111111111","previousBlockhash":"BHash6parent1111111111111111111111111111111","parentSlot":249999999,"blockHeight":123456,"blockTime":1700000005,"numRewardPartitions":4,"transactions":[{"transaction":{"signatures":["sigA"],"message":{"accountKeys":[{"pubkey":"3x9az88Dkbxa6tkKByxqEn7jBTJCJCD4dVvou49L24ET","signer":true,"writable":true,"source":"transaction"},{"pubkey":"9jLkNAaW9E47LQMHvjohy2uAAyr1331bAxgJKFRU7wF6","signer":false,"writable":true,"source":"transaction"},{"pubkey":"11111111111111111111111111111111","signer":false,"writable":false,"source":"transaction"}],"instructions":[{"program":"system","programId":"11111111111111111111111111111111","parsed":{"type":"transfer","info":{"lamports":42}},"stackHeight":null}],"recentBlockhash":"RBh7blktx111111111111111111111111111111111"}},"meta":{"err":null,"fee":5000,"preBalances":[1,1,1],"postBalances":[1,1,1],"innerInstructions":[],"logMessages":[],"preTokenBalances":[],"postTokenBalances":[],"loadedAddresses":{"writable":[],"readonly":[]}},"version":"legacy"},{"transaction":{"signatures":["sigB"],"message":{"accountKeys":[{"pubkey":"67vHA8qZGCJKw1UNGUJZME4MwEWDRGWzp7MGvsut43A8","signer":true,"writable":true,"source":"transaction"}],"instructions":[],"recentBlockhash":"RBh8blktx211111111111111111111111111111111"}},"meta":null,"version":0}]},"id":1}""";
 }

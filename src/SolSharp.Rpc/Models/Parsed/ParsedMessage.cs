@@ -17,4 +17,8 @@ public sealed record ParsedMessage
     /// <summary>The recent blockhash the transaction was built against (base58).</summary>
     [JsonPropertyName("recentBlockhash")]
     public string RecentBlockhash { get; init; } = string.Empty;
+
+    /// <summary>The address lookup-table references of a versioned message; absent for legacy messages.</summary>
+    [JsonPropertyName("addressTableLookups")]
+    public IReadOnlyList<ParsedAddressTableLookup>? AddressTableLookups { get; init; }
 }

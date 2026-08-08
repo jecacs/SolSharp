@@ -13,10 +13,10 @@ public static class AddressLookupTableProgram
     public static PublicKey ProgramId { get; } = PublicKey.Parse("AddressLookupTab1e1111111111111111111111111");
 
     /// <summary>
-    /// Creates a new lookup table owned by <paramref name="authority"/>. The table's address is a PDA derived
+    /// Creates a new lookup table controlled by <paramref name="authority"/>. The table's address is a PDA derived
     /// from the authority and <paramref name="recentSlot"/>, which must be a recent slot the node has seen.
     /// </summary>
-    /// <param name="authority">The account that will control the table (signer).</param>
+    /// <param name="authority">The account that will control the table.</param>
     /// <param name="payer">The account that funds the new table account (writable signer).</param>
     /// <param name="recentSlot">A recent slot; the table address is derived from it, so it must be current.</param>
     /// <returns>The create instruction and the derived lookup table address.</returns>
@@ -41,7 +41,7 @@ public static class AddressLookupTableProgram
             Accounts =
             [
                 AccountMeta.Writable(lookupTable),
-                AccountMeta.ReadonlySigner(authority),
+                AccountMeta.Readonly(authority),
                 AccountMeta.WritableSigner(payer),
                 AccountMeta.Readonly(SystemProgram.ProgramId)
             ],
@@ -66,7 +66,7 @@ public static class AddressLookupTableProgram
     {
         ArgumentNullException.ThrowIfNull(newAddresses);
 
-        using var buffer = new MemoryStream(sizeof(uint) + sizeof(ulong) + newAddresses.Count * PublicKey.Length);
+        using var buffer = new MemoryStream(sizeof(uint) + sizeof(ulong) + (newAddresses.Count * PublicKey.Length));
         Span<byte> head = stackalloc byte[sizeof(uint) + sizeof(ulong)];
         BinaryPrimitives.WriteUInt32LittleEndian(head, 2);
         BinaryPrimitives.WriteUInt64LittleEndian(head[sizeof(uint)..], (ulong)newAddresses.Count);

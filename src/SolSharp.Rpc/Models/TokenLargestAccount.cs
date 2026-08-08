@@ -19,6 +19,10 @@ public sealed record TokenLargestAccount
     [JsonPropertyName("decimals")]
     public byte Decimals { get; init; }
 
+    /// <summary>The balance scaled by the mint's decimals as a JSON number, or <c>null</c>.</summary>
+    [JsonPropertyName("uiAmount")]
+    public decimal? UiAmount { get; init; }
+
     /// <summary>The balance scaled by the decimals, as a human-readable string.</summary>
     [JsonPropertyName("uiAmountString")]
     public string? UiAmountString { get; init; }

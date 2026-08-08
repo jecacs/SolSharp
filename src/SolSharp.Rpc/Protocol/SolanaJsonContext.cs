@@ -30,6 +30,7 @@ namespace SolSharp.Rpc.Protocol;
 [JsonSerializable(typeof(CommitmentConfig))]
 [JsonSerializable(typeof(SendTransactionConfig))]
 [JsonSerializable(typeof(SimulateTransactionConfig))]
+[JsonSerializable(typeof(SimulateTransactionAccountsConfig))]
 [JsonSerializable(typeof(AccountInfoConfig))]
 [JsonSerializable(typeof(SignaturesForAddressConfig))]
 [JsonSerializable(typeof(ProgramAccountsConfig))]
@@ -81,6 +82,7 @@ namespace SolSharp.Rpc.Protocol;
 [JsonSerializable(typeof(InflationRate))]
 [JsonSerializable(typeof(RpcContextValue<LargestAccount[]>))]
 [JsonSerializable(typeof(PerformanceSample[]))]
+[JsonSerializable(typeof(AgGenesisCertificate))]
 // WebSocket notification payloads (SubscriptionSink roots).
 [JsonSerializable(typeof(SlotInfo))]
 [JsonSerializable(typeof(VoteNotification))]

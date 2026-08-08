@@ -8,6 +8,22 @@ namespace SolSharp.Core.Tests.Encoding;
 public static class BorshWriterTests
 {
     [TestFixture]
+    public sealed class Constructor
+    {
+        [TestCase(0)]
+        [TestCase(-1)]
+        public void NonPositiveCapacity_ThrowsDocumentedArgumentException(int initialCapacity)
+        {
+            // Act
+            Action act = () => _ = new BorshWriter(initialCapacity);
+
+            // Assert
+            act.Should().Throw<ArgumentException>()
+                .Which.ParamName.Should().Be(nameof(initialCapacity));
+        }
+    }
+
+    [TestFixture]
     public sealed class Write
     {
         [Test]

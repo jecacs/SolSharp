@@ -40,6 +40,12 @@ public sealed record VoteAccount
     [JsonPropertyName("commission")]
     public byte Commission { get; init; }
 
+    /// <summary>
+    /// The raw commission in basis points, when reported by nodes supporting SIMD-0291; otherwise <c>null</c>.
+    /// </summary>
+    [JsonPropertyName("inflationRewardsCommissionBps")]
+    public ushort? InflationRewardsCommissionBps { get; init; }
+
     /// <summary>The most recent slot this account voted on.</summary>
     [JsonPropertyName("lastVote")]
     public ulong LastVote { get; init; }

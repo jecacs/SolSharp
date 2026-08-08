@@ -17,11 +17,11 @@ internal sealed class Base64TupleJsonConverter : JsonConverter<byte[]>
         using var document = JsonDocument.ParseValue(ref reader);
         var root = document.RootElement;
         if (root.ValueKind != JsonValueKind.Array || root.GetArrayLength() != 2)
-            throw new JsonException("Expected base64 transaction data as a two-element array.");
+            throw new JsonException("Expected base64 binary data as a two-element array.");
         if (root[0].ValueKind != JsonValueKind.String)
-            throw new JsonException("Expected base64 transaction data as a string.");
+            throw new JsonException("Expected base64 binary data as a string.");
         if (root[1].ValueKind != JsonValueKind.String || root[1].GetString() != "base64")
-            throw new JsonException("Expected transaction encoding base64.");
+            throw new JsonException("Expected binary data encoding base64.");
 
         try
         {
@@ -29,7 +29,7 @@ internal sealed class Base64TupleJsonConverter : JsonConverter<byte[]>
         }
         catch (FormatException exception)
         {
-            throw new JsonException("Transaction data is not valid base64.", exception);
+            throw new JsonException("Binary data is not valid base64.", exception);
         }
     }
 

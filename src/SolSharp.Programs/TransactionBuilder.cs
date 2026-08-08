@@ -29,10 +29,13 @@ public sealed class TransactionBuilder
     /// <summary>Appends several instructions, in order.</summary>
     /// <param name="instructions">The instructions to add.</param>
     /// <returns>This builder, so calls can be chained.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="instructions"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException"><paramref name="instructions"/> or one of its elements is <c>null</c>.</exception>
     public TransactionBuilder AddInstructions(params Instruction[] instructions)
     {
         ArgumentNullException.ThrowIfNull(instructions);
+        foreach (var instruction in instructions)
+            ArgumentNullException.ThrowIfNull(instruction, nameof(instructions));
+
         _instructions.AddRange(instructions);
         return this;
     }
@@ -53,8 +56,10 @@ public sealed class TransactionBuilder
     /// </summary>
     /// <param name="recentBlockhash">A recent blockhash, e.g. from <c>getLatestBlockhash</c>.</param>
     /// <returns>This builder, so calls can be chained.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="recentBlockhash"/> is <c>null</c>.</exception>
     public TransactionBuilder SetRecentBlockhash(string recentBlockhash)
     {
+        ArgumentNullException.ThrowIfNull(recentBlockhash);
         _recentBlockhash = recentBlockhash;
         _nonceAdvance = null;
         return this;
@@ -82,10 +87,13 @@ public sealed class TransactionBuilder
     /// <summary>Sets the address lookup tables a v0 build (<see cref="BuildV0"/>) sources extra accounts from.</summary>
     /// <param name="lookupTables">The lookup tables; pass none to clear them.</param>
     /// <returns>This builder, so calls can be chained.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="lookupTables"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException"><paramref name="lookupTables"/> or one of its elements is <c>null</c>.</exception>
     public TransactionBuilder SetAddressLookupTables(params AddressLookupTableAccount[] lookupTables)
     {
         ArgumentNullException.ThrowIfNull(lookupTables);
+        foreach (var lookupTable in lookupTables)
+            ArgumentNullException.ThrowIfNull(lookupTable, nameof(lookupTables));
+
         _lookupTables.Clear();
         _lookupTables.AddRange(lookupTables);
         return this;
@@ -93,7 +101,9 @@ public sealed class TransactionBuilder
 
     /// <summary>Compiles the collected instructions into an unsigned <see cref="Message"/>.</summary>
     /// <returns>The compiled message.</returns>
-    /// <exception cref="InvalidOperationException">No fee payer, no recent blockhash, or no instructions were set.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// No fee payer or recent blockhash was set, or neither a user instruction nor a durable-nonce advance is present.
+    /// </exception>
     public Message BuildMessage()
     {
         var feePayer = _feePayer ?? throw new InvalidOperationException("A fee payer is required; call SetFeePayer.");
@@ -103,12 +113,15 @@ public sealed class TransactionBuilder
     /// <summary>Compiles the message and signs it with <paramref name="signers"/>.</summary>
     /// <param name="signers">The signers to apply. When no fee payer was set, the first signer becomes the fee payer.</param>
     /// <returns>The signed transaction (unsigned if <paramref name="signers"/> is empty).</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="signers"/> is <c>null</c>.</exception>
-    /// <exception cref="InvalidOperationException">No fee payer or signer, no recent blockhash, or no instructions were set.</exception>
+    /// <exception cref="ArgumentNullException"><paramref name="signers"/> or one of its elements is <c>null</c>.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// No fee payer or signer or recent blockhash was set, or neither a user instruction nor a durable-nonce advance is present.
+    /// </exception>
     /// <exception cref="ArgumentException">A signer is not a required signer of the compiled message.</exception>
     public Transaction Build(params ISigner[] signers)
     {
         ArgumentNullException.ThrowIfNull(signers);
+        ValidateSigners(signers);
 
         var feePayer = _feePayer ?? (signers.Length > 0
             ? signers[0].PublicKey
@@ -122,7 +135,7 @@ public sealed class TransactionBuilder
     {
         if (_recentBlockhash is null)
             throw new InvalidOperationException("A recent blockhash is required; call SetRecentBlockhash.");
-        if (_instructions.Count == 0)
+        if (_instructions.Count == 0 && _nonceAdvance is null)
             throw new InvalidOperationException("At least one instruction is required.");
 
         return Message.Compile(feePayer, _recentBlockhash, EffectiveInstructions());
@@ -134,7 +147,9 @@ public sealed class TransactionBuilder
 
     /// <summary>Compiles the collected instructions into an unsigned v0 <see cref="MessageV0"/>, using the set lookup tables.</summary>
     /// <returns>The compiled v0 message.</returns>
-    /// <exception cref="InvalidOperationException">No fee payer, no recent blockhash, or no instructions were set.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// No fee payer or recent blockhash was set, or neither a user instruction nor a durable-nonce advance is present.
+    /// </exception>
     public MessageV0 BuildMessageV0()
     {
         var feePayer = _feePayer ?? throw new InvalidOperationException("A fee payer is required; call SetFeePayer.");
@@ -144,12 +159,15 @@ public sealed class TransactionBuilder
     /// <summary>Compiles a v0 message (using the set lookup tables) and signs it with <paramref name="signers"/>.</summary>
     /// <param name="signers">The signers to apply. When no fee payer was set, the first signer becomes the fee payer.</param>
     /// <returns>The signed v0 transaction (unsigned if <paramref name="signers"/> is empty).</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="signers"/> is <c>null</c>.</exception>
-    /// <exception cref="InvalidOperationException">No fee payer or signer, no recent blockhash, or no instructions were set.</exception>
+    /// <exception cref="ArgumentNullException"><paramref name="signers"/> or one of its elements is <c>null</c>.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// No fee payer or signer or recent blockhash was set, or neither a user instruction nor a durable-nonce advance is present.
+    /// </exception>
     /// <exception cref="ArgumentException">A signer is not a required signer of the compiled message.</exception>
     public Transaction BuildV0(params ISigner[] signers)
     {
         ArgumentNullException.ThrowIfNull(signers);
+        ValidateSigners(signers);
 
         var feePayer = _feePayer ?? (signers.Length > 0
             ? signers[0].PublicKey
@@ -163,9 +181,15 @@ public sealed class TransactionBuilder
     {
         if (_recentBlockhash is null)
             throw new InvalidOperationException("A recent blockhash is required; call SetRecentBlockhash.");
-        if (_instructions.Count == 0)
+        if (_instructions.Count == 0 && _nonceAdvance is null)
             throw new InvalidOperationException("At least one instruction is required.");
 
         return MessageV0.Compile(feePayer, _recentBlockhash, EffectiveInstructions(), _lookupTables);
+    }
+
+    private static void ValidateSigners(IReadOnlyList<ISigner> signers)
+    {
+        foreach (var signer in signers)
+            ArgumentNullException.ThrowIfNull(signer, nameof(signers));
     }
 }

@@ -2,6 +2,8 @@ using System.Text.Json;
 using FluentAssertions;
 using NUnit.Framework;
 using SolSharp.Core.Converters;
+using SolSharp.Core.Primitives;
+using SolSharp.Rpc.Models;
 using SolSharp.Rpc.Protocol;
 
 namespace SolSharp.Rpc.Tests;
@@ -54,6 +56,35 @@ public static class RpcJsonTests
             // Assert
             value!.Context!.Slot.Should().Be(42);
             value.Value.Should().Be(7);
+        }
+
+        [Test]
+        public void ReadsRpcApiVersionFromResponseContext()
+        {
+            // Act
+            var value = JsonSerializer.Deserialize<RpcContextValue<ulong>>(
+                """{"context":{"slot":42,"apiVersion":"3.1.7"},"value":7}""", RpcJson.Options);
+
+            // Assert
+            value!.Context!.ApiVersion.Should().Be("3.1.7");
+        }
+
+        [Test]
+        public void WritesReportedAccountSpaceThroughTheCustomConverter()
+        {
+            // Arrange
+            var account = new AccountInfo
+            {
+                Owner = new PublicKey(new byte[PublicKey.Length]),
+                Space = 3,
+                Data = [1, 2, 3]
+            };
+
+            // Act
+            var json = JsonSerializer.Serialize(account, RpcJson.Options);
+
+            // Assert
+            json.Should().Contain("\"space\":3").And.Contain("\"data\":[\"AQID\",\"base64\"]");
         }
 
         private sealed record Unregistered;

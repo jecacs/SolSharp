@@ -42,6 +42,7 @@ public static class SolanaRpcClientAccountTests
             info.Owner.Should().Be(PublicKey.Parse(OwnerBase58));
             info.Executable.Should().BeFalse();
             info.RentEpoch.Should().Be(ulong.MaxValue);
+            info.Space.Should().Be(3);
             info.Data.Should().Equal(expectedData);
 
             handler.CapturedRequestBody.Should().Contain("\"getAccountInfo\"");

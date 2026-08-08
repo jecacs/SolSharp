@@ -25,12 +25,14 @@ public static class SolanaRpcClientGetTransactionTests
                 """{"jsonrpc":"2.0","result":{"slot":100,"blockTime":1700000000,"transaction":["AQID","base64"],"meta":{"err":null,"fee":5000,"preBalances":[100,200],"postBalances":[95,205],"logMessages":["Program log: ok"],"computeUnitsConsumed":1234},"version":0},"id":1}""");
 
             // Act
-            var transaction = await client.GetTransactionAsync("Sig1111");
+            // Keep the default literal in the legacy third-argument position as a source-compatibility KAT.
+            var transaction = await client.GetTransactionAsync("Sig1111", Commitment.Confirmed, default);
 
             // Assert
             transaction.Should().NotBeNull();
             transaction!.Slot.Should().Be(100);
             transaction.BlockTime.Should().Be(1700000000);
+            transaction.Version!.Value.GetInt32().Should().Be(0);
             transaction.Meta.Should().NotBeNull();
             transaction.Meta!.IsError.Should().BeFalse();
             transaction.Meta.Fee.Should().Be(5000);
@@ -44,7 +46,7 @@ public static class SolanaRpcClientGetTransactionTests
 
             handler.CapturedRequestBody.Should().Contain("\"getTransaction\"");
             handler.CapturedRequestBody.Should().Contain("Sig1111");
-            handler.CapturedRequestBody.Should().Contain("maxSupportedTransactionVersion");
+            handler.CapturedRequestBody.Should().Contain("\"maxSupportedTransactionVersion\":0");
         }
 
         [Test]
@@ -58,6 +60,23 @@ public static class SolanaRpcClientGetTransactionTests
 
             // Assert
             transaction.Should().BeNull();
+        }
+
+        [Test]
+        public async Task ExplicitVersionOptIn_SendsVersionOneAndPreservesOpaqueBytes()
+        {
+            // Arrange
+            var (client, handler) = Make(
+                """{"jsonrpc":"2.0","result":{"slot":101,"transaction":["gQECAw==","base64"],"meta":null,"version":1},"id":1}""");
+
+            // Act
+            var transaction = await client.GetTransactionWithMaxVersionAsync(
+                "SigV1", maxSupportedTransactionVersion: 1);
+
+            // Assert
+            transaction!.Version!.Value.GetInt32().Should().Be(1);
+            transaction.Transaction.Should().Equal(129, 1, 2, 3);
+            handler.CapturedRequestBody.Should().Contain("\"maxSupportedTransactionVersion\":1");
         }
 
         [Test]
@@ -140,6 +159,31 @@ public static class SolanaRpcClientGetTransactionTests
             // Assert
             await act.Should().ThrowAsync<JsonException>()
                 .WithMessage("*two-element array*");
+        }
+
+        [Test]
+        public async Task ParsesCurrentMetadataAndLegacyVersion()
+        {
+            // Arrange
+            var (client, _) = Make(
+                """{"jsonrpc":"2.0","result":{"slot":100,"blockTime":1700000000,"transactionIndex":4,"transaction":["AQID","base64"],"meta":{"err":null,"status":{"Ok":null},"fee":5000,"costUnits":77,"returnData":{"programId":"11111111111111111111111111111111","data":["BAU=","base64"]},"rewards":[{"pubkey":"11111111111111111111111111111111","lamports":-5,"postBalance":95,"rewardType":"Fee","commission":7,"commissionBps":725}]},"version":"legacy"},"id":1}""");
+
+            // Act
+            var transaction = await client.GetTransactionAsync("Sig1111");
+
+            // Assert
+            transaction!.TransactionIndex.Should().Be(4);
+            transaction.Version!.Value.GetString().Should().Be("legacy");
+            transaction.Meta!.Status!.Value.GetProperty("Ok").ValueKind.Should().Be(JsonValueKind.Null);
+            transaction.Meta.CostUnits.Should().Be(77);
+            transaction.Meta.ReturnData!.Data.Should().Equal(4, 5);
+            var reward = transaction.Meta.Rewards.Should().ContainSingle().Subject;
+            reward.PublicKey.Should().Be(PublicKey.Parse("11111111111111111111111111111111"));
+            reward.Lamports.Should().Be(-5);
+            reward.PostBalance.Should().Be(95);
+            reward.RewardType.Should().Be("Fee");
+            reward.Commission.Should().Be(7);
+            reward.CommissionBps.Should().Be(725);
         }
     }
 }

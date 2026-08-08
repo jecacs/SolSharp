@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace SolSharp.Rpc.Models.Parsed;
@@ -27,4 +28,13 @@ public sealed record ParsedTransaction
 
     /// <summary>The block production time as Unix seconds, when known; otherwise <c>null</c>.</summary>
     public long? BlockTime { get; init; }
+
+    /// <summary>
+    /// The transaction's index within its block. Read from <c>getTransaction</c> when reported and
+    /// derived from ledger order by <c>GetParsedBlockAsync</c>; <c>null</c> in streamed block notifications.
+    /// </summary>
+    public uint? TransactionIndex { get; init; }
+
+    /// <summary>The JSON transaction version: <c>"legacy"</c> or a numeric version such as <c>0</c>.</summary>
+    public JsonElement? Version { get; init; }
 }

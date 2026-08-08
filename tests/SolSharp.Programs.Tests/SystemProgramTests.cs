@@ -71,6 +71,7 @@ public static class SystemProgramTests
         => [.. instruction.Accounts.Select(a => (a.PublicKey, a.IsSigner, a.IsWritable))];
 
     private static PublicKey RecentBlockhashes => PublicKey.Parse(Sysvars.RecentBlockhashes);
+
     private static PublicKey Rent => PublicKey.Parse(Sysvars.Rent);
 
     [TestFixture]
@@ -188,6 +189,23 @@ public static class SystemProgramTests
             // Assert
             instruction.Data.Should().Equal(Hex("070000000707070707070707070707070707070707070707070707070707070707070707"));
             Metas(instruction).Should().Equal((Key(2), false, true), (Key(3), true, false));
+        }
+    }
+
+    [TestFixture]
+    public sealed class UpgradeNonceAccount
+    {
+        // Reference from the pinned generated Rust client: discriminator 12 and one writable non-signer.
+        [Test]
+        public void MatchesGeneratedSolanaClient()
+        {
+            // Act
+            var instruction = SystemProgram.UpgradeNonceAccount(Key(2));
+
+            // Assert
+            instruction.ProgramId.Should().Be(PublicKey.Parse(SolanaProgramIds.SystemProgram));
+            instruction.Data.Should().Equal(Hex("0c000000"));
+            Metas(instruction).Should().Equal((Key(2), false, true));
         }
     }
 

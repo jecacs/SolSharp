@@ -31,6 +31,10 @@ public sealed record SignatureInfo
     [JsonPropertyName("confirmationStatus")]
     public string? ConfirmationStatus { get; init; }
 
+    /// <summary>The transaction's index within its block, when reported.</summary>
+    [JsonPropertyName("transactionIndex")]
+    public uint? TransactionIndex { get; init; }
+
     /// <summary>True when the transaction failed (<see cref="Err"/> is present).</summary>
     [JsonIgnore]
     public bool IsError => Err is { ValueKind: not JsonValueKind.Null };

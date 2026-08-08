@@ -19,6 +19,7 @@ public sealed class BorshWriter
 
     /// <summary>Creates an empty writer with a preallocated capacity.</summary>
     /// <param name="initialCapacity">The number of bytes to reserve up front.</param>
+    /// <exception cref="ArgumentException"><paramref name="initialCapacity"/> is less than or equal to zero.</exception>
     public BorshWriter(int initialCapacity) => _buffer = new ArrayBufferWriter<byte>(initialCapacity);
 
     /// <summary>The number of bytes written so far.</summary>

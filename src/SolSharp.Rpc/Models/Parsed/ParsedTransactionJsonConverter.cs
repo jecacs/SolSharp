@@ -31,6 +31,13 @@ internal sealed class ParsedTransactionJsonConverter : JsonConverter<ParsedTrans
                 : null,
             BlockTime = root.TryGetProperty("blockTime", out var blockTime) && blockTime.ValueKind is JsonValueKind.Number
                 ? blockTime.GetInt64()
+                : null,
+            TransactionIndex = root.TryGetProperty("transactionIndex", out var transactionIndex) &&
+                               transactionIndex.ValueKind is JsonValueKind.Number
+                ? transactionIndex.GetUInt32()
+                : null,
+            Version = root.TryGetProperty("version", out var version) && version.ValueKind is not JsonValueKind.Null
+                ? version.Clone()
                 : null
         };
     }

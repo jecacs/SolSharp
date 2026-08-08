@@ -46,7 +46,7 @@ public static class PublicKeyTests
         [Test]
         public void SystemProgram_IsThirtyTwoZeroBytes() => PublicKey.Parse(SolanaProgramIds.SystemProgram).ToBytes().Should().Equal(new byte[32]);
 
-        [TestCase("0")]   // not in the base58 alphabet
+        [TestCase("0")] // not in the base58 alphabet
         [TestCase("abc")] // valid alphabet, wrong length
         public void Invalid_Throws(string input)
         {

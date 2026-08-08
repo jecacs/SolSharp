@@ -269,7 +269,7 @@ public sealed class MessageV0 : ITransactionMessage
     public int GetSerializedLength()
     {
         var length = 1 + 3 // the version prefix and the header counts
-            + ShortVec.GetByteCount(AccountKeys.Count) + AccountKeys.Count * PublicKey.Length
+            + ShortVec.GetByteCount(AccountKeys.Count) + (AccountKeys.Count * PublicKey.Length)
             + PublicKey.Length // the recent blockhash
             + ShortVec.GetByteCount(Instructions.Count);
 
@@ -433,7 +433,8 @@ public sealed class MessageV0 : ITransactionMessage
             if ((prefix & VersionPrefix) == 0)
                 throw new FormatException("Not a versioned message: the high bit of the version prefix is not set.");
 
-            // Only version 0 exists today; a future v1 payload must fail loudly rather than misparse as v0.
+            // SolSharp currently implements v0; a v1 or later payload must fail loudly rather than
+            // being misparsed as v0.
             var version = prefix & ~VersionPrefix;
             if (version != 0)
                 throw new FormatException($"Unsupported message version {version}; only v0 is supported.");
@@ -451,6 +452,11 @@ public sealed class MessageV0 : ITransactionMessage
 
             var lookupCount = ShortVec.Decode(data[offset..], out var read);
             offset += read;
+            const int minimumLookupBytes = PublicKey.Length + 2; // table key plus two zero length prefixes
+            if ((long)lookupCount * minimumLookupBytes > data.Length - offset)
+                throw new FormatException(
+                    $"The v0 message declares {lookupCount} address table lookup(s), but the remaining data cannot hold their minimum wire representation.");
+
             var addressTableLookups = new MessageAddressTableLookup[lookupCount];
             for (var i = 0; i < lookupCount; i++)
             {

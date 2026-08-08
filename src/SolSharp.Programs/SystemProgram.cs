@@ -26,6 +26,7 @@ public static class SystemProgram
     private const uint AllocateWithSeedDiscriminator = 9;
     private const uint AssignWithSeedDiscriminator = 10;
     private const uint TransferWithSeedDiscriminator = 11;
+    private const uint UpgradeNonceAccountDiscriminator = 12;
     private const int MaxSeedLength = 32;
 
     /// <summary>The serialized size of a durable nonce account, in bytes (80).</summary>
@@ -395,6 +396,22 @@ public static class SystemProgram
         {
             ProgramId = ProgramId,
             Accounts = [AccountMeta.Writable(nonceAccount), AccountMeta.ReadonlySigner(authority)],
+            Data = data
+        };
+    }
+
+    /// <summary>Upgrades a legacy durable nonce account to the current nonce-state format.</summary>
+    /// <param name="nonceAccount">The legacy nonce account to upgrade (writable).</param>
+    /// <returns>The upgradeNonceAccount instruction.</returns>
+    public static Instruction UpgradeNonceAccount(PublicKey nonceAccount)
+    {
+        var data = new byte[sizeof(uint)];
+        BinaryPrimitives.WriteUInt32LittleEndian(data, UpgradeNonceAccountDiscriminator);
+
+        return new Instruction
+        {
+            ProgramId = ProgramId,
+            Accounts = [AccountMeta.Writable(nonceAccount)],
             Data = data
         };
     }

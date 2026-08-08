@@ -43,6 +43,27 @@ Check(latest.Blockhash == blockhash, "getLatestBlockhash");
 var account = await client.GetAccountInfoAsync(recipient);
 Check(account is { Lamports: 42, Data: [1, 2, 3] }, "getAccountInfo");
 
+var simulation = await client.SimulateTransactionAsync(
+    wire,
+    new SimulateTransactionOptions { Accounts = [recipient], InnerInstructions = true });
+Check(
+    simulation is
+    {
+        Fee: 5_000,
+        LoadedAccountsDataSize: 3,
+        Accounts: [{ Space: 3 }],
+        ReturnData.Data: [4, 5]
+    },
+    "simulateTransaction current fields");
+
+var agGenesis = await client.GetAgGenesisCertificateAsync();
+Check(agGenesis is null, "getAgGenesisCert nullable result");
+
+var opaqueV1 = await client.GetTransactionWithMaxVersionAsync(signatureBase58, 1);
+Check(
+    opaqueV1 is { Transaction: [0x81, 1, 2, 3] } && opaqueV1.Version?.GetInt32() == 1,
+    "opaque transaction v1 opt-in");
+
 var sent = await client.SendTransactionAsync(wire);
 Check(sent == signatureBase58, "sendTransaction");
 
@@ -65,6 +86,15 @@ internal sealed class CannedRpcHandler : HttpMessageHandler
     private const string AccountInfoJson =
         """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"data":["AQID","base64"],"executable":false,"lamports":42,"owner":"11111111111111111111111111111111","rentEpoch":0}},"id":1}""";
 
+    private const string SimulateTransactionJson =
+        """{"jsonrpc":"2.0","result":{"context":{"slot":2,"apiVersion":"3.1.0"},"value":{"err":null,"logs":[],"accounts":[{"lamports":42,"data":["AQID","base64"],"owner":"11111111111111111111111111111111","executable":false,"rentEpoch":0,"space":3}],"unitsConsumed":10,"loadedAccountsDataSize":3,"returnData":{"programId":"11111111111111111111111111111111","data":["BAU=","base64"]},"innerInstructions":[],"fee":5000}},"id":1}""";
+
+    private const string AgGenesisCertificateJson =
+        """{"jsonrpc":"2.0","result":null,"id":1}""";
+
+    private const string VersionedTransactionJson =
+        """{"jsonrpc":"2.0","result":{"slot":3,"transaction":["gQECAw==","base64"],"meta":null,"version":1},"id":1}""";
+
     private const string SendTransactionJson =
         """{"jsonrpc":"2.0","result":"5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW","id":1}""";
 
@@ -75,6 +105,9 @@ internal sealed class CannedRpcHandler : HttpMessageHandler
         {
             _ when body.Contains("getLatestBlockhash") => LatestBlockhashJson,
             _ when body.Contains("getAccountInfo") => AccountInfoJson,
+            _ when body.Contains("simulateTransaction") => SimulateTransactionJson,
+            _ when body.Contains("getAgGenesisCert") => AgGenesisCertificateJson,
+            _ when body.Contains("getTransaction") => VersionedTransactionJson,
             _ when body.Contains("sendTransaction") => SendTransactionJson,
             _ => throw new InvalidOperationException($"Unexpected RPC request: {body}")
         };

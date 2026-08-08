@@ -84,6 +84,22 @@ public static class TransactionBuilderTests
             // Assert
             act.Should().Throw<InvalidOperationException>();
         }
+
+        [Test]
+        public void NullFirstSigner_ThrowsDocumentedArgumentNullException()
+        {
+            // Arrange
+            var builder = new TransactionBuilder()
+                .SetRecentBlockhash(Blockhash)
+                .AddInstruction(SystemProgram.Transfer(new PublicKey(Fill(1)), new PublicKey(Fill(2)), 1));
+
+            // Act
+            Action act = () => builder.Build(null!);
+
+            // Assert
+            act.Should().Throw<ArgumentNullException>()
+                .Which.ParamName.Should().Be("signers");
+        }
     }
 
     [TestFixture]
@@ -137,6 +153,52 @@ public static class TransactionBuilderTests
             instructions[0].Data.Should().Equal(first.Data);
             instructions[1].Data.Should().Equal(second.Data);
         }
+
+        [Test]
+        public void NullElement_ThrowsDocumentedArgumentNullException()
+        {
+            // Arrange
+            var builder = new TransactionBuilder();
+
+            // Act
+            Action act = () => builder.AddInstructions([null!]);
+
+            // Assert
+            act.Should().Throw<ArgumentNullException>()
+                .Which.ParamName.Should().Be("instructions");
+        }
+    }
+
+    [TestFixture]
+    public sealed class InputValidation
+    {
+        [Test]
+        public void NullRecentBlockhash_ThrowsAtSetter()
+        {
+            // Arrange
+            var builder = new TransactionBuilder();
+
+            // Act
+            Action act = () => builder.SetRecentBlockhash(null!);
+
+            // Assert
+            act.Should().Throw<ArgumentNullException>()
+                .Which.ParamName.Should().Be("recentBlockhash");
+        }
+
+        [Test]
+        public void NullLookupTable_ThrowsAtSetter()
+        {
+            // Arrange
+            var builder = new TransactionBuilder();
+
+            // Act
+            Action act = () => builder.SetAddressLookupTables([null!]);
+
+            // Assert
+            act.Should().Throw<ArgumentNullException>()
+                .Which.ParamName.Should().Be("lookupTables");
+        }
     }
 
     [TestFixture]
@@ -171,6 +233,48 @@ public static class TransactionBuilderTests
     [TestFixture]
     public sealed class SetDurableNonce
     {
+        [Test]
+        public void WithoutOtherInstructions_BuildsNonceAdvanceOnlyMessage()
+        {
+            // Arrange
+            using var payer = Keypair.FromSeed(Fill(1));
+            var nonceAccount = new PublicKey(Fill(5));
+
+            // Act
+            var message = new TransactionBuilder()
+                .SetFeePayer(payer.PublicKey)
+                .SetDurableNonce(nonceAccount, payer.PublicKey, Blockhash)
+                .BuildMessage();
+
+            // Assert
+            message.RecentBlockhash.Should().Be(Blockhash);
+            var instruction = message.DecompileInstructions([]).Should().ContainSingle().Subject;
+            instruction.ProgramId.Should().Be(SystemProgram.ProgramId);
+            instruction.Data.Should().Equal(Convert.FromHexString("04000000"));
+            instruction.Accounts[0].PublicKey.Should().Be(nonceAccount);
+        }
+
+        [Test]
+        public void WithoutOtherInstructions_BuildsNonceAdvanceOnlyV0Message()
+        {
+            // Arrange
+            using var payer = Keypair.FromSeed(Fill(1));
+            var nonceAccount = new PublicKey(Fill(5));
+
+            // Act
+            var message = new TransactionBuilder()
+                .SetFeePayer(payer.PublicKey)
+                .SetDurableNonce(nonceAccount, payer.PublicKey, Blockhash)
+                .BuildMessageV0();
+
+            // Assert
+            message.RecentBlockhash.Should().Be(Blockhash);
+            var instruction = message.DecompileInstructions([]).Should().ContainSingle().Subject;
+            instruction.ProgramId.Should().Be(SystemProgram.ProgramId);
+            instruction.Data.Should().Equal(Convert.FromHexString("04000000"));
+            instruction.Accounts[0].PublicKey.Should().Be(nonceAccount);
+        }
+
         [Test]
         public void PrependsAdvanceNonce_AndUsesNonceAsTheBlockhash()
         {

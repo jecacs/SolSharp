@@ -25,16 +25,25 @@ public static class ProgramDerivedAddress
     /// <param name="seeds">The seeds; each may be at most <see cref="MaxSeedLength"/> bytes, and at most <see cref="MaxSeeds"/> - 1 of them (the bump occupies the last slot).</param>
     /// <param name="programId">The program the address is derived for.</param>
     /// <returns>The derived address and the bump seed that produced it.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="seeds"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException"><paramref name="seeds"/> or one of its elements is <c>null</c>.</exception>
     /// <exception cref="ArgumentException">A seed exceeds <see cref="MaxSeedLength"/> bytes, or the seeds plus the bump exceed <see cref="MaxSeeds"/>.</exception>
     /// <exception cref="InvalidOperationException">No bump seed produced an off-curve address (cryptographically improbable).</exception>
     public static (PublicKey Address, byte Bump) FindProgramAddress(IReadOnlyList<byte[]> seeds, PublicKey programId)
     {
         ArgumentNullException.ThrowIfNull(seeds);
+        var seedCount = seeds.Count;
+        if (seedCount >= MaxSeeds)
+            throw new ArgumentException(
+                $"Finding a PDA accepts at most {MaxSeeds - 1} caller seed(s), got {seedCount}; the bump occupies the final slot.",
+                nameof(seeds));
 
-        var withBump = new byte[seeds.Count + 1][];
-        for (var i = 0; i < seeds.Count; i++)
-            withBump[i] = seeds[i];
+        var withBump = new byte[seedCount + 1][];
+        for (var i = 0; i < seedCount; i++)
+        {
+            var seed = seeds[i];
+            ArgumentNullException.ThrowIfNull(seed, nameof(seeds));
+            withBump[i] = seed;
+        }
 
         for (var bump = 255; bump >= 0; bump--)
         {
@@ -54,7 +63,7 @@ public static class ProgramDerivedAddress
     /// <param name="programId">The program the address is derived for.</param>
     /// <param name="address">The derived off-curve address on success; <see langword="default"/> otherwise.</param>
     /// <returns><c>true</c> if the seeds produced a valid off-curve address.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="seeds"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException"><paramref name="seeds"/> or one of its elements is <c>null</c>.</exception>
     /// <exception cref="ArgumentException">More than <see cref="MaxSeeds"/> seeds, or a seed exceeds <see cref="MaxSeedLength"/> bytes.</exception>
     public static bool TryCreateProgramAddress(IReadOnlyList<byte[]> seeds, PublicKey programId, out PublicKey address)
     {
@@ -68,6 +77,7 @@ public static class ProgramDerivedAddress
         using var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         foreach (var seed in seeds)
         {
+            ArgumentNullException.ThrowIfNull(seed, nameof(seeds));
             if (seed.Length > MaxSeedLength)
                 throw new ArgumentException($"A PDA seed may be at most {MaxSeedLength} bytes, got {seed.Length}.", nameof(seeds));
 

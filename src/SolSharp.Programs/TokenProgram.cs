@@ -479,6 +479,11 @@ public static class TokenProgram
     /// <param name="newAuthority">The new authority, or <c>null</c> to remove the authority permanently.</param>
     /// <param name="tokenProgram">The token program to target; defaults to the classic SPL Token program. Pass <c>SolanaProgramIds.Token2022Program</c> for Token-2022.</param>
     /// <returns>The setAuthority instruction.</returns>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="authorityType"/> is a Token-2022 extension authority, but <paramref name="tokenProgram"/>
+    /// targets the classic SPL Token program.
+    /// </exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="authorityType"/> is not a defined authority type.</exception>
     public static Instruction SetAuthority(
         PublicKey account,
         PublicKey currentAuthority,
@@ -486,6 +491,15 @@ public static class TokenProgram
         PublicKey? newAuthority = null,
         PublicKey? tokenProgram = null)
     {
+        if ((byte)authorityType > (byte)AuthorityType.PermissionedBurn)
+            throw new ArgumentOutOfRangeException(nameof(authorityType), authorityType, "Unknown SPL Token authority type.");
+
+        var program = tokenProgram ?? ProgramId;
+        if (program == ProgramId && (byte)authorityType > (byte)AuthorityType.CloseAccount)
+            throw new ArgumentException(
+                "Token-2022 extension authorities require the Token-2022 program.",
+                nameof(authorityType));
+
         // The new authority is a compact instruction COption (a 1-byte tag, plus the key only when present) -
         // the form the Rust spl-token builder packs. (solana-py pads None with 32 zero bytes; both unpack.)
         var data = new byte[newAuthority is null ? 3 : 35];
@@ -499,7 +513,7 @@ public static class TokenProgram
 
         return new Instruction
         {
-            ProgramId = tokenProgram ?? ProgramId,
+            ProgramId = program,
             Accounts = [AccountMeta.Writable(account), AccountMeta.ReadonlySigner(currentAuthority)],
             Data = data
         };
@@ -514,7 +528,12 @@ public static class TokenProgram
     /// <param name="multisigSigners">The multisig member accounts that sign the transaction, in account order.</param>
     /// <returns>The setAuthority instruction.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="multisigSigners"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentException"><paramref name="multisigSigners"/> is empty or contains more than 11 accounts.</exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="multisigSigners"/> is empty or contains more than 11 accounts, or
+    /// <paramref name="authorityType"/> is a Token-2022 extension authority while <paramref name="tokenProgram"/>
+    /// targets classic SPL Token.
+    /// </exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="authorityType"/> is not a defined authority type.</exception>
     public static Instruction SetAuthority(
         PublicKey account,
         PublicKey currentAuthority,

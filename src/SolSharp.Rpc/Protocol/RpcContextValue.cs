@@ -21,4 +21,8 @@ public sealed record RpcContext
     /// <summary>The slot at which the data was retrieved.</summary>
     [JsonPropertyName("slot")]
     public ulong Slot { get; init; }
+
+    /// <summary>The node's RPC API version, when reported.</summary>
+    [JsonPropertyName("apiVersion")]
+    public string? ApiVersion { get; init; }
 }
