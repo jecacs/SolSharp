@@ -58,7 +58,10 @@ public sealed class Message : ITransactionMessage
     /// <param name="instructions">The instructions to include, in execution order.</param>
     /// <returns>The compiled message.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="recentBlockhash"/> or <paramref name="instructions"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentException">The instructions reference more than <see cref="MaxAccounts"/> distinct accounts.</exception>
+    /// <exception cref="ArgumentException">
+    /// The instructions reference more than <see cref="MaxAccounts"/> distinct accounts or require more
+    /// than 127 signatures, whose high bit would collide with the versioned-message prefix.
+    /// </exception>
     public static Message Compile(PublicKey feePayer, string recentBlockhash, IReadOnlyList<Instruction> instructions)
     {
         ArgumentNullException.ThrowIfNull(recentBlockhash);
@@ -97,7 +100,9 @@ public sealed class Message : ITransactionMessage
         AddClass(orderedKeys, rest, flags, signer: false, writable: true);
         AddClass(orderedKeys, rest, flags, signer: false, writable: false);
 
-        byte requiredSignatures = 0, readonlySigned = 0, readonlyUnsigned = 0;
+        var requiredSignatures = 0;
+        var readonlySigned = 0;
+        var readonlyUnsigned = 0;
         var finalPosition = new Dictionary<PublicKey, int>(orderedKeys.Count);
         for (var slot = 0; slot < orderedKeys.Count; slot++)
         {
@@ -117,6 +122,14 @@ public sealed class Message : ITransactionMessage
             }
         }
 
+        // A legacy message has no separate version byte: the high bit of its first header byte is
+        // the versioned-message discriminator. Keep the signer count below it so the serialized
+        // message cannot be mistaken for v0 (or a future version).
+        if (requiredSignatures >= MessageV0.VersionPrefix)
+            throw new ArgumentException(
+                $"A legacy message can require at most {MessageV0.VersionPrefix - 1} signatures, got {requiredSignatures}.",
+                nameof(instructions));
+
         var compiled = new CompiledInstruction[instructions.Count];
         for (var n = 0; n < instructions.Count; n++)
         {
@@ -129,11 +142,17 @@ public sealed class Message : ITransactionMessage
             {
                 ProgramIdIndex = (byte)finalPosition[instruction.ProgramId],
                 AccountIndexes = accountIndexes,
-                Data = instruction.Data
+                Data = [.. instruction.Data]
             };
         }
 
-        return new Message(requiredSignatures, readonlySigned, readonlyUnsigned, orderedKeys, recentBlockhash, compiled);
+        return new Message(
+            (byte)requiredSignatures,
+            (byte)readonlySigned,
+            (byte)readonlyUnsigned,
+            orderedKeys,
+            recentBlockhash,
+            compiled);
     }
 
     /// <summary>Serializes the message to its canonical wire bytes - the bytes a signer signs over.</summary>
@@ -223,7 +242,7 @@ public sealed class Message : ITransactionMessage
     /// <param name="data">The serialized message (no version prefix).</param>
     /// <returns>The parsed message.</returns>
     /// <exception cref="FormatException">
-    /// The data is truncated, a compact-u16 length in it is malformed, or the message breaks a rule
+    /// The data is truncated, contains trailing bytes, has a malformed compact-u16 length, or breaks a rule
     /// Solana's sanitize enforces: header counts that overlap the account list or leave no writable
     /// fee-payer signer, an instruction whose program id is the fee payer, or an out-of-range program id
     /// or account index.
@@ -234,6 +253,11 @@ public sealed class Message : ITransactionMessage
         {
             var offset = 0;
             var requiredSignatures = data[offset++];
+            if ((requiredSignatures & MessageV0.VersionPrefix) != 0)
+                throw new FormatException(
+                    $"A legacy message signer count must be below {MessageV0.VersionPrefix}; " +
+                    $"the high bit marks a versioned message, got {requiredSignatures}.");
+
             var readonlySignedAccounts = data[offset++];
             var readonlyUnsignedAccounts = data[offset++];
 
@@ -243,6 +267,9 @@ public sealed class Message : ITransactionMessage
             offset += PublicKey.Length;
 
             var instructions = MessageWire.ReadInstructions(data, ref offset);
+
+            if (offset != data.Length)
+                throw new FormatException($"The message has {data.Length - offset} trailing byte(s).");
 
             // Mirror Solana's sanitize so a message the network would refuse never parses successfully.
             MessageWire.SanitizeHeader(requiredSignatures, readonlySignedAccounts, readonlyUnsignedAccounts, accountKeys.Length);

@@ -33,7 +33,7 @@ internal static class MessageDecompiler
             {
                 ProgramId = KeyAt(keys, compiled.ProgramIdIndex),
                 Accounts = accounts,
-                Data = compiled.Data
+                Data = [.. compiled.Data]
             };
         }
 

@@ -14,6 +14,7 @@ namespace SolSharp.Core.Converters;
 [JsonSerializable(typeof(Commitment))]
 [JsonSerializable(typeof(Commitment?))]
 [JsonSerializable(typeof(PublicKey))]
+[JsonSerializable(typeof(PublicKey?))]
 [JsonSerializable(typeof(PublicKey[]))]
 [JsonSourceGenerationOptions(
     GenerationMode = JsonSourceGenerationMode.Metadata,

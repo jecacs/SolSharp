@@ -19,7 +19,7 @@ wire format and the signing path, without dragging in a large dependency graph. 
 writing bots, indexers, or backend services that talk to Solana from .NET and care about
 speed and control, this is aimed at you.
 
-> **Status: 1.2.0 — stable release.** SolSharp ships as a single NuGet package — `SolSharp` —
+> **Status: 1.4.0 — stable release.** SolSharp ships as a single NuGet package — `SolSharp` —
 > bundling the Core (primitives + encodings), Wallet (Ed25519 keys, signing, verification, BIP-39/SLIP-0010
 > mnemonic import), Rpc (the full JSON-RPC HTTP read surface + send/simulate + WebSocket streaming + DI), and
 > Programs (instructions + transaction building + signing, durable nonces) assemblies. JSON is
@@ -34,7 +34,7 @@ WebSocket subscriptions, confirmation, Native AOT publishing, and more.
 
 When this was started, the .NET options for Solana were either unmaintained and stale or
 heavy and not built for performance — there was no modern, fast, actively-developed client.
-SolSharp is a from-scratch answer to that: current C#, allocation-conscious, and tuned for
+SolSharp is a from-scratch answer to that: modern C# 12, allocation-conscious, and tuned for
 latency-sensitive workloads.
 
 ## Why
@@ -46,7 +46,7 @@ latency-sensitive workloads.
 - **Wire-level control.** Hand-rolled, spec-accurate transaction and message encoding — the part
   most SDKs hide — with Ed25519 signing on a vetted crypto library, all tested against known vectors.
 - **Latency-minded.** Value types, allocation-free hot paths, span-based APIs.
-- **Modern .NET.** C# latest, nullable reference types, code style enforced on build.
+- **Modern .NET 8.** C# 12, nullable reference types, code style enforced on build.
 
 ## How it compares to Solnet
 
@@ -80,7 +80,7 @@ dotnet add package SolSharp
 ```
 
 ```xml
-<PackageReference Include="SolSharp" Version="1.2.0" />
+<PackageReference Include="SolSharp" Version="1.4.0" />
 ```
 
 | Assembly           | Purpose                                              |
@@ -202,6 +202,7 @@ bool ok = keypair.PublicKey.Verify(message, signature);
   `CreateNonceAccount` pair), `ComputeBudgetProgram` (compute-unit limit, priority fee, `RequestHeapFrame`,
   `SetLoadedAccountsDataSizeLimit`), `TokenProgram` (transfer, mint, burn, approve — checked variants
   included — revoke, `SetAuthority` via `AuthorityType` (incl. the Token-2022 extension authorities),
+  additive SPL Multisig-authority overloads,
   freeze / thaw, initialize mint / account, close, sync-native — each with a `tokenProgram` override for
   Token-2022), `AssociatedTokenAccount` (create and `CreateIdempotent`), `AddressLookupTableProgram`
   (create / extend / freeze / deactivate / close), and `MemoProgram`.

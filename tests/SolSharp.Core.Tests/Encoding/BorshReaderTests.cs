@@ -72,4 +72,93 @@ public static class BorshReaderTests
 
         private static void ReadU64From(byte[] data) => new BorshReader(data).ReadU64();
     }
+
+    [TestFixture]
+    public sealed class ReadBool
+    {
+        [Test]
+        public void Zero_ReturnsFalse()
+        {
+            // Arrange
+            var reader = new BorshReader([0]);
+
+            // Act
+            var value = reader.ReadBool();
+
+            // Assert
+            value.Should().BeFalse();
+        }
+
+        [TestCase((byte)0x02)]
+        [TestCase((byte)0xff)]
+        public void NonCanonicalDiscriminant_ThrowsFormatException(byte value)
+        {
+            // Arrange
+            var data = new[] { value };
+
+            // Act
+            Action act = () => ReadBoolFrom(data);
+
+            // Assert
+            act.Should().Throw<FormatException>().WithMessage("*must be 0 or 1*");
+        }
+
+        private static void ReadBoolFrom(byte[] data) => new BorshReader(data).ReadBool();
+    }
+
+    [TestFixture]
+    public sealed class ReadOption
+    {
+        [TestCase((byte)0x02)]
+        [TestCase((byte)0xff)]
+        public void NonCanonicalDiscriminant_ThrowsFormatException(byte value)
+        {
+            // Arrange
+            var data = new[] { value };
+
+            // Act
+            Action act = () => ReadOptionFrom(data);
+
+            // Assert
+            act.Should().Throw<FormatException>().WithMessage("*must be 0 or 1*");
+        }
+
+        private static void ReadOptionFrom(byte[] data) => new BorshReader(data).ReadOption();
+    }
+
+    [TestFixture]
+    public sealed class ReadString
+    {
+        [Test]
+        public void MultibyteScalars_DecodesUtf8Vector()
+        {
+            // Arrange
+            var data = Convert.FromHexString("0a00000041c2a2e282acf0908d88");
+            var reader = new BorshReader(data);
+
+            // Act
+            var value = reader.ReadString();
+
+            // Assert
+            value.Should().Be("A¢€𐍈");
+            reader.Remaining.Should().Be(0);
+        }
+
+        [Test]
+        public void InvalidUtf8_ThrowsFormatException()
+        {
+            // Arrange
+            var data = Convert.FromHexString("01000000ff");
+
+            // Act
+            Action act = () => ReadStringFrom(data);
+
+            // Assert
+            act.Should().Throw<FormatException>()
+                .WithMessage("*invalid UTF-8*")
+                .WithInnerException<System.Text.DecoderFallbackException>();
+        }
+
+        private static void ReadStringFrom(byte[] data) => new BorshReader(data).ReadString();
+    }
 }

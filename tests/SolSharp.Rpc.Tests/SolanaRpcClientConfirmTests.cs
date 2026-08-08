@@ -80,6 +80,35 @@ public static class SolanaRpcClientConfirmTests
             // Assert
             await act.Should().ThrowAsync<TimeoutException>();
         }
+
+        [Test]
+        public async Task Timeout_CancelsInFlightStatusRequest()
+        {
+            // Arrange
+            var handler = new BlockingHandler();
+            var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
+            var client = new SolanaRpcClient(http);
+
+            // Act
+            Func<Task> act = () => client.ConfirmTransactionAsync("Sig111", timeout: TimeSpan.FromMilliseconds(50));
+
+            // Assert
+            await act.Should().ThrowAsync<TimeoutException>();
+            await handler.CancellationObserved.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        }
+
+        [Test]
+        public async Task TimeoutBeyondTimerLimit_IsAccepted()
+        {
+            // Arrange
+            var (client, _) = Make(ConfirmedStatus);
+
+            // Act
+            var status = await client.ConfirmTransactionAsync("Sig111", timeout: TimeSpan.FromDays(100));
+
+            // Assert
+            status.ConfirmationStatus.Should().Be("confirmed");
+        }
     }
 
     [TestFixture]
@@ -112,6 +141,28 @@ public static class SolanaRpcClientConfirmTests
 
             // Assert
             await act.Should().ThrowAsync<TransactionFailedException>();
+        }
+    }
+
+    private sealed class BlockingHandler : HttpMessageHandler
+    {
+        public TaskCompletionSource CancellationObserved { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                throw new InvalidOperationException("The blocking handler unexpectedly resumed.");
+            }
+            catch (OperationCanceledException)
+            {
+                CancellationObserved.TrySetResult();
+                throw;
+            }
         }
     }
 }

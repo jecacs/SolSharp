@@ -15,6 +15,8 @@ public sealed class Transaction
     public const int SignatureLength = 64;
 
     private readonly byte[][] _signatures;
+    private byte[]? _signedMessageBytes;
+    private PublicKey[]? _signedRequiredSignerKeys;
 
     private Transaction(ITransactionMessage message)
     {
@@ -24,13 +26,18 @@ public sealed class Transaction
             _signatures[i] = new byte[SignatureLength];
     }
 
-    private Transaction(ITransactionMessage message, byte[][] signatures)
+    private Transaction(ITransactionMessage message, byte[][] signatures, byte[] signedMessageBytes)
     {
         Message = message;
         _signatures = signatures;
+        _signedMessageBytes = signedMessageBytes;
+        _signedRequiredSignerKeys = CopyRequiredSignerKeys(message);
     }
 
-    /// <summary>The message being signed and sent.</summary>
+    /// <summary>
+    /// The message being signed and sent. After the transaction is successfully signed or deserialized,
+    /// serialization continues to use the captured message bytes even if this object graph is later mutated.
+    /// </summary>
     public ITransactionMessage Message { get; }
 
     /// <summary>Creates an unsigned transaction for <paramref name="message"/>, with every signature slot zeroed.</summary>
@@ -43,11 +50,14 @@ public sealed class Transaction
         return new Transaction(message);
     }
 
-    /// <summary>Parses a transaction from its wire bytes: the signatures followed by a legacy or v0 message.</summary>
+    /// <summary>
+    /// Parses a transaction from its wire bytes: the signatures followed by a legacy or v0 message, retaining
+    /// the exact parsed message bytes for stable reserialization.
+    /// </summary>
     /// <param name="data">The serialized transaction.</param>
     /// <returns>The parsed transaction, carrying its signatures.</returns>
     /// <exception cref="FormatException">
-    /// The data is truncated, a compact-u16 length in it is malformed, the message is invalid or breaks
+    /// The data is truncated, contains trailing bytes, has a malformed compact-u16 length, or the message is invalid or breaks
     /// one of Solana's sanitize rules, or the signature count does not match the message's required
     /// signatures.
     /// </exception>
@@ -78,7 +88,7 @@ public sealed class Transaction
                 throw new FormatException(
                     $"The transaction carries {signatureCount} signature slot(s) but its message requires {message.RequiredSignatures}.");
 
-            return new Transaction(message, signatures);
+            return new Transaction(message, signatures, messageBytes.ToArray());
         }
         catch (Exception exception) when (exception is IndexOutOfRangeException or ArgumentOutOfRangeException)
         {
@@ -89,24 +99,56 @@ public sealed class Transaction
 
     /// <summary>
     /// Signs the message with each signer, placing each signature in the slot matching the signer's position
-    /// among the required signers.
+    /// among the required signers. The first successful non-empty call captures the signed message bytes;
+    /// later mutations to <see cref="Message"/> do not change serialization or the bytes passed to another signer.
     /// </summary>
     /// <param name="signers">The signers to apply; each must be a required signer of the message.</param>
     /// <returns>This transaction, so calls can be chained.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="signers"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentException">A signer is not one of the message's required signers.</exception>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="signers"/> or one of its elements is <c>null</c>.
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// A signer is not one of the message's required signers or returns a signature whose length is not
+    /// <see cref="SignatureLength"/> bytes.
+    /// </exception>
     public Transaction Sign(params ISigner[] signers)
     {
         ArgumentNullException.ThrowIfNull(signers);
 
-        var message = Message.Serialize();
-        foreach (var signer in signers)
+        var requiredSignerKeys = _signedRequiredSignerKeys ?? CopyRequiredSignerKeys(Message);
+        var pending = new (int Index, byte[] Signature)[signers.Length];
+        for (var i = 0; i < signers.Length; i++)
         {
-            var index = RequiredSignerIndex(signer.PublicKey);
+            var signer = signers[i];
+            ArgumentNullException.ThrowIfNull(signer, nameof(signers));
+
+            var index = RequiredSignerIndex(requiredSignerKeys, signer.PublicKey);
             if (index < 0)
                 throw new ArgumentException($"{signer.PublicKey} is not a required signer of this transaction.", nameof(signers));
 
-            _signatures[index] = signer.Sign(message);
+            pending[i].Index = index;
+        }
+
+        var message = _signedMessageBytes ?? Message.Serialize();
+        for (var i = 0; i < signers.Length; i++)
+        {
+            var signer = signers[i];
+            var signature = signer.Sign(message);
+            if (signature is null || signature.Length != SignatureLength)
+                throw new ArgumentException(
+                    $"A signer must return a {SignatureLength}-byte Ed25519 signature, got {signature?.Length ?? 0} bytes.",
+                    nameof(signers));
+
+            pending[i].Signature = [.. signature];
+        }
+
+        for (var i = 0; i < pending.Length; i++)
+            _signatures[pending[i].Index] = pending[i].Signature;
+
+        if (signers.Length > 0)
+        {
+            _signedMessageBytes ??= message;
+            _signedRequiredSignerKeys ??= requiredSignerKeys;
         }
 
         return this;
@@ -127,7 +169,7 @@ public sealed class Transaction
     public int GetSerializedLength()
         => ShortVec.GetByteCount(_signatures.Length)
            + _signatures.Length * SignatureLength
-           + Message.GetSerializedLength();
+           + (_signedMessageBytes?.Length ?? Message.GetSerializedLength());
 
     /// <summary>
     /// Serializes the transaction into <paramref name="destination"/> without allocating - the hot-path
@@ -152,7 +194,15 @@ public sealed class Transaction
             offset += SignatureLength;
         }
 
-        offset += Message.Serialize(destination[offset..]);
+        if (_signedMessageBytes is { } signedMessage)
+        {
+            signedMessage.CopyTo(destination[offset..]);
+            offset += signedMessage.Length;
+        }
+        else
+        {
+            offset += Message.Serialize(destination[offset..]);
+        }
         written = offset;
         return true;
     }
@@ -162,10 +212,19 @@ public sealed class Transaction
     /// <exception cref="FormatException">The message's recent blockhash is not a 32-byte base58 value.</exception>
     public string ToBase64() => Convert.ToBase64String(Serialize());
 
-    private int RequiredSignerIndex(PublicKey key)
+    private static PublicKey[] CopyRequiredSignerKeys(ITransactionMessage message)
     {
-        for (var i = 0; i < Message.RequiredSignatures; i++)
-            if (Message.AccountKeys[i] == key)
+        var keys = new PublicKey[message.RequiredSignatures];
+        for (var i = 0; i < keys.Length; i++)
+            keys[i] = message.AccountKeys[i];
+
+        return keys;
+    }
+
+    private static int RequiredSignerIndex(IReadOnlyList<PublicKey> requiredSignerKeys, PublicKey key)
+    {
+        for (var i = 0; i < requiredSignerKeys.Count; i++)
+            if (requiredSignerKeys[i] == key)
                 return i;
 
         return -1;

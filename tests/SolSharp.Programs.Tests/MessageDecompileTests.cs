@@ -38,7 +38,7 @@ public static class MessageDecompileTests
             // Assert
             var decompiled = message.DecompileInstructions([]).Should().ContainSingle().Subject;
             decompiled.ProgramId.Should().Be(Pk(9));
-            decompiled.Data.Should().Equal((byte)7);
+            decompiled.Data.Should().Equal(7);
             Metas(decompiled).Should().Equal(
                 (Pk(1), true, true),
                 (Pk(2), true, false),
@@ -47,6 +47,21 @@ public static class MessageDecompileTests
 
             // The parameterless default (via the interface) works for a message with no lookup tables.
             ((ITransactionMessage)message).DecompileInstructions().Should().ContainSingle();
+        }
+
+        [Test]
+        public void MutatingDecompiledData_DoesNotMutateMessage()
+        {
+            // Arrange
+            var instruction = new Instruction { ProgramId = Pk(9), Accounts = [], Data = [7] };
+            var message = Message.Compile(Pk(1), Pk(8).ToString(), [instruction]);
+            var decompiled = message.DecompileInstructions([]).Should().ContainSingle().Subject;
+
+            // Act
+            decompiled.Data[0] = 99;
+
+            // Assert
+            message.Instructions[0].Data.Should().Equal(7);
         }
     }
 
@@ -78,7 +93,7 @@ public static class MessageDecompileTests
             // Assert
             var decompiled = message.DecompileInstructions([table]).Should().ContainSingle().Subject;
             decompiled.ProgramId.Should().Be(Pk(9));
-            decompiled.Data.Should().Equal((byte)1, 2);
+            decompiled.Data.Should().Equal(1, 2);
             Metas(decompiled).Should().Equal(
                 (Pk(2), false, true),
                 (Pk(3), false, false),

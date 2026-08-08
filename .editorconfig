@@ -1,5 +1,5 @@
 # SolSharp - editorconfig
-# Modern C# only. The meaningful modernizers are warnings, not hints, so legacy
+# Modern C# 12. The meaningful modernizers are warnings, not hints, so legacy
 # patterns surface on build (EnforceCodeStyleInBuild is set in Directory.Build.props).
 
 root = true

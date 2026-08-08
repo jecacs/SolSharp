@@ -81,6 +81,24 @@ public static class RpcBatchTests
         }
 
         [Test]
+        public async Task PerCallError_PreservesStructuredErrorData()
+        {
+            // Arrange
+            var (client, _) = Make(
+                """[{"jsonrpc":"2.0","error":{"code":-32002,"message":"Simulation failed","data":{"unitsConsumed":99}},"id":1}]""");
+            var batch = client.CreateBatch();
+            var call = batch.GetSlotAsync();
+
+            // Act
+            await batch.ExecuteAsync();
+
+            // Assert
+            var act = async () => await call;
+            var exception = (await act.Should().ThrowAsync<RpcException>()).Which;
+            exception.ErrorData!.Value.GetProperty("unitsConsumed").GetInt32().Should().Be(99);
+        }
+
+        [Test]
         public async Task MissingResponseEntry_FaultsThatTask()
         {
             // Arrange: the node answers only the first call.
@@ -115,6 +133,63 @@ public static class RpcBatchTests
             await act.Should().ThrowAsync<RpcException>();
             var callAct = async () => await call;
             await callAct.Should().ThrowAsync<RpcException>();
+        }
+
+        [TestCase("[null]")]
+        [TestCase("[1]")]
+        [TestCase("[[]]")]
+        [TestCase("[{\"jsonrpc\":\"1.0\",\"result\":1,\"id\":1}]")]
+        [TestCase("[{\"jsonrpc\":\"2.0\",\"result\":1,\"error\":{\"code\":-1,\"message\":\"bad\"},\"id\":1}]")]
+        [TestCase("[{\"jsonrpc\":\"2.0\",\"result\":1,\"error\":null,\"id\":1}]")]
+        [TestCase("[{\"jsonrpc\":\"2.0\",\"error\":null,\"id\":1}]")]
+        [TestCase("[{\"jsonrpc\":\"2.0\",\"id\":1}]")]
+        [TestCase("[{\"jsonrpc\":\"2.0\",\"result\":1,\"id\":2}]")]
+        [TestCase("[{\"jsonrpc\":\"2.0\",\"result\":1,\"id\":\"1\"}]")]
+        [TestCase("[{\"jsonrpc\":\"2.0\",\"error\":\"bad\",\"id\":1}]")]
+        [TestCase("[{\"jsonrpc\":\"2.0\",\"error\":{},\"id\":1}]")]
+        [TestCase("[{\"jsonrpc\":\"2.0\",\"error\":{\"code\":\"-1\",\"message\":\"bad\"},\"id\":1}]")]
+        [TestCase("[{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-1,\"message\":7},\"id\":1}]")]
+        public async Task MalformedResponse_ThrowsAndTerminatesEveryQueuedTask(string response)
+        {
+            // Arrange
+            var (client, _) = Make(response);
+            var batch = client.CreateBatch();
+            var call = batch.GetSlotAsync();
+
+            // Act
+            var act = () => batch.ExecuteAsync();
+
+            // Assert
+            await act.Should().ThrowAsync<RpcException>();
+            call.IsCompleted.Should().BeTrue();
+            var callAct = async () => await call;
+            await callAct.Should().ThrowAsync<RpcException>();
+        }
+
+        [Test]
+        public async Task DuplicateResponseId_ThrowsAndTerminatesEveryQueuedTask()
+        {
+            // Arrange
+            var (client, _) = Make(
+                """
+                [
+                  {"jsonrpc":"2.0","result":1,"id":1},
+                  {"jsonrpc":"2.0","result":2,"id":1}
+                ]
+                """);
+            var batch = client.CreateBatch();
+            var first = batch.GetSlotAsync();
+            var second = batch.GetSlotAsync();
+
+            // Act
+            var act = () => batch.ExecuteAsync();
+
+            // Assert
+            await act.Should().ThrowAsync<RpcException>();
+            var firstAct = async () => await first;
+            var secondAct = async () => await second;
+            await firstAct.Should().ThrowAsync<RpcException>();
+            await secondAct.Should().ThrowAsync<RpcException>();
         }
 
         [Test]

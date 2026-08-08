@@ -29,10 +29,8 @@ jobs:
       - name: Test
         run: dotnet test --no-build --configuration Release --filter "TestCategory!=Integration"
 
-  # Proves the Native AOT claim end to end: the sample publishes with PublishAot (trimmed, no JIT,
-  # no reflection-based serialization) and then runs its offline signing / transaction-serialization /
-  # JSON-RPC-pipeline checks as a native binary. A type missing from the source-generated JSON context
-  # or a reflection call sneaking into a hot path fails this job.
+  # Proves the shipped package's Native AOT claim end to end: pack first (which also validates the
+  # public API against the previous stable package), then consume that nupkg from the AOT sample.
   aot-smoke:
     runs-on: ubuntu-latest
     steps:
@@ -43,8 +41,11 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Publish sample (Native AOT)
-        run: dotnet publish samples/SolSharp.AotSmoke -c Release -r linux-x64
+      - name: Pack and validate public API
+        run: dotnet pack src/SolSharp/SolSharp.csproj -c Release -o artifacts -p:Version=999.0.0-ci
+
+      - name: Publish packed package consumer (Native AOT)
+        run: dotnet publish samples/SolSharp.AotSmoke -c Release -r linux-x64 -p:UsePackedSolSharp=true -p:SolSharpPackageVersion=999.0.0-ci --source artifacts --source https://api.nuget.org/v3/index.json
 
       - name: Run sample
         run: samples/SolSharp.AotSmoke/bin/Release/net8.0/linux-x64/publish/SolSharp.AotSmoke

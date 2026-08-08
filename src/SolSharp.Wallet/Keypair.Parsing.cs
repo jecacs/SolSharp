@@ -167,22 +167,24 @@ public sealed partial class Keypair
         if (values is null)
             throw new FormatException("Key JSON must be an array, not null.");
 
-        var bytes = new byte[values.Length];
-        for (var i = 0; i < values.Length; i++)
-        {
-            if (values[i] is < 0 or > byte.MaxValue)
-                throw new FormatException($"Key JSON value at index {i} is outside the byte range 0-255: {values[i]}.");
-
-            bytes[i] = (byte)values[i];
-        }
-
+        byte[]? bytes = null;
         try
         {
+            bytes = new byte[values.Length];
+            for (var i = 0; i < values.Length; i++)
+            {
+                if (values[i] is < 0 or > byte.MaxValue)
+                    throw new FormatException($"Key JSON value at index {i} is outside the byte range 0-255: {values[i]}.");
+
+                bytes[i] = (byte)values[i];
+            }
+
             return FromDecoded(bytes, "JSON key array");
         }
         finally
         {
-            CryptographicOperations.ZeroMemory(bytes);
+            if (bytes is not null)
+                CryptographicOperations.ZeroMemory(bytes);
             Array.Clear(values);
         }
     }
@@ -207,14 +209,27 @@ public sealed partial class Keypair
     }
 
     private static byte[]? TryDecodeBase58(string text)
-        => Base58.TryDecode(text, out var bytes) && bytes.Length is SeedLength or SecretKeyLength ? bytes : null;
+    {
+        if (!Base58.TryDecode(text, out var bytes))
+            return null;
+
+        if (bytes.Length is SeedLength or SecretKeyLength)
+            return bytes;
+
+        CryptographicOperations.ZeroMemory(bytes);
+        return null;
+    }
 
     private static byte[]? TryDecodeBase64(string text)
     {
         try
         {
             var bytes = Convert.FromBase64String(text);
-            return bytes.Length is SeedLength or SecretKeyLength ? bytes : null;
+            if (bytes.Length is SeedLength or SecretKeyLength)
+                return bytes;
+
+            CryptographicOperations.ZeroMemory(bytes);
+            return null;
         }
         catch (FormatException)
         {

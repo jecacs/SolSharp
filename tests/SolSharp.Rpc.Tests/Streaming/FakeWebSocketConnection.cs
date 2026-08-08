@@ -7,28 +7,58 @@ namespace SolSharp.Rpc.Tests.Streaming;
 internal sealed class FakeWebSocketConnection : IWebSocketConnection
 {
     private readonly Channel<string> _incoming = Channel.CreateUnbounded<string>();
+    private int _connectCount;
+    private int _disposeCount;
 
     public List<string> Sent { get; } = [];
 
-    public int ConnectCount { get; private set; }
+    public int SentCount
+    {
+        get
+        {
+            lock (Sent)
+                return Sent.Count;
+        }
+    }
+
+    public int ConnectCount => Volatile.Read(ref _connectCount);
+
+    public int DisposeCount => Volatile.Read(ref _disposeCount);
+
+    public TaskCompletionSource DisposeStarted { get; } =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public Func<CancellationToken, Task>? ConnectBehavior { get; set; }
+
+    public Func<string, CancellationToken, ValueTask>? SendBehavior { get; set; }
+
+    public Func<string, CancellationToken, ValueTask>? ReceiveMessageBehavior { get; set; }
+
+    public Func<ValueTask>? DisposeBehavior { get; set; }
 
     public Task ConnectAsync(Uri uri, CancellationToken cancellationToken)
     {
-        ConnectCount++;
-        return Task.CompletedTask;
+        Interlocked.Increment(ref _connectCount);
+        return ConnectBehavior?.Invoke(cancellationToken) ?? Task.CompletedTask;
     }
 
-    public ValueTask SendAsync(string text, CancellationToken cancellationToken)
+    public async ValueTask SendAsync(string text, CancellationToken cancellationToken)
     {
-        Sent.Add(text);
-        return ValueTask.CompletedTask;
+        if (SendBehavior is not null)
+            await SendBehavior(text, cancellationToken);
+
+        lock (Sent)
+            Sent.Add(text);
     }
 
     public async ValueTask<string?> ReceiveAsync(CancellationToken cancellationToken)
     {
         try
         {
-            return await _incoming.Reader.ReadAsync(cancellationToken);
+            var message = await _incoming.Reader.ReadAsync(cancellationToken);
+            if (ReceiveMessageBehavior is not null)
+                await ReceiveMessageBehavior(message, cancellationToken);
+            return message;
         }
         catch (ChannelClosedException)
         {
@@ -36,13 +66,22 @@ internal sealed class FakeWebSocketConnection : IWebSocketConnection
         }
     }
 
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
+        Interlocked.Increment(ref _disposeCount);
+        DisposeStarted.TrySetResult();
         _incoming.Writer.TryComplete();
-        return ValueTask.CompletedTask;
+        if (DisposeBehavior is not null)
+            await DisposeBehavior();
     }
 
     public void PushFromServer(string message) => _incoming.Writer.TryWrite(message);
+
+    public string[] SentSnapshot()
+    {
+        lock (Sent)
+            return [.. Sent];
+    }
 
     /// <summary>Simulates the server dropping the connection: the next <see cref="ReceiveAsync"/> returns null.</summary>
     public void Drop() => _incoming.Writer.TryComplete();

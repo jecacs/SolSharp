@@ -40,6 +40,29 @@ public static class SolanaJsonSerializerTests
         }
 
         [Test]
+        public void SerializesNullablePublicKey()
+        {
+            // Arrange
+            PublicKey? key = PublicKey.Parse(SystemProgram);
+
+            // Act & Assert
+            JsonSerializer.Serialize(key, SolanaJsonSerializer.Options)
+                .Should().Be($"\"{SystemProgram}\"");
+            JsonSerializer.Serialize<PublicKey?>(null, SolanaJsonSerializer.Options)
+                .Should().Be("null");
+        }
+
+        [Test]
+        public void DeserializesNullablePublicKey()
+        {
+            // Act & Assert
+            JsonSerializer.Deserialize<PublicKey?>($"\"{SystemProgram}\"", SolanaJsonSerializer.Options)
+                .Should().Be(PublicKey.Parse(SystemProgram));
+            JsonSerializer.Deserialize<PublicKey?>("null", SolanaJsonSerializer.Options)
+                .Should().BeNull();
+        }
+
+        [Test]
         public void Serialize_UnregisteredType_ThrowsInsteadOfFallingBackToReflection()
         {
             // The options are resolved by a source-generated context with no reflection fallback (that

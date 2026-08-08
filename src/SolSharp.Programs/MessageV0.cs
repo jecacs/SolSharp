@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using SolSharp.Core.Encoding;
 using SolSharp.Core.Primitives;
 
@@ -69,7 +70,10 @@ public sealed class MessageV0 : ITransactionMessage
     /// <param name="addressLookupTables">The lookup tables to source extra accounts from; pass an empty list for none.</param>
     /// <returns>The compiled v0 message.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="recentBlockhash"/>, <paramref name="instructions"/>, or <paramref name="addressLookupTables"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentException">The instructions reference more than <see cref="MaxAccounts"/> distinct accounts, or a supplied lookup table holds more than <see cref="MaxAccounts"/> addresses.</exception>
+    /// <exception cref="ArgumentException">
+    /// The instructions reference more than <see cref="MaxAccounts"/> distinct accounts, require more than
+    /// 255 signatures, or a supplied lookup table holds more than <see cref="MaxAccounts"/> addresses.
+    /// </exception>
     public static MessageV0 Compile(
         PublicKey feePayer,
         string recentBlockhash,
@@ -94,6 +98,14 @@ public sealed class MessageV0 : ITransactionMessage
             Merge(instruction.ProgramId, signer: false, writable: false, invoked: true);
             foreach (var account in instruction.Accounts)
                 Merge(account.PublicKey, account.IsSigner, account.IsWritable, invoked: false);
+        }
+
+        // The runtime resolves a durable nonce before loading address tables, so the nonce account
+        // named by an exact first AdvanceNonceAccount instruction must remain in the static keys.
+        if (TryGetNonceAccount(instructions, out var nonceAccount))
+        {
+            var current = metas[nonceAccount];
+            metas[nonceAccount] = current with { IsNonce = true };
         }
 
         if (metas.Count > MaxAccounts)
@@ -129,7 +141,7 @@ public sealed class MessageV0 : ITransactionMessage
                     continue;
 
                 var meta = metas[key];
-                if (meta.IsSigner || meta.IsInvoked || !meta.IsWritable)
+                if (meta.IsSigner || meta.IsInvoked || meta.IsNonce || !meta.IsWritable)
                     continue;
 
                 var index = IndexInTable(table.Addresses, key);
@@ -147,7 +159,7 @@ public sealed class MessageV0 : ITransactionMessage
                     continue;
 
                 var meta = metas[key];
-                if (meta.IsSigner || meta.IsInvoked || meta.IsWritable)
+                if (meta.IsSigner || meta.IsInvoked || meta.IsNonce || meta.IsWritable)
                     continue;
 
                 var index = IndexInTable(table.Addresses, key);
@@ -183,7 +195,9 @@ public sealed class MessageV0 : ITransactionMessage
         AddClass(orderedStatic, staticRemaining, metas, signer: false, writable: true);
         AddClass(orderedStatic, staticRemaining, metas, signer: false, writable: false);
 
-        byte requiredSignatures = 0, readonlySigned = 0, readonlyUnsigned = 0;
+        var requiredSignatures = 0;
+        var readonlySigned = 0;
+        var readonlyUnsigned = 0;
         foreach (var key in orderedStatic)
         {
             var meta = metas[key];
@@ -198,6 +212,11 @@ public sealed class MessageV0 : ITransactionMessage
                 readonlyUnsigned++;
             }
         }
+
+        if (requiredSignatures > byte.MaxValue)
+            throw new ArgumentException(
+                $"A v0 message can require at most {byte.MaxValue} signatures, got {requiredSignatures}.",
+                nameof(instructions));
 
         var position = new Dictionary<PublicKey, int>(metas.Count);
         var slot = 0;
@@ -220,11 +239,18 @@ public sealed class MessageV0 : ITransactionMessage
             {
                 ProgramIdIndex = (byte)position[instruction.ProgramId],
                 AccountIndexes = accountIndexes,
-                Data = instruction.Data
+                Data = [.. instruction.Data]
             };
         }
 
-        return new MessageV0(requiredSignatures, readonlySigned, readonlyUnsigned, orderedStatic, recentBlockhash, compiled, lookups);
+        return new MessageV0(
+            (byte)requiredSignatures,
+            (byte)readonlySigned,
+            (byte)readonlyUnsigned,
+            orderedStatic,
+            recentBlockhash,
+            compiled,
+            lookups);
     }
 
     /// <summary>Serializes the message to its canonical wire bytes - what a signer signs over - starting with <see cref="VersionPrefix"/>.</summary>
@@ -391,8 +417,8 @@ public sealed class MessageV0 : ITransactionMessage
     /// <param name="data">The serialized v0 message.</param>
     /// <returns>The parsed message.</returns>
     /// <exception cref="FormatException">
-    /// The data is not a versioned message, carries a version other than 0, is truncated, a compact-u16
-    /// length is malformed, or the message breaks a rule Solana's sanitize enforces: header counts that
+    /// The data is not a versioned message, carries a version other than 0, is truncated, contains trailing
+    /// bytes, has a malformed compact-u16 length, or breaks a rule Solana's sanitize enforces: header counts that
     /// overlap the static account list or leave no writable fee-payer signer, an address table lookup that
     /// loads no accounts, more than 256 addressable accounts, an instruction whose program id is the fee
     /// payer or a lookup-loaded account, or an out-of-range program id or account index.
@@ -447,6 +473,9 @@ public sealed class MessageV0 : ITransactionMessage
                     ReadonlyIndexes = readonlyIndexes
                 };
             }
+
+            if (offset != data.Length)
+                throw new FormatException($"The v0 message has {data.Length - offset} trailing byte(s).");
 
             // Mirror Solana's v0 sanitize so a message the network would refuse never parses successfully.
             MessageWire.SanitizeHeader(requiredSignatures, readonlySignedAccounts, readonlyUnsignedAccounts, accountKeys.Length);
@@ -515,5 +544,24 @@ public sealed class MessageV0 : ITransactionMessage
         return x.SequenceCompareTo(y);
     }
 
-    private readonly record struct KeyMeta(bool IsSigner, bool IsWritable, bool IsInvoked);
+    private static bool TryGetNonceAccount(IReadOnlyList<Instruction> instructions, out PublicKey nonceAccount)
+    {
+        if (instructions.Count > 0)
+        {
+            var first = instructions[0];
+            if (first.ProgramId == SystemProgram.ProgramId
+                && first.Data.Length == sizeof(uint)
+                && BinaryPrimitives.ReadUInt32LittleEndian(first.Data) == 4
+                && first.Accounts.Count > 0)
+            {
+                nonceAccount = first.Accounts[0].PublicKey;
+                return true;
+            }
+        }
+
+        nonceAccount = default;
+        return false;
+    }
+
+    private readonly record struct KeyMeta(bool IsSigner, bool IsWritable, bool IsInvoked, bool IsNonce = false);
 }
