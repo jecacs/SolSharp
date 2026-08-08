@@ -140,6 +140,9 @@ public static class RpcBatchTests
         [TestCase("[[]]")]
         [TestCase("[{\"jsonrpc\":\"1.0\",\"result\":1,\"id\":1}]")]
         [TestCase("[{\"jsonrpc\":\"2.0\",\"result\":1,\"error\":{\"code\":-1,\"message\":\"bad\"},\"id\":1}]")]
+        [TestCase("[{\"jsonrpc\":\"2.0\",\"result\":1,\"error\":null,\"id\":1}]")]
+        [TestCase("[{\"jsonrpc\":\"2.0\",\"error\":null,\"id\":1}]")]
+        [TestCase("[{\"jsonrpc\":\"2.0\",\"id\":1}]")]
         [TestCase("[{\"jsonrpc\":\"2.0\",\"result\":1,\"id\":2}]")]
         [TestCase("[{\"jsonrpc\":\"2.0\",\"result\":1,\"id\":\"1\"}]")]
         [TestCase("[{\"jsonrpc\":\"2.0\",\"error\":\"bad\",\"id\":1}]")]
@@ -183,8 +186,10 @@ public static class RpcBatchTests
 
             // Assert
             await act.Should().ThrowAsync<RpcException>();
-            first.IsCompleted.Should().BeTrue();
-            second.IsCompleted.Should().BeTrue();
+            var firstAct = async () => await first;
+            var secondAct = async () => await second;
+            await firstAct.Should().ThrowAsync<RpcException>();
+            await secondAct.Should().ThrowAsync<RpcException>();
         }
 
         [Test]

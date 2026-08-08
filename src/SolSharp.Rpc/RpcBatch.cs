@@ -125,7 +125,7 @@ public sealed class RpcBatch
                     throw new RpcException(-1, $"The batch response contained duplicate request id {value}.");
 
                 var hasResult = element.TryGetProperty("result", out _);
-                var hasError = element.TryGetProperty("error", out var error) && error.ValueKind != JsonValueKind.Null;
+                var hasError = element.TryGetProperty("error", out var error);
                 if (hasResult == hasError)
                     throw new RpcException(
                         -1,

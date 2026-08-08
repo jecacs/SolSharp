@@ -90,7 +90,8 @@ services.AddSolanaWs(new SolanaWsClientOptions
     MaxReconnectAttempts = 10,
     ReceiveTimeout = TimeSpan.FromMinutes(2),   // opt-in: only for high-frequency subscriptions
     MaxMessageSizeBytes = 64 * 1024 * 1024,
-    SubscriptionBufferCapacity = 1024
+    SubscriptionBufferCapacity = 1024,
+    MaxPendingSubscriptionRequests = 1024
 });
 
 var ws = provider.GetRequiredService<SolanaWsClient>();
@@ -796,7 +797,11 @@ The reconnect policy is tunable through `SolanaWsClientOptions`: `AutoReconnect`
 forever). When reconnect attempts are exhausted — or auto-reconnect is off — every subscription completes
 with the connection error. `SubscriptionAckTimeout` (30 seconds by default) bounds both initial subscribe
 and reconnect replay acknowledgement waits, so one unresponsive request cannot stall every subscription
-behind it.
+behind it. `MaxPendingSubscriptionRequests` (1,024 by default) caps the combined number of live ACK waits
+and compact late-ACK cleanup records. After a timeout or cancellation, the subscription, sink, and request
+parameters are released while a generation-scoped cleanup record remains so a late successful ACK can still
+be unsubscribed; once the cap is reached, further subscriptions fail before they are sent until an ACK or
+connection drop frees space.
 
 `ReceiveTimeout` (off by default) treats a connection with no complete message for the given interval as
 dropped, so auto-reconnect can replace a silently half-open socket. Only data messages reset the timer —

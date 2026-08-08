@@ -27,6 +27,13 @@ public sealed record SolanaWsClientOptions
     public TimeSpan SubscriptionAckTimeout { get; init; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
+    /// The maximum number of subscription requests whose acknowledgements may be outstanding on one
+    /// connection. This includes compact records retained after a local timeout or cancellation so a
+    /// late successful acknowledgement can still be unsubscribed. The default is 1,024.
+    /// </summary>
+    public int MaxPendingSubscriptionRequests { get; init; } = 1024;
+
+    /// <summary>
     /// The maximum encoded size of one incoming WebSocket message, in bytes. The default is 64 MiB.
     /// Messages over the limit close the connection with <c>MessageTooBig</c>.
     /// </summary>

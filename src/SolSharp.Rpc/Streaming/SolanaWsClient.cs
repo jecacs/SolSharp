@@ -56,6 +56,24 @@ public sealed class SolanaWsClient : IAsyncDisposable
         }
     }
 
+    internal int RetainedPendingSubscriptionReferenceCount
+    {
+        get
+        {
+            lock (_stateGate)
+                return _pending.Values.Count(pending => pending.Subscription is not null);
+        }
+    }
+
+    internal int RetainedAcknowledgementTombstoneCount
+    {
+        get
+        {
+            lock (_stateGate)
+                return _pending.Values.Count(pending => pending.State == PendingState.Abandoned);
+        }
+    }
+
     /// <summary>Creates a client over a real <see cref="System.Net.WebSockets.ClientWebSocket"/> with default options.</summary>
     /// <param name="loggerFactory">Optional factory for connection/reconnection diagnostics; no logging when null.</param>
     public SolanaWsClient(ILoggerFactory? loggerFactory = null) : this(new SolanaWsClientOptions(), loggerFactory)
@@ -88,6 +106,8 @@ public sealed class SolanaWsClient : IAsyncDisposable
             throw new ArgumentOutOfRangeException(nameof(options), "Maximum reconnect attempts cannot be negative.");
         if (options.SubscriptionAckTimeout <= TimeSpan.Zero || options.SubscriptionAckTimeout > MaximumTimerDuration)
             throw new ArgumentOutOfRangeException(nameof(options), "Subscription acknowledgement timeout must be positive and finite.");
+        if (options.MaxPendingSubscriptionRequests <= 0)
+            throw new ArgumentOutOfRangeException(nameof(options), "Maximum pending subscription requests must be positive.");
         if (options.ReceiveTimeout != Timeout.InfiniteTimeSpan && options.ReceiveTimeout <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(options), "Receive timeout must be positive or infinite.");
         if (options.ReceiveTimeout > MaximumTimerDuration)
@@ -610,7 +630,12 @@ public sealed class SolanaWsClient : IAsyncDisposable
             if (subscription.Phase == SubscriptionPhase.Terminal)
                 throw new OperationCanceledException(cancellationToken);
             if (_phase != ClientPhase.Connected || !ReferenceEquals(_connection, epoch))
-                throw new InvalidOperationException("The WebSocket connection changed before the subscription was sent.");
+                throw ConnectionChangedBeforeSend();
+            if (_pending.Count >= _options.MaxPendingSubscriptionRequests)
+            {
+                throw new InvalidOperationException(
+                    $"The maximum of {_options.MaxPendingSubscriptionRequests} pending subscription requests has been reached.");
+            }
 
             var requestId = ++_nextRequestId;
             pending = new PendingSubscribe(requestId, epoch, subscription, initial);
@@ -658,15 +683,26 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
             if (pending.State == PendingState.Awaiting)
             {
-                pending.State = PendingState.Abandoned;
-                if (ReferenceEquals(pending.Subscription.Attempt, pending))
-                    pending.Subscription.Attempt = null;
+                AbandonPendingLocked(pending);
+                pending.Acked.TrySetCanceled();
             }
 
             // Keep an abandoned request as a generation-scoped tombstone. A late acknowledgement
             // otherwise creates an unowned server-side subscription that can never be released.
             return false;
         }
+    }
+
+    private static void AbandonPendingLocked(PendingSubscribe pending)
+    {
+        var subscription = pending.Subscription;
+        pending.State = PendingState.Abandoned;
+        if (subscription is not null && ReferenceEquals(subscription.Attempt, pending))
+            subscription.Attempt = null;
+
+        // Retain only request metadata needed to clean up a late successful ACK. In particular, the
+        // tombstone must not retain the sink, parameters, cancellation source, or consumer state.
+        pending.DetachSubscription();
     }
 
     private async ValueTask AttachCancellationAsync(
@@ -735,8 +771,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
         if (subscription.Attempt is { } attempt && attempt.State == PendingState.Awaiting)
         {
-            attempt.State = PendingState.Abandoned;
-            subscription.Attempt = null;
+            AbandonPendingLocked(attempt);
             if (exception is OperationCanceledException canceled)
                 attempt.Acked.TrySetCanceled(canceled.CancellationToken);
             else
@@ -815,7 +850,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
             lock (_stateGate)
             {
                 if (!TryReserveSendLocked(epoch))
-                    throw new InvalidOperationException("The WebSocket connection changed before the request was sent.");
+                    throw ConnectionChangedBeforeSend();
             }
         }
 
@@ -830,7 +865,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
                 lock (_stateGate)
                 {
                     if (_phase != ClientPhase.Connected || !ReferenceEquals(_connection, epoch))
-                        throw new InvalidOperationException("The WebSocket connection changed before the request was sent.");
+                        throw ConnectionChangedBeforeSend();
                 }
 
                 await epoch.Connection.SendAsync(json, linked.Token);
@@ -1085,9 +1120,10 @@ public sealed class SolanaWsClient : IAsyncDisposable
                     continue;
 
                 pending.State = PendingState.Failed;
-                if (ReferenceEquals(pending.Subscription.Attempt, pending))
-                    pending.Subscription.Attempt = null;
-                pending.Acked.TrySetException(exception);
+                var subscription = pending.Subscription;
+                if (subscription is not null && ReferenceEquals(subscription.Attempt, pending))
+                    subscription.Attempt = null;
+                pending.Acked.TrySetException(new ConnectionEpochEndedException(exception));
             }
         }
     }
@@ -1123,16 +1159,34 @@ public sealed class SolanaWsClient : IAsyncDisposable
             {
                 await EstablishAsync(subscription, epoch, initial: false, token);
             }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
             catch (Exception exception)
             {
+                TerminalWork? work;
+                bool generationEnded;
+                lock (_stateGate)
+                {
+                    generationEnded = exception is ConnectionEpochEndedException ||
+                                      exception is OperationCanceledException &&
+                                      (token.IsCancellationRequested || _lifetimeCts.IsCancellationRequested);
+                    work = generationEnded
+                        ? null
+                        : TryTerminateLocked(subscription, exception, unsubscribe: true);
+                }
+
+                // Only the connection epoch ending stops the replay loop. Cancellation or failure of
+                // one subscription terminalizes (or has already terminalized) that subscription and
+                // replay proceeds with the remaining snapshot entries.
+                if (generationEnded)
+                    return;
+
+                if (work is null)
+                    continue;
+
                 _logger.LogWarning(
                     exception,
-                    "Solana WS failed to replay subscription '{Method}'",
+                    "Solana WS failed to replay subscription '{Method}'; faulting that subscription",
                     subscription.SubscribeMethod);
+                await ExecuteTerminalWorkAsync(work);
             }
         }
     }
@@ -1144,7 +1198,8 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
         if (root.TryGetProperty("id", out var idElement) && idElement.TryGetInt32(out var requestId))
         {
-            if (root.TryGetProperty("error", out var errorElement))
+            if (root.TryGetProperty("error", out var errorElement) &&
+                errorElement.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined))
             {
                 CompletePendingError(requestId, epoch, errorElement);
                 return;
@@ -1231,20 +1286,21 @@ public sealed class SolanaWsClient : IAsyncDisposable
             }
 
             _pending.Remove(requestId);
-            var wasAwaiting = pending.State == PendingState.Awaiting;
+            var subscription = pending.Subscription;
+            var wasAwaiting = pending.State == PendingState.Awaiting && subscription is not null;
             if (result.ValueKind != JsonValueKind.Number || !result.TryGetInt64(out var subscriptionId))
             {
                 pending.State = PendingState.Failed;
-                if (ReferenceEquals(pending.Subscription.Attempt, pending))
-                    pending.Subscription.Attempt = null;
+                if (subscription is not null && ReferenceEquals(subscription.Attempt, pending))
+                    subscription.Attempt = null;
                 if (wasAwaiting)
                     pending.Acked.TrySetException(new InvalidOperationException("The node rejected the subscription."));
                 return;
             }
 
             var canAccept = wasAwaiting &&
-                            pending.Subscription.Phase != SubscriptionPhase.Terminal &&
-                            ReferenceEquals(pending.Subscription.Attempt, pending) &&
+                            subscription!.Phase != SubscriptionPhase.Terminal &&
+                            ReferenceEquals(subscription.Attempt, pending) &&
                             _phase == ClientPhase.Connected &&
                             ReferenceEquals(_connection, epoch);
             pending.State = PendingState.Acknowledged;
@@ -1252,17 +1308,17 @@ public sealed class SolanaWsClient : IAsyncDisposable
             if (canAccept)
             {
                 var binding = new RouteBinding(epoch, subscriptionId);
-                pending.Subscription.Attempt = null;
-                pending.Subscription.Binding = binding;
+                subscription!.Attempt = null;
+                subscription.Binding = binding;
                 if (pending.Initial)
-                    pending.Subscription.Phase = SubscriptionPhase.Active;
-                _byServerId[(epoch.Generation, subscriptionId)] = pending.Subscription;
+                    subscription.Phase = SubscriptionPhase.Active;
+                _byServerId[(epoch.Generation, subscriptionId)] = subscription;
                 pending.Acked.TrySetResult(subscriptionId);
             }
             else
             {
                 lateBinding = new RouteBinding(epoch, subscriptionId);
-                lateUnsubscribeMethod = pending.Subscription.UnsubscribeMethod;
+                lateUnsubscribeMethod = pending.UnsubscribeMethod;
                 reservationHeld = TryReserveSendLocked(epoch);
             }
         }
@@ -1295,11 +1351,12 @@ public sealed class SolanaWsClient : IAsyncDisposable
             }
 
             _pending.Remove(requestId);
-            method = pending.Subscription.SubscribeMethod;
-            var wasAwaiting = pending.State == PendingState.Awaiting;
+            method = pending.SubscribeMethod;
+            var subscription = pending.Subscription;
+            var wasAwaiting = pending.State == PendingState.Awaiting && subscription is not null;
             pending.State = PendingState.Failed;
-            if (ReferenceEquals(pending.Subscription.Attempt, pending))
-                pending.Subscription.Attempt = null;
+            if (subscription is not null && ReferenceEquals(subscription.Attempt, pending))
+                subscription.Attempt = null;
             if (wasAwaiting)
             {
                 pending.Acked.TrySetException(
@@ -1463,7 +1520,11 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
         public ConnectionEpoch Epoch { get; } = epoch;
 
-        public Subscription Subscription { get; } = subscription;
+        public Subscription? Subscription { get; private set; } = subscription;
+
+        public string SubscribeMethod { get; } = subscription.SubscribeMethod;
+
+        public string UnsubscribeMethod { get; } = subscription.UnsubscribeMethod;
 
         public bool Initial { get; } = initial;
 
@@ -1471,6 +1532,8 @@ public sealed class SolanaWsClient : IAsyncDisposable
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public PendingState State { get; set; }
+
+        public void DetachSubscription() => Subscription = null;
     }
 
     private sealed class ConnectionEpoch
@@ -1579,6 +1642,14 @@ public sealed class SolanaWsClient : IAsyncDisposable
         Abandoned,
         Acknowledged,
         Failed
+    }
+
+    private static ConnectionEpochEndedException ConnectionChangedBeforeSend()
+        => new(new InvalidOperationException("The WebSocket connection changed before the request was sent."));
+
+    private sealed class ConnectionEpochEndedException(Exception innerException)
+        : InvalidOperationException(innerException.Message, innerException)
+    {
     }
 
     private static readonly TimeSpan MaximumTimerDuration = TimeSpan.FromMilliseconds(uint.MaxValue - 1);

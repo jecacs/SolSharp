@@ -21,7 +21,10 @@ internal sealed class IntegrationEnvironmentTests
     }
 
     [TestCase(-32603)] // Internal error.
+    [TestCase(-32004)] // Block not available for slot.
     [TestCase(-32005)] // Node is unhealthy.
+    [TestCase(-32007)] // Slot skipped or missing due to ledger jump.
+    [TestCase(-32009)] // Slot missing in long-term storage.
     [TestCase(-32014)] // Block status is not available yet.
     [TestCase(-32016)] // Minimum context slot has not been reached.
     public void IsTransient_TransientRpcFailure_ReturnsTrue(int code)
