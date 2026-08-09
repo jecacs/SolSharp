@@ -13,7 +13,7 @@ public sealed record SimulateTransactionOptions
 
     /// <summary>
     /// The commitment the simulation runs at. Defaults to <see cref="Core.Primitives.Commitment.Confirmed"/>
-    /// to match <see cref="SolanaRpcClient.GetLatestBlockhashAsync"/>: at the node default of
+    /// to match <see cref="SolanaRpcClient.GetLatestBlockhashAsync(Commitment, CancellationToken)"/>: at the node default of
     /// <c>finalized</c> a blockhash fetched at <c>confirmed</c> may not exist yet, failing the simulation
     /// with <c>BlockhashNotFound</c>. Set to <c>null</c> for the node default.
     /// </summary>
@@ -23,10 +23,17 @@ public sealed record SimulateTransactionOptions
     public ulong? MinContextSlot { get; init; }
 
     /// <summary>
-    /// Accounts whose post-simulation state the node should return, encoded as base64. The node limits
-    /// the number of requested addresses to the transaction's account count; no states are requested when <c>null</c>.
+    /// Accounts whose post-simulation state the node should return. The node limits the number of requested
+    /// addresses to the transaction's account count; no states are requested when <c>null</c>.
     /// </summary>
     public IReadOnlyList<PublicKey>? Accounts { get; init; }
+
+    /// <summary>
+    /// Encoding for requested post-simulation accounts. Agave supports <see cref="RpcAccountEncoding.Base64"/>,
+    /// <see cref="RpcAccountEncoding.JsonParsed"/>, and <see cref="RpcAccountEncoding.Base64Zstd"/> on this path.
+    /// Defaults to base64.
+    /// </summary>
+    public RpcAccountEncoding AccountsEncoding { get; init; } = RpcAccountEncoding.Base64;
 
     /// <summary>Requests parsed inner instructions from the simulation. Default <c>false</c>.</summary>
     public bool InnerInstructions { get; init; }

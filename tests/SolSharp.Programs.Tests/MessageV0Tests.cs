@@ -95,6 +95,21 @@ public static class MessageV0Tests
         }
 
         [Test]
+        public void TypedBlockhash_MatchesStringOverload()
+        {
+            // Arrange
+            var instruction = new Instruction { ProgramId = Pk(9), Accounts = [], Data = [7] };
+            var blockhash = new Hash(Pk(8).ToBytes());
+
+            // Act
+            var typed = MessageV0.Compile(Pk(1), blockhash, [instruction], []);
+            var text = MessageV0.Compile(Pk(1), blockhash.ToString(), [instruction], []);
+
+            // Assert
+            typed.Serialize().Should().Equal(text.Serialize());
+        }
+
+        [Test]
         public void OversizedLookupTable_Throws()
         {
             // Arrange: 257 addresses cannot be addressed by the single-byte wire indexes.

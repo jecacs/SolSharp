@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Text.Json;
 using System.Threading.Channels;
 using FluentAssertions;
 using NUnit.Framework;
@@ -159,7 +160,7 @@ public static class SolanaWsClientTests
             (await move).Should().BeTrue();
             subscription.Current.Slot.Should().Be(250001ul);
             subscription.Current.Type.Should().Be("frozen");
-            subscription.Current.Timestamp.Should().Be(1750000000123L);
+            subscription.Current.Timestamp.Should().Be(1750000000123UL);
             subscription.Current.Parent.Should().BeNull();
             subscription.Current.Error.Should().BeNull();
             subscription.Current.Stats!.NumTransactionEntries.Should().Be(96ul);
@@ -202,6 +203,76 @@ public static class SolanaWsClientTests
             subscription.Current.Error.Should().Be("invalid block");
 
             await subscription.DisposeAsync();
+        }
+    }
+
+    [TestFixture]
+    public sealed class SubscribeLogsWithFilterAsync
+    {
+        [Test]
+        public async Task AllFilter_SendsExactPinnedUnionBranch()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            using var cancellation = new CancellationTokenSource();
+
+            // Act
+            _ = client.SubscribeLogsWithFilterAsync(
+                LogsSubscriptionFilter.All,
+                Commitment.Processed,
+                cancellation.Token);
+
+            // Assert
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.SentSnapshot()[0].Should().Be(
+                """{"jsonrpc":"2.0","id":1,"method":"logsSubscribe","params":["all",{"commitment":"processed"}]}""");
+            await cancellation.CancelAsync();
+        }
+
+        [Test]
+        public async Task AllWithVotesFilter_SendsExactPinnedUnionBranch()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            using var cancellation = new CancellationTokenSource();
+
+            // Act
+            _ = client.SubscribeLogsWithFilterAsync(
+                LogsSubscriptionFilter.AllWithVotes,
+                Commitment.Finalized,
+                cancellation.Token);
+
+            // Assert
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.SentSnapshot()[0].Should().Be(
+                """{"jsonrpc":"2.0","id":1,"method":"logsSubscribe","params":["allWithVotes",{"commitment":"finalized"}]}""");
+            await cancellation.CancelAsync();
+        }
+
+        [Test]
+        public async Task MentionsFilter_SendsExactPinnedUnionBranch()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            using var cancellation = new CancellationTokenSource();
+
+            // Act
+            _ = client.SubscribeLogsWithFilterAsync(
+                LogsSubscriptionFilter.Mentions(PublicKey.Parse(SolanaProgramIds.TokenProgram)),
+                Commitment.Confirmed,
+                cancellation.Token);
+
+            // Assert
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.SentSnapshot()[0].Should().Be(
+                """{"jsonrpc":"2.0","id":1,"method":"logsSubscribe","params":[{"mentions":["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"]},{"commitment":"confirmed"}]}""");
+            await cancellation.CancelAsync();
         }
     }
 
@@ -512,6 +583,31 @@ public static class SolanaWsClientTests
             var message = await reader.ReadAsync();
             message.Value!.Signature.Should().Be("sig1");
         }
+
+        [TestCase("{\"jsonrpc\":\"2.0\",\"error\":{},\"id\":1}")]
+        [TestCase("{\"jsonrpc\":\"2.0\",\"error\":\"nope\",\"id\":1}")]
+        [TestCase("{\"jsonrpc\":\"2.0\",\"result\":7,\"error\":{\"code\":-1,\"message\":\"nope\"},\"id\":1}")]
+        [TestCase("{\"jsonrpc\":\"2.0\",\"id\":1}")]
+        [TestCase("{\"jsonrpc\":\"2.0\",\"result\":7,\"id\":\"1\"}")]
+        [TestCase("{\"jsonrpc\":\"2.0\",\"result\":7,\"id\":1.5}")]
+        [TestCase("{\"jsonrpc\":\"2.0\",\"result\":7,\"id\":2147483648}")]
+        public async Task MalformedResponse_FaultsTheSubscribeCall(string response)
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            var subscribe = client.SubscribeLogsAsync(PublicKey.Parse(SolanaProgramIds.TokenProgram));
+            await WaitUntil(() => fake.Sent.Count > 0);
+
+            // Act
+            fake.PushFromServer(response);
+            var act = async () => await subscribe;
+
+            // Assert
+            var exception = await act.Should().ThrowAsync<InvalidOperationException>();
+            exception.Which.InnerException.Should().BeOfType<InvalidDataException>();
+        }
     }
 
     [TestFixture]
@@ -560,6 +656,28 @@ public static class SolanaWsClientTests
     public sealed class SubscribeAccount
     {
         [Test]
+        public async Task NullAccountValue_FaultsSubscription()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            var subscribe = client.SubscribeAccountAsync(PublicKey.Parse(SolanaProgramIds.TokenProgram));
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 6));
+            var reader = await subscribe;
+
+            // Act
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"accountNotification","params":{"subscription":6,"result":{"context":{"slot":100},"value":null}}}""");
+            var read = async () => await reader.ReadAsync();
+
+            // Assert
+            (await read.Should().ThrowAsync<ChannelClosedException>())
+                .Which.InnerException.Should().BeOfType<System.Text.Json.JsonException>();
+        }
+
+        [Test]
         public async Task DeliversDecodedAccount_ThenUnsubscribesOnCancel()
         {
             // Arrange
@@ -599,6 +717,46 @@ public static class SolanaWsClientTests
     [TestFixture]
     public sealed class Reconnect
     {
+        [Test]
+        public async Task UnownedOperationCanceledException_RetriesNextCandidate()
+        {
+            // Arrange
+            var first = new FakeWebSocketConnection();
+            var cancelled = new FakeWebSocketConnection
+            {
+                ConnectBehavior = _ => Task.FromException(new OperationCanceledException())
+            };
+            var recovered = new FakeWebSocketConnection();
+            var connections = new[] { first, cancelled, recovered };
+            var index = -1;
+            var options = new SolanaWsClientOptions
+            {
+                MaxReconnectAttempts = 2,
+                ReconnectInitialDelay = TimeSpan.FromMilliseconds(1),
+                ReconnectMaxDelay = TimeSpan.FromMilliseconds(1)
+            };
+            await using var client = new SolanaWsClient(
+                () => connections[Interlocked.Increment(ref index)], options);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            var subscribe = client.SubscribeLogsAsync(PublicKey.Parse(SolanaProgramIds.TokenProgram));
+            await WaitUntil(() => first.SentCount == 1);
+            first.PushFromServer(Acknowledgement(RequestId(first.SentSnapshot()[0]), subscriptionId: 11));
+            var reader = await subscribe;
+
+            // Act: the transport-generated OCE carries no owned cancellation token, so it is a failed
+            // attempt rather than a request to abandon the entire reconnect policy.
+            first.Drop();
+            await WaitUntil(() => recovered.SentCount == 1);
+            var replay = recovered.SentSnapshot()[0];
+            recovered.PushFromServer(Acknowledgement(RequestId(replay), subscriptionId: 12));
+            recovered.PushFromServer(LogNotification(subscription: 12, signature: "recovered"));
+
+            // Assert
+            (await reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1)))
+                .Value!.Signature.Should().Be("recovered");
+            cancelled.DisposeCount.Should().Be(1);
+        }
+
         [Test]
         public async Task ReplaysSubscriptions_OntoNewConnection_AfterDrop()
         {
@@ -1044,6 +1202,63 @@ public static class SolanaWsClientTests
     }
 
     [TestFixture]
+    public sealed class SubscribeParsedProgramAsync
+    {
+        [Test]
+        public async Task ParsedProgram_DecodesNestedParsedAccountKat()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            using var cancellation = new CancellationTokenSource();
+            var subscribe = client.SubscribeParsedProgramAsync(
+                PublicKey.Parse(SolanaProgramIds.TokenProgram),
+                filters: [AccountFilter.DataSize(165)],
+                cancellationToken: cancellation.Token);
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 41));
+            var reader = await subscribe;
+
+            // Act
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"programNotification","params":{"subscription":41,"result":{"context":{"slot":300},"value":{"pubkey":"11111111111111111111111111111111","account":{"lamports":1,"owner":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA","executable":false,"rentEpoch":0,"data":{"program":"spl-token","parsed":{"type":"account","info":{"state":"initialized"}},"space":165}}}}}}""");
+            var message = await reader.ReadAsync();
+
+            // Assert
+            message.Context!.Slot.Should().Be(300);
+            message.Value!.PublicKey.Should().Be(PublicKey.Parse("11111111111111111111111111111111"));
+            message.Value.Account.Program.Should().Be("spl-token");
+            message.Value.Account.Parsed!.Type.Should().Be("account");
+            fake.SentSnapshot()[0].Should().Contain("\"encoding\":\"jsonParsed\"");
+            await cancellation.CancelAsync();
+        }
+
+        [Test]
+        public async Task ExplicitNullAccount_FaultsSubscription()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            var subscribe = client.SubscribeParsedProgramAsync(
+                PublicKey.Parse(SolanaProgramIds.TokenProgram));
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 42));
+            var reader = await subscribe;
+
+            // Act
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"programNotification","params":{"subscription":42,"result":{"context":{"slot":301},"value":{"pubkey":"11111111111111111111111111111111","account":null}}}}""");
+            var read = async () => await reader.ReadAsync();
+
+            // Assert
+            (await read.Should().ThrowAsync<ChannelClosedException>())
+                .Which.InnerException.Should().BeOfType<JsonException>();
+        }
+    }
+
+    [TestFixture]
     public sealed class SubscribeProgram
     {
         [Test]
@@ -1082,8 +1297,191 @@ public static class SolanaWsClientTests
     }
 
     [TestFixture]
+    public sealed class SubscribeSignatureWithOptionsAsync
+    {
+        [Test]
+        public async Task ExplicitFalse_SendsExactPinnedConfig()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            using var cancellation = new CancellationTokenSource();
+
+            // Act
+            _ = client.SubscribeSignatureWithOptionsAsync(
+                "Sig111",
+                new SignatureSubscriptionOptions
+                {
+                    Commitment = Commitment.Processed,
+                    EnableReceivedNotification = false
+                },
+                cancellation.Token);
+
+            // Assert
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.SentSnapshot()[0].Should().Be(
+                """{"jsonrpc":"2.0","id":1,"method":"signatureSubscribe","params":["Sig111",{"commitment":"processed","enableReceivedNotification":false}]}""");
+            await cancellation.CancelAsync();
+        }
+
+        [Test]
+        public async Task ReceivedNotification_RemainsActiveUntilFinalObject()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            using var cancellation = new CancellationTokenSource();
+            var options = new SignatureSubscriptionOptions
+            {
+                Commitment = Commitment.Confirmed,
+                EnableReceivedNotification = true
+            };
+            var subscribe = client.SubscribeSignatureWithOptionsAsync("Sig111", options, cancellation.Token);
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.SentSnapshot()[0].Should().Be(
+                """{"jsonrpc":"2.0","id":1,"method":"signatureSubscribe","params":["Sig111",{"commitment":"confirmed","enableReceivedNotification":true}]}""");
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 43));
+            var reader = await subscribe;
+
+            // Act
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"signatureNotification","params":{"subscription":43,"result":{"context":{"slot":10},"value":"receivedSignature"}}}""");
+            var received = await reader.ReadAsync();
+
+            // Assert
+            received.Context!.Slot.Should().Be(10);
+            received.Value!.Kind.Should().Be(SignatureNotificationKind.Received);
+            received.Value.IsReceived.Should().BeTrue();
+            received.Value.IsFinal.Should().BeFalse();
+            reader.Completion.IsCompleted.Should().BeFalse();
+            client.RetainedCancellationRegistrationCount.Should().Be(1);
+
+            // Act
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"signatureNotification","params":{"subscription":43,"result":{"context":{"slot":11},"value":{"err":null}}}}""");
+            var final = await reader.ReadAsync();
+
+            // Assert
+            final.Context!.Slot.Should().Be(11);
+            final.Value!.Kind.Should().Be(SignatureNotificationKind.Processed);
+            final.Value.IsFinal.Should().BeTrue();
+            await reader.Completion.WaitAsync(TimeSpan.FromSeconds(1));
+            client.RetainedCancellationRegistrationCount.Should().Be(0);
+            fake.SentSnapshot().Should().NotContain(message => message.Contains("signatureUnsubscribe"));
+        }
+
+        [TestCase("\"unexpected\"")]
+        [TestCase("{}")]
+        [TestCase("7")]
+        [TestCase("null")]
+        public async Task MalformedUnionValue_FaultsOnlySubscription(string value)
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            var subscribe = client.SubscribeSignatureWithOptionsAsync(
+                "Sig111",
+                new SignatureSubscriptionOptions { EnableReceivedNotification = true });
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 44));
+            var reader = await subscribe;
+
+            // Act
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"signatureNotification","params":{"subscription":44,"result":{"context":{"slot":10},"value":__VALUE__}}}"""
+                    .Replace("__VALUE__", value));
+            var read = async () => await reader.ReadAsync();
+
+            // Assert
+            (await read.Should().ThrowAsync<ChannelClosedException>())
+                .Which.InnerException.Should().BeOfType<System.Text.Json.JsonException>();
+        }
+
+        [Test]
+        public async Task ExplicitFalse_RejectsUnexpectedReceivedEvent()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            var subscribe = client.SubscribeSignatureWithOptionsAsync(
+                "Sig111",
+                new SignatureSubscriptionOptions { EnableReceivedNotification = false });
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 46));
+            var reader = await subscribe;
+
+            // Act
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"signatureNotification","params":{"subscription":46,"result":{"context":{"slot":10},"value":"receivedSignature"}}}""");
+            var read = async () => await reader.ReadAsync();
+
+            // Assert
+            (await read.Should().ThrowAsync<ChannelClosedException>())
+                .Which.InnerException.Should().BeOfType<System.Text.Json.JsonException>();
+        }
+
+        [Test]
+        public async Task ScalarResult_FaultsOnlySignatureWhileOtherSubscriptionKeepsStreaming()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            var signatureSubscribe = client.SubscribeSignatureWithOptionsAsync(
+                "Sig111",
+                new SignatureSubscriptionOptions { EnableReceivedNotification = true });
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 47));
+            var signatureReader = await signatureSubscribe;
+
+            var logsSubscribe = client.SubscribeLogsAsync(PublicKey.Parse(SolanaProgramIds.TokenProgram));
+            await WaitUntil(() => fake.SentCount == 2);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[1]), subscriptionId: 48));
+            var logsReader = await logsSubscribe;
+
+            // Act
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"signatureNotification","params":{"subscription":47,"result":7}}""");
+            fake.PushFromServer(LogNotification(subscription: 48, signature: "still-live"));
+
+            // Assert
+            var signatureRead = async () => await signatureReader.ReadAsync();
+            (await signatureRead.Should().ThrowAsync<ChannelClosedException>())
+                .Which.InnerException.Should().BeOfType<System.Text.Json.JsonException>();
+            (await logsReader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1)))
+                .Value!.Signature.Should().Be("still-live");
+        }
+    }
+
+    [TestFixture]
     public sealed class SubscribeSignature
     {
+        [Test]
+        public async Task UnexpectedReceivedEvent_IsNotMistakenForFinalConfirmation()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            var subscribe = client.SubscribeSignatureAsync("Sig111");
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 49));
+            var reader = await subscribe;
+
+            // Act
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"signatureNotification","params":{"subscription":49,"result":{"context":{"slot":10},"value":"receivedSignature"}}}""");
+            var read = async () => await reader.ReadAsync();
+
+            // Assert
+            (await read.Should().ThrowAsync<ChannelClosedException>())
+                .Which.InnerException.Should().BeOfType<System.Text.Json.JsonException>();
+        }
+
         [Test]
         public async Task DeliversOneNotification_ThenCompletesWithoutReplayableState()
         {
@@ -1163,6 +1561,26 @@ public static class SolanaWsClientTests
     [TestFixture]
     public sealed class ConfirmSignature
     {
+        [Test]
+        public async Task UnexpectedReceivedEvent_DoesNotSatisfyCommitment()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            var confirm = client.ConfirmSignatureAsync("Sig111");
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 50));
+
+            // Act
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"signatureNotification","params":{"subscription":50,"result":{"context":{"slot":10},"value":"receivedSignature"}}}""");
+            var act = async () => await confirm;
+
+            // Assert
+            await act.Should().ThrowAsync<ChannelClosedException>();
+        }
+
         [Test]
         public async Task ReturnsResultWhenNotified()
         {
@@ -1271,6 +1689,127 @@ public static class SolanaWsClientTests
     }
 
     [TestFixture]
+    public sealed class SubscribeBlocksWithOptionsAsync
+    {
+        [Test]
+        public async Task AllFilter_SendsExactPinnedUnionBranch()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            using var cancellation = new CancellationTokenSource();
+
+            // Act
+            _ = client.SubscribeBlocksWithOptionsAsync(
+                BlockSubscriptionFilter.All,
+                new BlockSubscriptionOptions(),
+                cancellation.Token);
+
+            // Assert
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.SentSnapshot()[0].Should().Be(
+                """{"jsonrpc":"2.0","id":1,"method":"blockSubscribe","params":["all",{}]}""");
+            await cancellation.CancelAsync();
+        }
+
+        [Test]
+        public async Task ExactConfig_SendsPinnedJsonAndPreservesBlockBody()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            using var cancellation = new CancellationTokenSource();
+            var options = new BlockSubscriptionOptions
+            {
+                Commitment = Commitment.Finalized,
+                Encoding = RpcTransactionEncoding.Base64,
+                TransactionDetails = RpcTransactionDetails.Accounts,
+                ShowRewards = true,
+                MaxSupportedTransactionVersion = 1
+            };
+            var subscribe = client.SubscribeBlocksWithOptionsAsync(
+                BlockSubscriptionFilter.Mentions(PublicKey.Parse(SolanaProgramIds.TokenProgram)),
+                options,
+                cancellation.Token);
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.SentSnapshot()[0].Should().Be(
+                """{"jsonrpc":"2.0","id":1,"method":"blockSubscribe","params":[{"mentionsAccountOrProgram":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"},{"commitment":"finalized","encoding":"base64","transactionDetails":"accounts","showRewards":true,"maxSupportedTransactionVersion":1}]}""");
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 46));
+            var reader = await subscribe;
+
+            // Act
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"blockNotification","params":{"subscription":46,"result":{"context":{"slot":20},"value":{"slot":20,"err":null,"block":{"transactions":[{"opaque":9}],"rewards":[]}}}}}""");
+            var notification = await reader.ReadAsync();
+
+            // Assert
+            notification.Value!.Block!.Value.GetProperty("transactions")[0]
+                .GetProperty("opaque").GetInt32().Should().Be(9);
+            await cancellation.CancelAsync();
+        }
+
+        [Test]
+        public async Task MissingMandatoryBlockFields_FaultsOnlyBlockWhileSiblingKeepsStreaming()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            var blockSubscribe = client.SubscribeBlocksWithOptionsAsync(
+                BlockSubscriptionFilter.All,
+                new BlockSubscriptionOptions());
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 47));
+            var blockReader = await blockSubscribe;
+
+            var logsSubscribe = client.SubscribeLogsAsync(PublicKey.Parse(SolanaProgramIds.TokenProgram));
+            await WaitUntil(() => fake.SentCount == 2);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[1]), subscriptionId: 48));
+            var logsReader = await logsSubscribe;
+
+            // Act
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"blockNotification","params":{"subscription":47,"result":{"context":{"slot":21},"value":{}}}}""");
+            fake.PushFromServer(LogNotification(subscription: 48, signature: "live"));
+
+            // Assert
+            var blockRead = async () => await blockReader.ReadAsync();
+            (await blockRead.Should().ThrowAsync<ChannelClosedException>())
+                .Which.InnerException.Should().BeOfType<JsonException>();
+            (await logsReader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1)))
+                .Value!.Signature.Should().Be("live");
+        }
+    }
+
+    [TestFixture]
+    public sealed class SubscribeBlocksWithMaxVersionAsync
+    {
+        [Test]
+        public async Task ExplicitVersionOptIn_SendsVersionOne()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+
+            using var cts = new CancellationTokenSource();
+
+            // Act
+            _ = client.SubscribeBlocksWithMaxVersionAsync(
+                maxSupportedTransactionVersion: 1, cancellationToken: cts.Token);
+
+            // Assert
+            await WaitUntil(() => fake.Sent.Count > 0);
+            fake.Sent[0].Should().Contain("\"transactionDetails\":\"signatures\"");
+            fake.Sent[0].Should().Contain("\"maxSupportedTransactionVersion\":1");
+
+            await cts.CancelAsync();
+        }
+    }
+
+    [TestFixture]
     public sealed class SubscribeBlocks
     {
         [Test]
@@ -1331,6 +1870,32 @@ public static class SolanaWsClientTests
     }
 
     [TestFixture]
+    public sealed class SubscribeParsedBlocksWithMaxVersionAsync
+    {
+        [Test]
+        public async Task ExplicitVersionOptIn_SendsVersionOne()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+
+            using var cts = new CancellationTokenSource();
+
+            // Act
+            _ = client.SubscribeParsedBlocksWithMaxVersionAsync(
+                maxSupportedTransactionVersion: 1, cancellationToken: cts.Token);
+
+            // Assert
+            await WaitUntil(() => fake.Sent.Count > 0);
+            fake.Sent[0].Should().Contain("\"encoding\":\"jsonParsed\"");
+            fake.Sent[0].Should().Contain("\"maxSupportedTransactionVersion\":1");
+
+            await cts.CancelAsync();
+        }
+    }
+
+    [TestFixture]
     public sealed class SubscribeParsedBlocks
     {
         [Test]
@@ -1376,6 +1941,29 @@ public static class SolanaWsClientTests
     [TestFixture]
     public sealed class SubscribeParsedAccount
     {
+        [Test]
+        public async Task NullAccountValue_FaultsSubscription()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new Uri("wss://localhost"));
+            var subscribe = client.SubscribeParsedAccountAsync(
+                PublicKey.Parse("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"));
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 12));
+            var reader = await subscribe;
+
+            // Act
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"accountNotification","params":{"subscription":12,"result":{"context":{"slot":250},"value":null}}}""");
+            var read = async () => await reader.ReadAsync();
+
+            // Assert
+            (await read.Should().ThrowAsync<ChannelClosedException>())
+                .Which.InnerException.Should().BeOfType<System.Text.Json.JsonException>();
+        }
+
         [Test]
         public async Task DeliversDecodedTokenAccount()
         {

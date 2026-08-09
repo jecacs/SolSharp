@@ -48,11 +48,9 @@ public static class SolanaUnitsTests
         }
 
         [Test]
-        public void ExactUlongBoundary_Converts()
-        {
+        public void ExactUlongBoundary_Converts() =>
             // 18_446_744_073.709551615 SOL is exactly ulong.MaxValue lamports.
             SolanaUnits.SolToLamports(18_446_744_073.709551615m).Should().Be(ulong.MaxValue);
-        }
     }
 
     [TestFixture]

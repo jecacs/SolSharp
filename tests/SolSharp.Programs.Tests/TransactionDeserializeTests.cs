@@ -34,6 +34,7 @@ public static class TransactionDeserializeTests
             // Assert
             transaction.Serialize().Should().Equal(bytes);
             transaction.Message.Should().BeOfType<Message>();
+            transaction.Version.Should().Be(TransactionVersion.Legacy);
             transaction.Message.RequiredSignatures.Should().Be(1);
             transaction.Message.AccountKeys.Should().HaveCount(3);
         }
@@ -50,6 +51,7 @@ public static class TransactionDeserializeTests
             // Assert
             transaction.Serialize().Should().Equal(bytes);
             transaction.Message.Should().BeOfType<MessageV0>();
+            transaction.Version.Should().Be(TransactionVersion.V0);
 
             var message = (MessageV0)transaction.Message;
             message.AddressTableLookups.Should().ContainSingle();
@@ -85,16 +87,17 @@ public static class TransactionDeserializeTests
         }
 
         [Test]
-        public void ImpossibleSignatureCount_ThrowsBeforeAllocatingDeclaredArray()
+        public void HighBitDiscriminator_IsRejectedBeforeCompactSignatureDecoding()
         {
-            // Arrange: max compact-u16 signature count with no signatures or message.
+            // Arrange: SIMD-0385 reserves a top-bit discriminator for message-first transactions.
+            // Only 0x81 is V1; 0xFF must not be interpreted as a multi-byte compact signature count.
             byte[] data = [0xff, 0xff, 0x03];
 
             // Act
             Action act = () => Transaction.Deserialize(data);
 
             // Assert
-            act.Should().Throw<FormatException>().WithMessage("*declares 65535 signature slot(s)*");
+            act.Should().Throw<FormatException>().WithMessage("*Invalid transaction discriminator 0xFF*");
         }
 
         [Test]

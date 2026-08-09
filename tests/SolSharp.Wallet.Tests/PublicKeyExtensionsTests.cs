@@ -28,22 +28,16 @@ public static class PublicKeyExtensionsTests
     public sealed class Verify
     {
         [Test]
-        public void Rfc8032Test1_EmptyMessage_ReturnsTrue()
-        {
-            Key(Test1PublicKey).Verify([], Hex(Test1Signature)).Should().BeTrue();
-        }
+        public void Rfc8032Test1_EmptyMessage_ReturnsTrue() => Key(Test1PublicKey).Verify([], Hex(Test1Signature)).Should().BeTrue();
 
         [Test]
-        public void Rfc8032Test2_ReturnsTrue()
-        {
-            Key(Test2PublicKey).Verify(Hex(Test2Message), Hex(Test2Signature)).Should().BeTrue();
-        }
+        public void TypedSignature_Rfc8032Test1_ReturnsTrue() => Key(Test1PublicKey).Verify([], new Signature(Hex(Test1Signature))).Should().BeTrue();
 
         [Test]
-        public void TamperedMessage_ReturnsFalse()
-        {
-            Key(Test2PublicKey).Verify(Hex("73"), Hex(Test2Signature)).Should().BeFalse();
-        }
+        public void Rfc8032Test2_ReturnsTrue() => Key(Test2PublicKey).Verify(Hex(Test2Message), Hex(Test2Signature)).Should().BeTrue();
+
+        [Test]
+        public void TamperedMessage_ReturnsFalse() => Key(Test2PublicKey).Verify(Hex("73"), Hex(Test2Signature)).Should().BeFalse();
 
         [Test]
         public void TamperedSignature_ReturnsFalse()
@@ -57,18 +51,12 @@ public static class PublicKeyExtensionsTests
         }
 
         [Test]
-        public void WrongKey_ReturnsFalse()
-        {
-            Key(Test1PublicKey).Verify(Hex(Test2Message), Hex(Test2Signature)).Should().BeFalse();
-        }
+        public void WrongKey_ReturnsFalse() => Key(Test1PublicKey).Verify(Hex(Test2Message), Hex(Test2Signature)).Should().BeFalse();
 
         [TestCase(0)]
         [TestCase(63)]
         [TestCase(65)]
-        public void WrongLengthSignature_ReturnsFalse(int length)
-        {
-            Key(Test1PublicKey).Verify([], new byte[length]).Should().BeFalse();
-        }
+        public void WrongLengthSignature_ReturnsFalse(int length) => Key(Test1PublicKey).Verify([], new byte[length]).Should().BeFalse();
 
         // C2SP CCTV Ed25519 test 5, also pinned by Agave's strict-verification regression test:
         // R is a low-order point, so accepting this signature would make verification malleable.

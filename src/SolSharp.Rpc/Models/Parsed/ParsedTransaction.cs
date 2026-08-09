@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace SolSharp.Rpc.Models.Parsed;
@@ -35,6 +34,6 @@ public sealed record ParsedTransaction
     /// </summary>
     public uint? TransactionIndex { get; init; }
 
-    /// <summary>The JSON transaction version: <c>"legacy"</c> or a numeric version such as <c>0</c>.</summary>
-    public JsonElement? Version { get; init; }
+    /// <summary>The wire transaction version, or <c>null</c> when the node omitted it.</summary>
+    public RpcTransactionVersion? Version { get; init; }
 }

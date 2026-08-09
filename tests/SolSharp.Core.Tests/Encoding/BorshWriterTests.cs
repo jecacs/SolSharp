@@ -113,7 +113,7 @@ public static class BorshWriterTests
             var writer = new BorshWriter();
 
             // Act
-            Action act = () => writer.WriteLength(-1);
+            var act = () => writer.WriteLength(-1);
 
             // Assert
             act.Should().Throw<ArgumentOutOfRangeException>();
@@ -144,7 +144,7 @@ public static class BorshWriterTests
             var writer = new BorshWriter();
 
             // Act
-            Action act = () => writer.WriteString("\ud800");
+            var act = () => writer.WriteString("\ud800");
 
             // Assert
             act.Should().Throw<System.Text.EncoderFallbackException>();

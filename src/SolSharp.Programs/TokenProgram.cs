@@ -10,7 +10,7 @@ namespace SolSharp.Programs;
 /// <c>tokenProgram</c> so the same instructions can target Token-2022 (the layouts are shared); it defaults
 /// to the classic SPL Token program.
 /// </summary>
-public static class TokenProgram
+public static partial class TokenProgram
 {
     private const int MaxMultisigSigners = 11;
 

@@ -13,6 +13,9 @@ namespace SolSharp.Core.Converters;
 /// </summary>
 [JsonSerializable(typeof(Commitment))]
 [JsonSerializable(typeof(Commitment?))]
+[JsonSerializable(typeof(Hash))]
+[JsonSerializable(typeof(Hash?))]
+[JsonSerializable(typeof(Hash[]))]
 [JsonSerializable(typeof(PublicKey))]
 [JsonSerializable(typeof(PublicKey?))]
 [JsonSerializable(typeof(PublicKey[]))]

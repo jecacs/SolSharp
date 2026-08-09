@@ -91,6 +91,26 @@ public static class SolanaRpcClientAccountTests
 
             await act.Should().ThrowAsync<JsonException>();
         }
+
+        [TestCase("\"oops\"")]
+        [TestCase("true")]
+        [TestCase("{}")]
+        [TestCase("-1")]
+        [TestCase("18446744073709551616")]
+        public async Task PresentSpaceOutsideOptionalU64_ThrowsJsonException(string space)
+        {
+            // Arrange
+            var value =
+                """{"data":["AQID","base64"],"executable":false,"lamports":1,"owner":"11111111111111111111111111111111","rentEpoch":0,"space":__SPACE__}"""
+                    .Replace("__SPACE__", space, StringComparison.Ordinal);
+            var (client, _) = Make(ContextEnvelope(value));
+
+            // Act
+            var act = async () => await client.GetAccountInfoAsync(PublicKey.Parse(OwnerBase58));
+
+            // Assert
+            await act.Should().ThrowAsync<JsonException>();
+        }
     }
 
     [TestFixture]

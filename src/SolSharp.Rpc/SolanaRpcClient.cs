@@ -78,7 +78,26 @@ public class SolanaRpcClient
             RpcRequests.GetLatestBlockhash(commitment),
             cancellationToken);
 
-        return result.Value!;
+        return RequireContextValue(result);
+    }
+
+    /// <summary>Returns the latest blockhash with explicit commitment and minimum-context-slot options.</summary>
+    /// <param name="options">The context options sent to the node.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The blockhash and the last block height at which it stays valid.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<LatestBlockhash> GetLatestBlockhashWithOptionsAsync(
+        RpcContextOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var result = await SendAsync<RpcContextValue<LatestBlockhash>>(
+            RpcRequests.GetLatestBlockhash(options.Commitment, options.MinContextSlot), cancellationToken);
+
+        return RequireContextValue(result);
     }
 
     /// <summary>
@@ -104,6 +123,27 @@ public class SolanaRpcClient
         return result.Value;
     }
 
+    /// <summary>Returns an account balance with explicit commitment and minimum-context-slot options.</summary>
+    /// <param name="account">The account to query.</param>
+    /// <param name="options">The context options sent to the node.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The balance in lamports.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<ulong> GetBalanceWithOptionsAsync(
+        PublicKey account,
+        RpcContextOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var result = await SendAsync<RpcContextValue<ulong>>(
+            RpcRequests.GetBalance(account, options.Commitment, options.MinContextSlot), cancellationToken);
+
+        return result.Value;
+    }
+
     /// <summary>
     /// Returns the slot that has reached the given commitment level.
     /// See <see href="https://solana.com/docs/rpc/http/getslot">getSlot</see>.
@@ -118,6 +158,22 @@ public class SolanaRpcClient
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
         => SendAsync<ulong>(RpcRequests.GetSlot(commitment), cancellationToken);
+
+    /// <summary>Returns the current slot with explicit commitment and minimum-context-slot options.</summary>
+    /// <param name="options">The context options sent to the node.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The current slot.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<ulong> GetSlotWithOptionsAsync(
+        RpcContextOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return SendAsync<ulong>(RpcRequests.GetSlot(options.Commitment, options.MinContextSlot), cancellationToken);
+    }
 
     /// <summary>
     /// Returns whether the node reports itself healthy ("ok").
@@ -161,6 +217,23 @@ public class SolanaRpcClient
         CancellationToken cancellationToken = default)
         => SendAsync<ulong>(RpcRequests.GetBlockHeight(commitment), cancellationToken);
 
+    /// <summary>Returns the current block height with explicit commitment and minimum-context-slot options.</summary>
+    /// <param name="options">The context options sent to the node.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The current block height.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<ulong> GetBlockHeightWithOptionsAsync(
+        RpcContextOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return SendAsync<ulong>(
+            RpcRequests.GetBlockHeight(options.Commitment, options.MinContextSlot), cancellationToken);
+    }
+
     /// <summary>
     /// Returns the number of transactions the cluster has processed.
     /// See <see href="https://solana.com/docs/rpc/http/gettransactioncount">getTransactionCount</see>.
@@ -175,6 +248,23 @@ public class SolanaRpcClient
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
         => SendAsync<ulong>(RpcRequests.GetTransactionCount(commitment), cancellationToken);
+
+    /// <summary>Returns the transaction count with explicit commitment and minimum-context-slot options.</summary>
+    /// <param name="options">The context options sent to the node.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The total transaction count.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<ulong> GetTransactionCountWithOptionsAsync(
+        RpcContextOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return SendAsync<ulong>(
+            RpcRequests.GetTransactionCount(options.Commitment, options.MinContextSlot), cancellationToken);
+    }
 
     /// <summary>
     /// Returns the token balance of an SPL token account.
@@ -195,7 +285,7 @@ public class SolanaRpcClient
         var result = await SendAsync<RpcContextValue<TokenAmount>>(
             RpcRequests.GetTokenAccountBalance(account, commitment), cancellationToken);
 
-        return result.Value!;
+        return RequireContextValue(result);
     }
 
     /// <summary>
@@ -217,7 +307,7 @@ public class SolanaRpcClient
         var result = await SendAsync<RpcContextValue<TokenAmount>>(
             RpcRequests.GetTokenSupply(mint, commitment), cancellationToken);
 
-        return result.Value!;
+        return RequireContextValue(result);
     }
 
     /// <summary>
@@ -271,12 +361,13 @@ public class SolanaRpcClient
     /// <param name="transaction">The transaction's serialized wire bytes; base64-encoded for the request.</param>
     /// <param name="options">
     /// Simulation options including signature verification, blockhash replacement, commitment, requested
-    /// post-simulation accounts, and parsed inner instructions; client defaults are used when <c>null</c>.
+    /// post-simulation accounts and their encoding, and parsed inner instructions; client defaults are used when <c>null</c>.
     /// </param>
     /// <param name="cancellationToken">A token to cancel the request.</param>
     /// <returns>The simulation result.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="transaction"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentException"><see cref="SimulateTransactionOptions.SigVerify"/> and <see cref="SimulateTransactionOptions.ReplaceRecentBlockhash"/> are both enabled.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Post-simulation accounts were requested and <see cref="SimulateTransactionOptions.AccountsEncoding"/> is unsupported by Agave's simulation account path.</exception>
     /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
     /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
     /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
@@ -290,6 +381,14 @@ public class SolanaRpcClient
         if (options.SigVerify && options.ReplaceRecentBlockhash)
             throw new ArgumentException(
                 "Signature verification cannot be combined with recent-blockhash replacement.", nameof(options));
+        if (options.Accounts is not null && options.AccountsEncoding is not (
+            RpcAccountEncoding.Base64 or RpcAccountEncoding.JsonParsed or RpcAccountEncoding.Base64Zstd))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(options),
+                options.AccountsEncoding,
+                "Simulation accounts support only base64, jsonParsed, and base64+zstd encoding.");
+        }
 
         var encoded = Convert.ToBase64String(transaction);
         var result = await SendAsync<RpcContextValue<SimulateTransactionResult>>(
@@ -300,10 +399,11 @@ public class SolanaRpcClient
                 options.Commitment,
                 options.MinContextSlot,
                 options.Accounts,
+                options.AccountsEncoding,
                 options.InnerInstructions),
             cancellationToken);
 
-        return result.Value!;
+        return RequireContextValue(result);
     }
 
     /// <summary>
@@ -325,10 +425,82 @@ public class SolanaRpcClient
         DataSlice? dataSlice = null,
         CancellationToken cancellationToken = default)
     {
-        var result = await SendAsync<RpcContextValue<AccountInfo>>(
+        var result = await SendAsync<RpcContextValue<AccountInfo?>>(
             RpcRequests.GetAccountInfo(account, commitment, dataSlice), cancellationToken);
 
         return result.Value;
+    }
+
+    /// <summary>
+    /// Returns an account with the exact upstream encoding, slicing, commitment, and minimum-context-slot
+    /// configuration. The result preserves the node's legacy, encoded-tuple, or parsed account-data branch.
+    /// </summary>
+    /// <param name="account">The account to query.</param>
+    /// <param name="options">The exact upstream account configuration.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The account, or <c>null</c> if it does not exist.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<RpcAccountInfo?> GetAccountInfoWithOptionsAsync(
+        PublicKey account,
+        RpcAccountInfoOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await GetAccountInfoWithOptionsAndContextAsync(account, options, cancellationToken);
+        return result.Value;
+    }
+
+    /// <summary>
+    /// Returns an exact-encoding account response together with the slot context used by the node.
+    /// </summary>
+    /// <param name="account">The account to query.</param>
+    /// <param name="options">The exact upstream account configuration.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The context-wrapped account; its value is <c>null</c> when the account does not exist.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<RpcContextValue<RpcAccountInfo?>> GetAccountInfoWithOptionsAndContextAsync(
+        PublicKey account,
+        RpcAccountInfoOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return SendAsync<RpcContextValue<RpcAccountInfo?>>(
+            RpcRequests.GetAccountInfo(
+                account,
+                options.Commitment,
+                options.DataSlice,
+                options.MinContextSlot,
+                options.Encoding),
+            cancellationToken);
+    }
+
+    /// <summary>Returns an account together with the slot context used by the node.</summary>
+    /// <param name="account">The account to query.</param>
+    /// <param name="options">Commitment, data-slice, and minimum-context-slot options.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The context-wrapped account; its value is <c>null</c> when the account does not exist.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<RpcContextValue<AccountInfo?>> GetAccountInfoWithContextAsync(
+        PublicKey account,
+        GetAccountInfoOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return SendAsync<RpcContextValue<AccountInfo?>>(
+            RpcRequests.GetAccountInfo(
+                account,
+                options.Commitment,
+                options.DataSlice,
+                options.MinContextSlot),
+            cancellationToken);
     }
 
     /// <summary>
@@ -354,7 +526,85 @@ public class SolanaRpcClient
         var result = await SendAsync<RpcContextValue<AccountInfo?[]>>(
             RpcRequests.GetMultipleAccounts(accounts, commitment), cancellationToken);
 
-        return result.Value!;
+        return RequireContextValue(result);
+    }
+
+    /// <summary>
+    /// Returns multiple accounts with the exact upstream account configuration while preserving every account-data
+    /// encoding branch and missing entries.
+    /// </summary>
+    /// <param name="accounts">The accounts to query.</param>
+    /// <param name="options">The exact upstream account configuration.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>One account entry per requested address, preserving missing entries as <c>null</c>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="accounts"/> or <paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<IReadOnlyList<RpcAccountInfo?>> GetMultipleAccountsWithOptionsAsync(
+        IReadOnlyList<PublicKey> accounts,
+        RpcAccountInfoOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await GetMultipleAccountsWithOptionsAndContextAsync(accounts, options, cancellationToken);
+        return RequireContextValue(result);
+    }
+
+    /// <summary>
+    /// Returns exact-encoding accounts together with the slot context used by the node.
+    /// </summary>
+    /// <param name="accounts">The accounts to query.</param>
+    /// <param name="options">The exact upstream account configuration.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The context-wrapped account array, preserving missing entries as <c>null</c>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="accounts"/> or <paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<RpcContextValue<RpcAccountInfo?[]>> GetMultipleAccountsWithOptionsAndContextAsync(
+        IReadOnlyList<PublicKey> accounts,
+        RpcAccountInfoOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(accounts);
+        ArgumentNullException.ThrowIfNull(options);
+        var result = await SendAsync<RpcContextValue<RpcAccountInfo?[]>>(
+            RpcRequests.GetMultipleAccounts(
+                accounts,
+                options.Commitment,
+                options.DataSlice,
+                options.MinContextSlot,
+                options.Encoding),
+            cancellationToken);
+        RequireContextValue(result);
+        return result;
+    }
+
+    /// <summary>Returns multiple accounts together with the slot context used by the node.</summary>
+    /// <param name="accounts">The accounts to query.</param>
+    /// <param name="options">Commitment, data-slice, and minimum-context-slot options.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The context-wrapped account array.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="accounts"/> or <paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<RpcContextValue<AccountInfo?[]>> GetMultipleAccountsWithContextAsync(
+        IReadOnlyList<PublicKey> accounts,
+        GetAccountInfoOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(accounts);
+        ArgumentNullException.ThrowIfNull(options);
+        var result = await SendAsync<RpcContextValue<AccountInfo?[]>>(
+            RpcRequests.GetMultipleAccounts(
+                accounts,
+                options.Commitment,
+                options.DataSlice,
+                options.MinContextSlot),
+            cancellationToken);
+        RequireContextValue(result);
+        return result;
     }
 
     /// <summary>
@@ -374,9 +624,11 @@ public class SolanaRpcClient
         CancellationToken cancellationToken = default)
     {
         options ??= new GetSignaturesForAddressOptions();
-        return await SendAsync<SignatureInfo[]>(
+        var result = await SendAsync<SignatureInfo[]>(
             RpcRequests.GetSignaturesForAddress(address, options.Limit, options.Before, options.Until, options.Commitment, options.MinContextSlot),
             cancellationToken);
+
+        return RequireNonNullEntries(result, "signature list");
     }
 
     /// <summary>
@@ -398,14 +650,129 @@ public class SolanaRpcClient
         CancellationToken cancellationToken = default)
     {
         options ??= new GetProgramAccountsOptions();
-        return await SendAsync<ProgramAccount[]>(
-            RpcRequests.GetProgramAccounts(programId, options.Commitment, options.Filters, options.DataSlice, options.MinContextSlot),
+        var request = RpcRequests.GetProgramAccounts(
+            programId,
+            options.Commitment,
+            options.Filters,
+            options.DataSlice,
+            options.MinContextSlot,
+            options.WithContext,
+            options.SortResults);
+
+        if (options.WithContext is true)
+        {
+            var contextual = await SendAsync<RpcContextValue<ProgramAccount[]>>(request, cancellationToken);
+            return RequireNonNullKeyedAccounts(RequireContextValue(contextual));
+        }
+
+        return RequireNonNullKeyedAccounts(await SendAsync<ProgramAccount[]>(request, cancellationToken));
+    }
+
+    /// <summary>
+    /// Returns program-owned accounts with the exact upstream encoding, filters, slicing, context-shape, and
+    /// sorting configuration. Each account preserves its legacy, encoded-tuple, or parsed data branch.
+    /// </summary>
+    /// <param name="programId">The owning program to enumerate accounts for.</param>
+    /// <param name="options">The exact upstream program-account configuration.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The matching accounts; the context wrapper is unwrapped when requested.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<IReadOnlyList<RpcProgramAccount>> GetProgramAccountsWithOptionsAsync(
+        PublicKey programId,
+        RpcProgramAccountsOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var request = RpcRequests.GetProgramAccounts(
+            programId,
+            options.Commitment,
+            options.Filters,
+            options.DataSlice,
+            options.MinContextSlot,
+            options.WithContext,
+            options.SortResults,
+            options.Encoding);
+
+        if (options.WithContext is true)
+        {
+            var contextual = await GetProgramAccountsWithOptionsAndContextAsync(
+                programId, options, cancellationToken);
+            return RequireContextValue(contextual);
+        }
+
+        return RequireNonNullKeyedAccounts(
+            await SendAsync<RpcProgramAccount[]>(request, cancellationToken));
+    }
+
+    /// <summary>
+    /// Returns exact-encoding program accounts in the upstream <c>{ context, value }</c> response shape.
+    /// </summary>
+    /// <param name="programId">The owning program to enumerate accounts for.</param>
+    /// <param name="options">The exact upstream program-account configuration; context wrapping is forced.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The matching accounts together with the slot context used by the node.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<RpcContextValue<RpcProgramAccount[]>> GetProgramAccountsWithOptionsAndContextAsync(
+        PublicKey programId,
+        RpcProgramAccountsOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var result = await SendAsync<RpcContextValue<RpcProgramAccount[]>>(
+            RpcRequests.GetProgramAccounts(
+                programId,
+                options.Commitment,
+                options.Filters,
+                options.DataSlice,
+                options.MinContextSlot,
+                withContext: true,
+                options.SortResults,
+                options.Encoding),
             cancellationToken);
+        RequireNonNullKeyedAccounts(result.Value);
+        return result;
+    }
+
+    /// <summary>
+    /// Returns every account owned by a program in the upstream <c>{ context, value }</c> shape.
+    /// </summary>
+    /// <param name="programId">The owning program to enumerate accounts for.</param>
+    /// <param name="options">Filters, account configuration, and sorting options; node defaults are used when <c>null</c>.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The matching accounts together with the slot context used by the node.</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<RpcContextValue<ProgramAccount[]>> GetProgramAccountsWithContextAsync(
+        PublicKey programId,
+        GetProgramAccountsOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        options ??= new GetProgramAccountsOptions();
+        var result = await SendAsync<RpcContextValue<ProgramAccount[]>>(
+            RpcRequests.GetProgramAccounts(
+                programId,
+                options.Commitment,
+                options.Filters,
+                options.DataSlice,
+                options.MinContextSlot,
+                withContext: true,
+                options.SortResults),
+            cancellationToken);
+        RequireNonNullKeyedAccounts(result.Value);
+        return result;
     }
 
     /// <summary>
     /// Fetches and decodes an on-chain Address Lookup Table account. Returns <c>null</c> if nothing exists
-    /// at <paramref name="tableAddress"/> or the account is not an initialized lookup table.
+    /// at <paramref name="tableAddress"/> or the account is not an initialized lookup table. The returned
+    /// <see cref="AddressLookupTable.Addresses"/> excludes addresses appended in the response's context slot.
     /// See <see href="https://solana.com/docs/rpc/http/getaccountinfo">getAccountInfo</see>.
     /// </summary>
     /// <param name="tableAddress">The lookup table account's address.</param>
@@ -420,10 +787,17 @@ public class SolanaRpcClient
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
     {
-        var account = await GetAccountInfoAsync(tableAddress, commitment, cancellationToken: cancellationToken);
-        return account is { Executable: false } && account.Owner == AddressLookupTableProgramOwner
-            ? AddressLookupTable.Decode(account.Data)
-            : null;
+        var response = await GetAccountInfoWithContextAsync(
+            tableAddress,
+            new GetAccountInfoOptions { Commitment = commitment },
+            cancellationToken);
+        var account = response.Value;
+        if (account is not { Executable: false } || account.Owner != AddressLookupTableProgramOwner)
+            return null;
+
+        return response.Context is { } context
+            ? AddressLookupTable.Decode(account.Data, context.Slot)
+            : AddressLookupTable.Decode(account.Data);
     }
 
     /// <summary>
@@ -440,6 +814,23 @@ public class SolanaRpcClient
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
         => await SendAsync<EpochInfo>(RpcRequests.GetEpochInfo(commitment), cancellationToken);
+
+    /// <summary>Returns epoch information with explicit commitment and minimum-context-slot options.</summary>
+    /// <param name="options">The context options sent to the node.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The current epoch information.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<EpochInfo> GetEpochInfoWithOptionsAsync(
+        RpcContextOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return SendAsync<EpochInfo>(
+            RpcRequests.GetEpochInfo(options.Commitment, options.MinContextSlot), cancellationToken);
+    }
 
     /// <summary>
     /// Returns whether a blockhash is still valid for use as a transaction's recent blockhash.
@@ -458,6 +849,27 @@ public class SolanaRpcClient
         CancellationToken cancellationToken = default)
     {
         var result = await SendAsync<RpcContextValue<bool>>(RpcRequests.IsBlockhashValid(blockhash, commitment), cancellationToken);
+        return result.Value;
+    }
+
+    /// <summary>Checks blockhash validity with explicit commitment and minimum-context-slot options.</summary>
+    /// <param name="blockhash">The blockhash (base58) to check.</param>
+    /// <param name="options">The context options sent to the node.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns><c>true</c> if the blockhash is still valid.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<bool> IsBlockhashValidWithOptionsAsync(
+        string blockhash,
+        RpcContextOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var result = await SendAsync<RpcContextValue<bool>>(
+            RpcRequests.IsBlockhashValid(blockhash, options.Commitment, options.MinContextSlot), cancellationToken);
+
         return result.Value;
     }
 
@@ -485,6 +897,30 @@ public class SolanaRpcClient
         return result.Value;
     }
 
+    /// <summary>Returns a message fee with explicit commitment and minimum-context-slot options.</summary>
+    /// <param name="message">The message's serialized wire bytes.</param>
+    /// <param name="options">The context options sent to the node.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The fee in lamports, or <c>null</c> if the recent blockhash expired.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="message"/> or <paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<ulong?> GetFeeForMessageWithOptionsAsync(
+        byte[] message,
+        RpcContextOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        ArgumentNullException.ThrowIfNull(options);
+
+        var encoded = Convert.ToBase64String(message);
+        var result = await SendAsync<RpcContextValue<ulong?>>(
+            RpcRequests.GetFeeForMessage(encoded, options.Commitment, options.MinContextSlot), cancellationToken);
+
+        return result.Value;
+    }
+
     /// <summary>
     /// Requests an airdrop of lamports to an account (test clusters only).
     /// See <see href="https://solana.com/docs/rpc/http/requestairdrop">requestAirdrop</see>.
@@ -503,6 +939,27 @@ public class SolanaRpcClient
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
         => SendAsync<string>(RpcRequests.RequestAirdrop(account, lamports, commitment), cancellationToken);
+
+    /// <summary>Requests an airdrop with an optional caller-selected recent blockhash.</summary>
+    /// <param name="account">The account to fund.</param>
+    /// <param name="lamports">The amount to airdrop, in lamports.</param>
+    /// <param name="options">Recent-blockhash and commitment options.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The airdrop transaction signature (base58).</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<string> RequestAirdropWithOptionsAsync(
+        PublicKey account,
+        ulong lamports,
+        RequestAirdropOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return SendAsync<string>(
+            RpcRequests.RequestAirdrop(account, lamports, options.Commitment, options.RecentBlockhash), cancellationToken);
+    }
 
     /// <summary>
     /// Returns the SPL token accounts owned by <paramref name="owner"/> for a specific <paramref name="mint"/>.
@@ -524,9 +981,122 @@ public class SolanaRpcClient
         CancellationToken cancellationToken = default)
     {
         var result = await SendAsync<RpcContextValue<ProgramAccount[]>>(
-            RpcRequests.GetTokenAccountsByOwner(owner, mint, commitment), cancellationToken);
+            RpcRequests.GetTokenAccountsByOwner(
+                owner,
+                TokenAccountsFilter.ByMint(mint),
+                commitment),
+            cancellationToken);
 
-        return result.Value!;
+        return RequireNonNullKeyedAccounts(RequireContextValue(result));
+    }
+
+    /// <summary>
+    /// Returns token accounts owned by an address, filtered by either mint or SPL Token program.
+    /// </summary>
+    /// <param name="owner">The account that owns the token accounts.</param>
+    /// <param name="filter">The mutually exclusive mint or token-program filter.</param>
+    /// <param name="options">Base64 slicing, commitment, and minimum-context-slot options; node defaults when <c>null</c>.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The matching token accounts.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="filter"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<IReadOnlyList<ProgramAccount>> GetTokenAccountsByOwnerWithFilterAsync(
+        PublicKey owner,
+        TokenAccountsFilter filter,
+        GetAccountInfoOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await GetTokenAccountsByOwnerWithContextAsync(owner, filter, options, cancellationToken);
+        return RequireNonNullKeyedAccounts(RequireContextValue(result));
+    }
+
+    /// <summary>
+    /// Returns filtered token accounts with the exact upstream account encoding and read configuration.
+    /// </summary>
+    /// <param name="owner">The account that owns the token accounts.</param>
+    /// <param name="filter">The mutually exclusive mint or token-program filter.</param>
+    /// <param name="options">The exact upstream account configuration.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The matching token accounts with exact account-data branches.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="filter"/> or <paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<IReadOnlyList<RpcProgramAccount>> GetTokenAccountsByOwnerWithOptionsAsync(
+        PublicKey owner,
+        TokenAccountsFilter filter,
+        RpcAccountInfoOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await GetTokenAccountsByOwnerWithOptionsAndContextAsync(
+            owner, filter, options, cancellationToken);
+
+        return RequireContextValue(result);
+    }
+
+    /// <summary>
+    /// Returns exact-encoding filtered token accounts together with the slot context used by the node.
+    /// </summary>
+    /// <param name="owner">The account that owns the token accounts.</param>
+    /// <param name="filter">The mutually exclusive mint or token-program filter.</param>
+    /// <param name="options">The exact upstream account configuration.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The context-wrapped matching token accounts.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="filter"/> or <paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<RpcContextValue<RpcProgramAccount[]>> GetTokenAccountsByOwnerWithOptionsAndContextAsync(
+        PublicKey owner,
+        TokenAccountsFilter filter,
+        RpcAccountInfoOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        ArgumentNullException.ThrowIfNull(options);
+        var result = await SendAsync<RpcContextValue<RpcProgramAccount[]>>(
+            RpcRequests.GetTokenAccountsByOwner(
+                owner,
+                filter,
+                options.Commitment,
+                options.DataSlice,
+                options.MinContextSlot,
+                options.Encoding),
+            cancellationToken);
+        RequireNonNullKeyedAccounts(result.Value);
+        return result;
+    }
+
+    /// <summary>Returns filtered token accounts owned by an address together with their slot context.</summary>
+    /// <param name="owner">The account that owns the token accounts.</param>
+    /// <param name="filter">The mutually exclusive mint or token-program filter.</param>
+    /// <param name="options">Base64 slicing, commitment, and minimum-context-slot options; node defaults when <c>null</c>.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The context-wrapped matching token accounts.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="filter"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<RpcContextValue<ProgramAccount[]>> GetTokenAccountsByOwnerWithContextAsync(
+        PublicKey owner,
+        TokenAccountsFilter filter,
+        GetAccountInfoOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        options ??= new GetAccountInfoOptions();
+        var result = await SendAsync<RpcContextValue<ProgramAccount[]>>(
+            RpcRequests.GetTokenAccountsByOwner(
+                owner,
+                filter,
+                options.Commitment,
+                options.DataSlice,
+                options.MinContextSlot),
+            cancellationToken);
+        RequireNonNullKeyedAccounts(result.Value);
+        return result;
     }
 
     /// <summary>
@@ -542,11 +1112,14 @@ public class SolanaRpcClient
     public async Task<IReadOnlyList<PrioritizationFee>> GetRecentPrioritizationFeesAsync(
         IReadOnlyList<PublicKey>? accounts = null,
         CancellationToken cancellationToken = default)
-        => await SendAsync<PrioritizationFee[]>(RpcRequests.GetRecentPrioritizationFees(accounts ?? []), cancellationToken);
+        => RequireNonNullEntries(
+            await SendAsync<PrioritizationFee[]>(RpcRequests.GetRecentPrioritizationFees(accounts ?? []), cancellationToken),
+            "prioritization-fee list");
 
     /// <summary>
     /// Returns a confirmed transaction by signature, or <c>null</c> if the cluster has not seen it. Supports
-    /// legacy and versioned-v0 transactions. See
+    /// legacy and versioned-v0 transactions. Use <see cref="GetTransactionWithMaxVersionAsync"/> to opt into
+    /// a newer numeric version. See
     /// <see href="https://solana.com/docs/rpc/http/gettransaction">getTransaction</see>.
     /// </summary>
     /// <param name="signature">The transaction signature (base58).</param>
@@ -560,12 +1133,12 @@ public class SolanaRpcClient
         string signature,
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
-        => SendAsync<TransactionResponse?>(RpcRequests.GetTransaction(signature, commitment, 0), cancellationToken);
+        => SendNullableAsync<TransactionResponse?>(RpcRequests.GetTransaction(signature, commitment, 0), cancellationToken);
 
     /// <summary>
     /// Returns a confirmed transaction while explicitly opting into a newer transaction version. The
-    /// transaction remains opaque wire bytes on <see cref="TransactionResponse.Transaction"/>; callers must
-    /// only advertise versions whose bytes they can handle.
+    /// transaction is returned as wire bytes on <see cref="TransactionResponse.Transaction"/>; callers must
+    /// only advertise versions whose wire format they can handle.
     /// </summary>
     /// <param name="signature">The transaction signature (base58).</param>
     /// <param name="maxSupportedTransactionVersion">
@@ -583,8 +1156,36 @@ public class SolanaRpcClient
         byte maxSupportedTransactionVersion,
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
-        => SendAsync<TransactionResponse?>(
+        => SendNullableAsync<TransactionResponse?>(
             RpcRequests.GetTransaction(signature, commitment, maxSupportedTransactionVersion), cancellationToken);
+
+    /// <summary>
+    /// Returns a transaction using the exact upstream encoding, commitment, and transaction-version
+    /// configuration. Because the encoding changes the transaction field's JSON schema, the result is exposed
+    /// without lossy projection as a <see cref="JsonElement"/>.
+    /// </summary>
+    /// <param name="signature">The transaction signature (base58).</param>
+    /// <param name="options">The exact upstream transaction configuration.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The configured transaction JSON, or <c>null</c> if the transaction was not found.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<JsonElement?> GetTransactionWithOptionsAsync(
+        string signature,
+        GetTransactionOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return SendNullableAsync<JsonElement?>(
+            RpcRequests.GetTransaction(
+                signature,
+                options.Commitment,
+                options.MaxSupportedTransactionVersion,
+                options.Encoding),
+            cancellationToken);
+    }
 
     /// <summary>
     /// Returns the processing status of each signature, in order; an entry is <c>null</c> if the cluster has
@@ -609,7 +1210,7 @@ public class SolanaRpcClient
         var result = await SendAsync<RpcContextValue<SignatureStatus?[]>>(
             RpcRequests.GetSignatureStatuses(signatures, searchTransactionHistory), cancellationToken);
 
-        return result.Value!;
+        return RequireContextValue(result);
     }
 
     /// <summary>
@@ -867,7 +1468,7 @@ public class SolanaRpcClient
     /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
     public Task<AgGenesisCertificate?> GetAgGenesisCertificateAsync(
         CancellationToken cancellationToken = default)
-        => SendAsync<AgGenesisCertificate?>(RpcRequests.GetAgGenesisCert(), cancellationToken);
+        => SendNullableAsync<AgGenesisCertificate?>(RpcRequests.GetAgGenesisCert(), cancellationToken);
 
     /// <summary>
     /// Returns the cluster's total, circulating, and non-circulating token supply.
@@ -883,8 +1484,28 @@ public class SolanaRpcClient
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
     {
-        var result = await SendAsync<RpcContextValue<Supply>>(RpcRequests.GetSupply(commitment), cancellationToken);
-        return result.Value!;
+        var result = await SendAsync<RpcContextValue<Supply>>(
+            RpcRequests.GetSupply(commitment, excludeNonCirculatingAccountsList: true), cancellationToken);
+        return RequireContextValue(result);
+    }
+
+    /// <summary>Returns cluster supply with explicit control over the non-circulating account list.</summary>
+    /// <param name="options">Commitment and account-list exclusion options.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The supply totals and, unless excluded, non-circulating account addresses.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<Supply> GetSupplyWithOptionsAsync(
+        GetSupplyOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var result = await SendAsync<RpcContextValue<Supply>>(
+            RpcRequests.GetSupply(options.Commitment, options.ExcludeNonCirculatingAccountsList), cancellationToken);
+
+        return RequireContextValue(result);
     }
 
     /// <summary>
@@ -906,7 +1527,7 @@ public class SolanaRpcClient
         var result = await SendAsync<RpcContextValue<TokenLargestAccount[]>>(
             RpcRequests.GetTokenLargestAccounts(mint, commitment), cancellationToken);
 
-        return result.Value!;
+        return RequireNonNullEntries(RequireContextValue(result), "token-largest-account list");
     }
 
     /// <summary>
@@ -924,7 +1545,58 @@ public class SolanaRpcClient
         ulong slot,
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
-        => SendAsync<Block?>(RpcRequests.GetBlock(slot, commitment), cancellationToken);
+        => SendNullableAsync<Block?>(RpcRequests.GetBlock(slot, commitment, 0), cancellationToken);
+
+    /// <summary>
+    /// Returns a confirmed signatures-only block while explicitly opting into a newer transaction version.
+    /// This is required when the block contains a version newer than v0, even though only signatures are
+    /// requested. See <see href="https://solana.com/docs/rpc/http/getblock">getBlock</see>.
+    /// </summary>
+    /// <param name="slot">The slot to fetch the block for.</param>
+    /// <param name="maxSupportedTransactionVersion">The highest numeric transaction version the caller accepts.</param>
+    /// <param name="commitment">The commitment level to query at (<c>processed</c> is not supported by the node).</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The block, or <c>null</c> if the slot was skipped and produced no block.</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<Block?> GetBlockWithMaxVersionAsync(
+        ulong slot,
+        byte maxSupportedTransactionVersion,
+        Commitment commitment = Commitment.Confirmed,
+        CancellationToken cancellationToken = default)
+        => SendNullableAsync<Block?>(
+            RpcRequests.GetBlock(slot, commitment, maxSupportedTransactionVersion), cancellationToken);
+
+    /// <summary>
+    /// Returns a block using the exact upstream encoding, transaction-details, rewards, commitment, and
+    /// transaction-version configuration. Because those choices change the JSON schema, the result is exposed
+    /// without lossy projection as a <see cref="JsonElement"/>.
+    /// </summary>
+    /// <param name="slot">The slot to fetch the block for.</param>
+    /// <param name="options">The exact upstream block configuration.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The configured block JSON, or <c>null</c> if the slot was skipped.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<JsonElement?> GetBlockWithOptionsAsync(
+        ulong slot,
+        GetBlockOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return SendNullableAsync<JsonElement?>(
+            RpcRequests.GetBlock(
+                slot,
+                options.Commitment,
+                options.MaxSupportedTransactionVersion,
+                options.Encoding,
+                options.TransactionDetails,
+                options.Rewards),
+            cancellationToken);
+    }
 
     /// <summary>
     /// Returns a confirmed transaction decoded by the node into <c>jsonParsed</c> form - recognized
@@ -938,12 +1610,50 @@ public class SolanaRpcClient
     /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
     /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
     /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
-    public Task<ParsedTransaction?> GetParsedTransactionAsync(
+    public async Task<ParsedTransaction?> GetParsedTransactionAsync(
         string signature,
         Commitment? commitment = null,
         CancellationToken cancellationToken = default)
-        => SendAsync<ParsedTransaction?>(
-            RpcRequests.GetParsedTransaction(signature, commitment ?? Commitment.Confirmed), cancellationToken);
+    {
+        var transaction = await SendNullableAsync<ParsedTransaction?>(
+            RpcRequests.GetParsedTransaction(signature, commitment ?? Commitment.Confirmed, 0), cancellationToken);
+        return RequireConfirmedParsedTransaction(transaction);
+    }
+
+    /// <summary>
+    /// Returns a node-decoded transaction while explicitly opting into a newer numeric transaction version.
+    /// For V1, <see cref="ParsedMessage.TransactionConfig"/> exposes the message's execution configuration.
+    /// </summary>
+    /// <param name="signature">The transaction signature (base58) to fetch.</param>
+    /// <param name="maxSupportedTransactionVersion">The highest numeric transaction version the caller accepts.</param>
+    /// <param name="commitment">The commitment level to query at; defaults to <see cref="Commitment.Confirmed"/> when <c>null</c>.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The parsed transaction, or <c>null</c> if no transaction with that signature was found.</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<ParsedTransaction?> GetParsedTransactionWithMaxVersionAsync(
+        string signature,
+        byte maxSupportedTransactionVersion,
+        Commitment? commitment = null,
+        CancellationToken cancellationToken = default)
+    {
+        var transaction = await SendNullableAsync<ParsedTransaction?>(
+            RpcRequests.GetParsedTransaction(
+                signature,
+                commitment ?? Commitment.Confirmed,
+                maxSupportedTransactionVersion),
+            cancellationToken);
+        return RequireConfirmedParsedTransaction(transaction);
+    }
+
+    private static ParsedTransaction? RequireConfirmedParsedTransaction(ParsedTransaction? transaction)
+    {
+        if (transaction is not null && transaction.Slot is null)
+            throw new JsonException("A getTransaction response must carry a slot and block-time member.");
+
+        return transaction;
+    }
 
     /// <summary>
     /// Returns a confirmed block whose transactions are decoded by the node into <c>jsonParsed</c> form, or
@@ -962,9 +1672,39 @@ public class SolanaRpcClient
         ulong slot,
         Commitment? commitment = null,
         CancellationToken cancellationToken = default)
+        => await GetParsedBlockCoreAsync(slot, 0, commitment, cancellationToken);
+
+    /// <summary>
+    /// Returns a node-decoded block while explicitly opting into a newer numeric transaction version.
+    /// For V1 messages, <see cref="ParsedMessage.TransactionConfig"/> exposes the embedded execution settings.
+    /// </summary>
+    /// <param name="slot">The slot to fetch the block for.</param>
+    /// <param name="maxSupportedTransactionVersion">The highest numeric transaction version the caller accepts.</param>
+    /// <param name="commitment">The commitment level to query at; defaults to <see cref="Commitment.Confirmed"/> when <c>null</c>.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The block with parsed transactions, or <c>null</c> if the slot was skipped and produced no block.</returns>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<ParsedBlock?> GetParsedBlockWithMaxVersionAsync(
+        ulong slot,
+        byte maxSupportedTransactionVersion,
+        Commitment? commitment = null,
+        CancellationToken cancellationToken = default)
+        => await GetParsedBlockCoreAsync(slot, maxSupportedTransactionVersion, commitment, cancellationToken);
+
+    private async Task<ParsedBlock?> GetParsedBlockCoreAsync(
+        ulong slot,
+        byte maxSupportedTransactionVersion,
+        Commitment? commitment,
+        CancellationToken cancellationToken)
     {
-        var block = await SendAsync<ParsedBlock?>(
-            RpcRequests.GetParsedBlock(slot, commitment ?? Commitment.Confirmed), cancellationToken);
+        var block = await SendNullableAsync<ParsedBlock?>(
+            RpcRequests.GetParsedBlock(
+                slot,
+                commitment ?? Commitment.Confirmed,
+                maxSupportedTransactionVersion),
+            cancellationToken);
 
         if (block is null)
             return null;
@@ -998,6 +1738,28 @@ public class SolanaRpcClient
         CancellationToken cancellationToken = default)
         => SendAsync<VoteAccounts>(RpcRequests.GetVoteAccounts(commitment), cancellationToken);
 
+    /// <summary>Returns vote accounts using the complete upstream vote-account configuration.</summary>
+    /// <param name="options">Vote address, commitment, and delinquency options.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The matching current and delinquent vote accounts.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<VoteAccounts> GetVoteAccountsWithOptionsAsync(
+        GetVoteAccountsOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return SendAsync<VoteAccounts>(
+            RpcRequests.GetVoteAccounts(
+                options.Commitment,
+                options.VotePublicKey,
+                options.KeepUnstakedDelinquents,
+                options.DelinquentSlotDistance),
+            cancellationToken);
+    }
+
     /// <summary>
     /// Returns the inflation / staking reward paid to each of <paramref name="addresses"/> for an epoch.
     /// See <see href="https://solana.com/docs/rpc/http/getinflationreward">getInflationReward</see>.
@@ -1007,6 +1769,7 @@ public class SolanaRpcClient
     /// <param name="commitment">The commitment level to query at.</param>
     /// <param name="cancellationToken">A token to cancel the request.</param>
     /// <returns>The reward for each address in order; an entry is <c>null</c> when that address earned no reward.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="addresses"/> is <c>null</c>.</exception>
     /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
     /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
     /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
@@ -1015,8 +1778,36 @@ public class SolanaRpcClient
         ulong? epoch = null,
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
-        => SendAsync<IReadOnlyList<InflationReward?>>(
+    {
+        ArgumentNullException.ThrowIfNull(addresses);
+        return SendAsync<IReadOnlyList<InflationReward?>>(
             RpcRequests.GetInflationReward(addresses, epoch, commitment), cancellationToken);
+    }
+
+    /// <summary>Returns inflation rewards with explicit epoch and minimum-context-slot options.</summary>
+    /// <param name="addresses">The addresses to look up rewards for.</param>
+    /// <param name="options">Epoch, commitment, and minimum-context-slot options.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The reward for each address in order; missing rewards are <c>null</c>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="addresses"/> or <paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<IReadOnlyList<InflationReward?>> GetInflationRewardWithOptionsAsync(
+        IReadOnlyList<PublicKey> addresses,
+        GetInflationRewardOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(addresses);
+        ArgumentNullException.ThrowIfNull(options);
+        return SendAsync<IReadOnlyList<InflationReward?>>(
+            RpcRequests.GetInflationReward(
+                addresses,
+                options.Epoch,
+                options.Commitment,
+                options.MinContextSlot),
+            cancellationToken);
+    }
 
     /// <summary>
     /// Returns the leader schedule for an epoch - a map of validator identity to the slot indices (relative to
@@ -1030,12 +1821,29 @@ public class SolanaRpcClient
     /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
     /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
     /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
-    public Task<IReadOnlyDictionary<string, IReadOnlyList<int>>?> GetLeaderScheduleAsync(
+    public Task<IReadOnlyDictionary<string, IReadOnlyList<ulong>>?> GetLeaderScheduleAsync(
         ulong? slot = null,
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
-        => SendAsync<IReadOnlyDictionary<string, IReadOnlyList<int>>?>(
+        => SendNullableAsync<IReadOnlyDictionary<string, IReadOnlyList<ulong>>?>(
             RpcRequests.GetLeaderSchedule(slot, commitment), cancellationToken);
+
+    /// <summary>Returns a leader schedule with optional validator-identity filtering.</summary>
+    /// <param name="options">Slot, identity, and commitment options.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The leader schedule, or <c>null</c> when unavailable.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<IReadOnlyDictionary<string, IReadOnlyList<ulong>>?> GetLeaderScheduleWithOptionsAsync(
+        GetLeaderScheduleOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return SendNullableAsync<IReadOnlyDictionary<string, IReadOnlyList<ulong>>?>(
+            RpcRequests.GetLeaderSchedule(options.Slot, options.Commitment, options.Identity), cancellationToken);
+    }
 
     /// <summary>
     /// Returns the confirmed block slots from <paramref name="startSlot"/> through <paramref name="endSlot"/>
@@ -1056,6 +1864,27 @@ public class SolanaRpcClient
         CancellationToken cancellationToken = default)
         => SendAsync<IReadOnlyList<ulong>>(RpcRequests.GetBlocks(startSlot, endSlot, commitment), cancellationToken);
 
+    /// <summary>Returns confirmed block slots with explicit commitment and minimum-context-slot options.</summary>
+    /// <param name="startSlot">The first slot of the range.</param>
+    /// <param name="endSlot">The last slot of the range, or <c>null</c> for the latest confirmed block.</param>
+    /// <param name="options">The context options sent to the node.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The slots that produced a block, in ascending order.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<IReadOnlyList<ulong>> GetBlocksWithOptionsAsync(
+        ulong startSlot,
+        ulong? endSlot,
+        RpcContextOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return SendAsync<IReadOnlyList<ulong>>(
+            RpcRequests.GetBlocks(startSlot, endSlot, options.Commitment, options.MinContextSlot), cancellationToken);
+    }
+
     /// <summary>
     /// Returns information about the nodes participating in the cluster.
     /// See <see href="https://solana.com/docs/rpc/http/getclusternodes">getClusterNodes</see>.
@@ -1065,8 +1894,10 @@ public class SolanaRpcClient
     /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
     /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
     /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
-    public Task<IReadOnlyList<ClusterNode>> GetClusterNodesAsync(CancellationToken cancellationToken = default)
-        => SendAsync<IReadOnlyList<ClusterNode>>(RpcRequests.GetClusterNodes(), cancellationToken);
+    public async Task<IReadOnlyList<ClusterNode>> GetClusterNodesAsync(CancellationToken cancellationToken = default)
+        => RequireNonNullEntries(
+            await SendAsync<ClusterNode[]>(RpcRequests.GetClusterNodes(), cancellationToken),
+            "cluster-node list");
 
     /// <summary>
     /// Returns the account at <paramref name="account"/> decoded with <c>jsonParsed</c> encoding, or <c>null</c>
@@ -1084,10 +1915,47 @@ public class SolanaRpcClient
         Commitment? commitment = null,
         CancellationToken cancellationToken = default)
     {
-        var result = await SendAsync<RpcContextValue<ParsedAccountInfo>>(
+        var result = await SendAsync<RpcContextValue<ParsedAccountInfo?>>(
             RpcRequests.GetParsedAccountInfo(account, commitment ?? Commitment.Confirmed), cancellationToken);
 
         return result.Value;
+    }
+
+    /// <summary>Returns a parsed account with explicit commitment and minimum-context-slot options.</summary>
+    /// <param name="account">The account to fetch.</param>
+    /// <param name="options">The context options sent to the node.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The parsed account, or <c>null</c> if it does not exist.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<ParsedAccountInfo?> GetParsedAccountInfoWithOptionsAsync(
+        PublicKey account,
+        RpcContextOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await GetParsedAccountInfoWithContextAsync(account, options, cancellationToken);
+        return result.Value;
+    }
+
+    /// <summary>Returns a parsed account together with the slot context used by the node.</summary>
+    /// <param name="account">The account to fetch.</param>
+    /// <param name="options">The context options sent to the node.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The context-wrapped parsed account; its value is <c>null</c> when the account does not exist.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<RpcContextValue<ParsedAccountInfo?>> GetParsedAccountInfoWithContextAsync(
+        PublicKey account,
+        RpcContextOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return SendAsync<RpcContextValue<ParsedAccountInfo?>>(
+            RpcRequests.GetParsedAccountInfo(account, options.Commitment, options.MinContextSlot), cancellationToken);
     }
 
     /// <summary>
@@ -1128,7 +1996,7 @@ public class SolanaRpcClient
         var result = await SendAsync<RpcContextValue<BlockProduction>>(
             RpcRequests.GetBlockProduction(commitment, identity, firstSlot, lastSlot), cancellationToken);
 
-        return result.Value!;
+        return RequireContextValue(result);
     }
 
     /// <summary>
@@ -1142,7 +2010,7 @@ public class SolanaRpcClient
     /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
     /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
     public Task<long?> GetBlockTimeAsync(ulong slot, CancellationToken cancellationToken = default)
-        => SendAsync<long?>(RpcRequests.GetBlockTime(slot), cancellationToken);
+        => SendNullableAsync<long?>(RpcRequests.GetBlockTime(slot), cancellationToken);
 
     /// <summary>
     /// Returns up to <paramref name="limit"/> confirmed block slots starting at <paramref name="startSlot"/>.
@@ -1162,6 +2030,32 @@ public class SolanaRpcClient
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
         => SendAsync<IReadOnlyList<ulong>>(RpcRequests.GetBlocksWithLimit(startSlot, limit, commitment), cancellationToken);
+
+    /// <summary>Returns a limited block-slot range with explicit commitment and minimum-context-slot options.</summary>
+    /// <param name="startSlot">The first slot of the range.</param>
+    /// <param name="limit">The maximum number of slots to return.</param>
+    /// <param name="options">The context options sent to the node.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The slots that produced a block, in ascending order.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<IReadOnlyList<ulong>> GetBlocksWithLimitWithOptionsAsync(
+        ulong startSlot,
+        ulong limit,
+        RpcContextOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return SendAsync<IReadOnlyList<ulong>>(
+            RpcRequests.GetBlocksWithLimit(
+                startSlot,
+                limit,
+                options.Commitment,
+                options.MinContextSlot),
+            cancellationToken);
+    }
 
     /// <summary>
     /// Returns the cluster's epoch schedule (epoch length, warmup, leader-schedule offset).
@@ -1273,7 +2167,26 @@ public class SolanaRpcClient
         var result = await SendAsync<RpcContextValue<LargestAccount[]>>(
             RpcRequests.GetLargestAccounts(commitment, filter), cancellationToken);
 
-        return result.Value!;
+        return RequireNonNullEntries(RequireContextValue(result), "largest-account list");
+    }
+
+    /// <summary>Returns the largest accounts with explicit filtering and server-side sorting control.</summary>
+    /// <param name="options">Commitment, circulating-supply filter, and sorting options.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The largest accounts.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<IReadOnlyList<LargestAccount>> GetLargestAccountsWithOptionsAsync(
+        GetLargestAccountsOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var result = await SendAsync<RpcContextValue<LargestAccount[]>>(
+            RpcRequests.GetLargestAccounts(options.Commitment, options.Filter, options.SortResults), cancellationToken);
+
+        return RequireNonNullEntries(RequireContextValue(result), "largest-account list");
     }
 
     /// <summary>
@@ -1313,7 +2226,9 @@ public class SolanaRpcClient
     public async Task<IReadOnlyList<PerformanceSample>> GetRecentPerformanceSamplesAsync(
         int? limit = null,
         CancellationToken cancellationToken = default)
-        => await SendAsync<PerformanceSample[]>(RpcRequests.GetRecentPerformanceSamples(limit), cancellationToken);
+        => RequireNonNullEntries(
+            await SendAsync<PerformanceSample[]>(RpcRequests.GetRecentPerformanceSamples(limit), cancellationToken),
+            "performance-sample list");
 
     /// <summary>
     /// Returns the identity of the current slot leader.
@@ -1329,6 +2244,23 @@ public class SolanaRpcClient
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
         => SendAsync<PublicKey>(RpcRequests.GetSlotLeader(commitment), cancellationToken);
+
+    /// <summary>Returns the current slot leader with explicit commitment and minimum-context-slot options.</summary>
+    /// <param name="options">The context options sent to the node.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The current slot leader's identity.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<PublicKey> GetSlotLeaderWithOptionsAsync(
+        RpcContextOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return SendAsync<PublicKey>(
+            RpcRequests.GetSlotLeader(options.Commitment, options.MinContextSlot), cancellationToken);
+    }
 
     /// <summary>
     /// Returns the cluster's minimum stake delegation, in lamports.
@@ -1346,6 +2278,25 @@ public class SolanaRpcClient
     {
         var result = await SendAsync<RpcContextValue<ulong>>(
             RpcRequests.GetStakeMinimumDelegation(commitment), cancellationToken);
+
+        return result.Value;
+    }
+
+    /// <summary>Returns minimum stake delegation with explicit commitment and minimum-context-slot options.</summary>
+    /// <param name="options">The context options sent to the node.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The minimum delegation in lamports.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<ulong> GetStakeMinimumDelegationWithOptionsAsync(
+        RpcContextOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var result = await SendAsync<RpcContextValue<ulong>>(
+            RpcRequests.GetStakeMinimumDelegation(options.Commitment, options.MinContextSlot), cancellationToken);
 
         return result.Value;
     }
@@ -1371,9 +2322,124 @@ public class SolanaRpcClient
         CancellationToken cancellationToken = default)
     {
         var result = await SendAsync<RpcContextValue<ProgramAccount[]>>(
-            RpcRequests.GetTokenAccountsByDelegate(delegateAccount, mint, commitment), cancellationToken);
+            RpcRequests.GetTokenAccountsByDelegate(
+                delegateAccount,
+                TokenAccountsFilter.ByMint(mint),
+                commitment),
+            cancellationToken);
 
-        return result.Value!;
+        return RequireNonNullKeyedAccounts(RequireContextValue(result));
+    }
+
+    /// <summary>
+    /// Returns token accounts approved to a delegate, filtered by either mint or SPL Token program.
+    /// </summary>
+    /// <param name="delegateAccount">The delegate the token accounts are approved to.</param>
+    /// <param name="filter">The mutually exclusive mint or token-program filter.</param>
+    /// <param name="options">Base64 slicing, commitment, and minimum-context-slot options; node defaults when <c>null</c>.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The matching token accounts.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="filter"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<IReadOnlyList<ProgramAccount>> GetTokenAccountsByDelegateWithFilterAsync(
+        PublicKey delegateAccount,
+        TokenAccountsFilter filter,
+        GetAccountInfoOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await GetTokenAccountsByDelegateWithContextAsync(
+            delegateAccount, filter, options, cancellationToken);
+
+        return RequireNonNullKeyedAccounts(RequireContextValue(result));
+    }
+
+    /// <summary>
+    /// Returns filtered delegated token accounts with the exact upstream account encoding and read configuration.
+    /// </summary>
+    /// <param name="delegateAccount">The delegate the token accounts are approved to.</param>
+    /// <param name="filter">The mutually exclusive mint or token-program filter.</param>
+    /// <param name="options">The exact upstream account configuration.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The matching token accounts with exact account-data branches.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="filter"/> or <paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<IReadOnlyList<RpcProgramAccount>> GetTokenAccountsByDelegateWithOptionsAsync(
+        PublicKey delegateAccount,
+        TokenAccountsFilter filter,
+        RpcAccountInfoOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await GetTokenAccountsByDelegateWithOptionsAndContextAsync(
+            delegateAccount, filter, options, cancellationToken);
+
+        return RequireContextValue(result);
+    }
+
+    /// <summary>
+    /// Returns exact-encoding delegated token accounts together with the slot context used by the node.
+    /// </summary>
+    /// <param name="delegateAccount">The delegate the token accounts are approved to.</param>
+    /// <param name="filter">The mutually exclusive mint or token-program filter.</param>
+    /// <param name="options">The exact upstream account configuration.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The context-wrapped matching token accounts.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="filter"/> or <paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<RpcContextValue<RpcProgramAccount[]>> GetTokenAccountsByDelegateWithOptionsAndContextAsync(
+        PublicKey delegateAccount,
+        TokenAccountsFilter filter,
+        RpcAccountInfoOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        ArgumentNullException.ThrowIfNull(options);
+        var result = await SendAsync<RpcContextValue<RpcProgramAccount[]>>(
+            RpcRequests.GetTokenAccountsByDelegate(
+                delegateAccount,
+                filter,
+                options.Commitment,
+                options.DataSlice,
+                options.MinContextSlot,
+                options.Encoding),
+            cancellationToken);
+        RequireNonNullKeyedAccounts(result.Value);
+        return result;
+    }
+
+    /// <summary>Returns filtered delegated token accounts together with their slot context.</summary>
+    /// <param name="delegateAccount">The delegate the token accounts are approved to.</param>
+    /// <param name="filter">The mutually exclusive mint or token-program filter.</param>
+    /// <param name="options">Base64 slicing, commitment, and minimum-context-slot options; node defaults when <c>null</c>.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The context-wrapped matching token accounts.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="filter"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<RpcContextValue<ProgramAccount[]>> GetTokenAccountsByDelegateWithContextAsync(
+        PublicKey delegateAccount,
+        TokenAccountsFilter filter,
+        GetAccountInfoOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        options ??= new GetAccountInfoOptions();
+        var result = await SendAsync<RpcContextValue<ProgramAccount[]>>(
+            RpcRequests.GetTokenAccountsByDelegate(
+                delegateAccount,
+                filter,
+                options.Commitment,
+                options.DataSlice,
+                options.MinContextSlot),
+            cancellationToken);
+        RequireNonNullKeyedAccounts(result.Value);
+        return result;
     }
 
     /// <summary>
@@ -1413,6 +2479,15 @@ public class SolanaRpcClient
     }
 
     private async Task<T> SendAsync<T>(RpcRequest request, CancellationToken cancellationToken)
+        => await SendCoreAsync<T>(request, allowNullResult: false, cancellationToken);
+
+    private async Task<T> SendNullableAsync<T>(RpcRequest request, CancellationToken cancellationToken)
+        => await SendCoreAsync<T>(request, allowNullResult: true, cancellationToken);
+
+    private async Task<T> SendCoreAsync<T>(
+        RpcRequest request,
+        bool allowNullResult,
+        CancellationToken cancellationToken)
     {
         using var message = new HttpRequestMessage(HttpMethod.Post, string.Empty)
         {
@@ -1427,7 +2502,39 @@ public class SolanaRpcClient
         response.EnsureSuccessStatusCode();
 
         var body = await ReadResponseBodyAsync(response.Content, cancellationToken);
-        return DeserializeEnvelope<T>(body.Span, request.Id);
+        return DeserializeEnvelope<T>(body.Span, request.Id, allowNullResult);
+    }
+
+    private static T[] RequireNonNullKeyedAccounts<T>(T[]? accounts)
+        where T : class
+    {
+        if (accounts is null)
+            throw new JsonException("An RPC keyed-account list cannot be null.");
+
+        if (Array.Exists(accounts, static account => account is null))
+            throw new JsonException("An RPC keyed-account list cannot contain null entries.");
+
+        return accounts;
+    }
+
+    private static T[] RequireNonNullEntries<T>(T[]? values, string valueName)
+        where T : class
+    {
+        if (values is null)
+            throw new JsonException($"An RPC {valueName} cannot be null.");
+
+        if (Array.Exists(values, static value => value is null))
+            throw new JsonException($"An RPC {valueName} cannot contain null entries.");
+
+        return values;
+    }
+
+    private static T RequireContextValue<T>(RpcContextValue<T> result)
+    {
+        if (result.Value is null)
+            throw new JsonException("The RPC context wrapper carried null for a non-null value contract.");
+
+        return result.Value;
     }
 
     private async Task<ReadOnlyMemory<byte>> ReadResponseBodyAsync(HttpContent content, CancellationToken cancellationToken)
@@ -1476,7 +2583,7 @@ public class SolanaRpcClient
     // Validates the envelope and extracts the result in a single pass: a Utf8JsonReader walk checks
     // jsonrpc/id/error and records the span of the result value, which is then deserialized directly -
     // no intermediate JsonElement DOM of the (possibly multi-megabyte) result.
-    private static T DeserializeEnvelope<T>(ReadOnlySpan<byte> body, int requestId)
+    private static T DeserializeEnvelope<T>(ReadOnlySpan<byte> body, int requestId, bool allowNullResult)
     {
         var span = body;
         // ReadFromJsonAsync tolerated a UTF-8 BOM; Utf8JsonReader rejects it.
@@ -1494,8 +2601,11 @@ public class SolanaRpcClient
             throw new JsonException("The JSON-RPC response is not a JSON object.");
 
         string? version = null;
+        var hasId = false;
+        var idIsNull = false;
         var idMatches = false;
         var hasResult = false;
+        var resultIsNull = false;
         var resultStart = 0;
         var resultLength = 0;
         RpcError? error = null;
@@ -1506,13 +2616,37 @@ public class SolanaRpcClient
             {
                 reader.Read();
                 hasResult = true;
+                resultIsNull = reader.TokenType == JsonTokenType.Null;
                 resultStart = (int)reader.TokenStartIndex;
                 reader.Skip();
                 resultLength = (int)reader.BytesConsumed - resultStart;
             }
             else if (reader.ValueTextEquals("error"u8))
             {
-                error = JsonSerializer.Deserialize(ref reader, RpcJson.TypeInfo<RpcError>());
+                reader.Read();
+                if (reader.TokenType != JsonTokenType.Null)
+                {
+                    using var errorDocument = JsonDocument.ParseValue(ref reader);
+                    var errorElement = errorDocument.RootElement;
+                    if (errorElement.ValueKind != JsonValueKind.Object ||
+                        !errorElement.TryGetProperty("code", out var codeElement) ||
+                        codeElement.ValueKind != JsonValueKind.Number ||
+                        !codeElement.TryGetInt32(out var code) ||
+                        !errorElement.TryGetProperty("message", out var messageElement) ||
+                        messageElement.ValueKind != JsonValueKind.String)
+                    {
+                        throw new RpcException(-1, "JSON-RPC response carried a malformed error object.");
+                    }
+
+                    error = new RpcError
+                    {
+                        Code = code,
+                        Message = messageElement.GetString()!,
+                        Data = errorElement.TryGetProperty("data", out var dataElement)
+                            ? dataElement.Clone()
+                            : null
+                    };
+                }
             }
             else if (reader.ValueTextEquals("jsonrpc"u8))
             {
@@ -1523,6 +2657,8 @@ public class SolanaRpcClient
             else if (reader.ValueTextEquals("id"u8))
             {
                 reader.Read();
+                hasId = true;
+                idIsNull = reader.TokenType == JsonTokenType.Null;
                 idMatches = reader.TokenType == JsonTokenType.Number
                     && reader.TryGetInt32(out var id)
                     && id == requestId;
@@ -1539,18 +2675,33 @@ public class SolanaRpcClient
         if (reader.Read())
             throw new JsonException("The JSON-RPC response carries trailing content.");
 
-        // The node's error is the most useful diagnostic there is, so it outranks envelope strictness:
-        // per JSON-RPC 2.0 an unprocessable request is answered with "id": null, and some gateways pad
-        // error responses with "result": null - neither may mask the real code and message.
-        if (error is not null)
-            throw new RpcException(error.Code, error.Message, error.Data);
         if (version != "2.0")
             throw new RpcException(-1, "Invalid JSON-RPC response version.");
+
+        // An unprocessable request legitimately carries "id": null. A numeric error id must still
+        // correlate to this request; otherwise a multiplexing proxy could surface another call's error.
+        if (error is not null)
+        {
+            if (!hasId || (!idIsNull && !idMatches))
+                throw new RpcException(-1, "JSON-RPC response id did not match the request id.");
+
+            if (hasResult && !resultIsNull)
+                throw new RpcException(-1, "JSON-RPC response contained both a non-null result and an error.");
+
+            // Some gateways pad an error response with "result": null. Once version and correlation are
+            // valid, the node's concrete error remains the most useful diagnostic.
+            throw new RpcException(error.Code, error.Message, error.Data);
+        }
+
         if (!idMatches)
             throw new RpcException(-1, "JSON-RPC response id did not match the request id.");
         if (!hasResult)
             throw new RpcException(-1, "JSON-RPC response contained neither a result nor an error.");
 
-        return JsonSerializer.Deserialize(span.Slice(resultStart, resultLength), RpcJson.TypeInfo<T>())!;
+        var result = JsonSerializer.Deserialize(span.Slice(resultStart, resultLength), RpcJson.TypeInfo<T>());
+        if (!allowNullResult && result is null)
+            throw new JsonException("The JSON-RPC method returned null for a non-null result contract.");
+
+        return result!;
     }
 }

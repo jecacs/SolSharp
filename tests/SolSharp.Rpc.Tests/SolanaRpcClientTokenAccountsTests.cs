@@ -65,5 +65,18 @@ public static class SolanaRpcClientTokenAccountsTests
             fees[1].Fee.Should().Be(0);
             handler.CapturedRequestBody.Should().Contain("\"getRecentPrioritizationFees\"");
         }
+
+        [Test]
+        public async Task NullEntry_ThrowsJsonException()
+        {
+            // Arrange
+            var (client, _) = Make("""{"jsonrpc":"2.0","result":[null],"id":1}""");
+
+            // Act
+            var act = async () => await client.GetRecentPrioritizationFeesAsync();
+
+            // Assert
+            await act.Should().ThrowAsync<System.Text.Json.JsonException>();
+        }
     }
 }

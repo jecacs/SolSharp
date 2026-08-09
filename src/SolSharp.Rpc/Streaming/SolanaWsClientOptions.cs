@@ -10,7 +10,10 @@ public sealed record SolanaWsClientOptions
     /// </summary>
     public bool AutoReconnect { get; init; } = true;
 
-    /// <summary>The delay before the first reconnect attempt; it doubles after each failed attempt, up to <see cref="ReconnectMaxDelay"/>.</summary>
+    /// <summary>
+    /// The delay before the first reconnect attempt; it doubles after each failed attempt, up to
+    /// <see cref="ReconnectMaxDelay"/>. When zero and the maximum is positive, subsequent delays start at 1 ms.
+    /// </summary>
     public TimeSpan ReconnectInitialDelay { get; init; } = TimeSpan.FromSeconds(1);
 
     /// <summary>The ceiling for the exponential reconnect backoff.</summary>

@@ -36,6 +36,21 @@ public static class MemoProgram
             throw new ArgumentException("A memo must contain valid Unicode text.", nameof(text), exception);
         }
 
+        return Memo(data, signers);
+    }
+
+    /// <summary>
+    /// Builds a memo instruction from raw bytes. The Memo program validates UTF-8 on-chain; accepting bytes here
+    /// preserves exact client-side parity with the Rust builder and permits callers to handle validation timing.
+    /// </summary>
+    /// <param name="memo">The exact instruction bytes.</param>
+    /// <param name="signers">The read-only accounts that must sign the memo.</param>
+    /// <returns>The memo instruction.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="signers"/> is <c>null</c>.</exception>
+    public static Instruction Memo(ReadOnlySpan<byte> memo, params PublicKey[] signers)
+    {
+        ArgumentNullException.ThrowIfNull(signers);
+
         // Read-only signers, matching the Rust spl-memo builder (AccountMeta::new_readonly(pubkey, true));
         // a writable flag would needlessly write-lock the signer accounts. (solana-py marks them writable.)
         var accounts = new AccountMeta[signers.Length];
@@ -46,7 +61,7 @@ public static class MemoProgram
         {
             ProgramId = ProgramId,
             Accounts = accounts,
-            Data = data
+            Data = memo.ToArray()
         };
     }
 }

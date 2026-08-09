@@ -23,9 +23,7 @@ internal sealed class AccountInfoJsonConverter : JsonConverter<AccountInfo>
             Owner = new PublicKey(root.GetProperty("owner").GetString()!),
             Executable = root.GetProperty("executable").GetBoolean(),
             RentEpoch = root.GetProperty("rentEpoch").GetUInt64(),
-            Space = root.TryGetProperty("space", out var space) && space.ValueKind is JsonValueKind.Number
-                ? space.GetUInt64()
-                : null,
+            Space = ReadOptionalSpace(root),
             Data = bytes
         };
     }
@@ -65,5 +63,16 @@ internal sealed class AccountInfoJsonConverter : JsonConverter<AccountInfo>
         {
             throw new JsonException("Account data is not valid base64.", exception);
         }
+    }
+
+    internal static ulong? ReadOptionalSpace(JsonElement account)
+    {
+        if (!account.TryGetProperty("space", out var space) || space.ValueKind is JsonValueKind.Null)
+            return null;
+
+        if (space.ValueKind is JsonValueKind.Number && space.TryGetUInt64(out var value))
+            return value;
+
+        throw new JsonException("Account space must be null or a u64 value.");
     }
 }

@@ -56,5 +56,18 @@ public static class MemoProgramTests
             act.Should().Throw<ArgumentException>()
                 .Which.ParamName.Should().Be("text");
         }
+
+        [Test]
+        public void RawBytes_PreserveExactRustBuilderPayload()
+        {
+            // Act
+            var instruction = MemoProgram.Memo([0xff, 0x00, 0x80], Pk(6));
+
+            // Assert
+            instruction.Data.Should().Equal(0xff, 0x00, 0x80);
+            instruction.Accounts.Should().ContainSingle();
+            instruction.Accounts[0].Should().Match<AccountMeta>(account =>
+                account.PublicKey == Pk(6) && account.IsSigner && !account.IsWritable);
+        }
     }
 }

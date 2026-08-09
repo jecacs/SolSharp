@@ -5,7 +5,7 @@ namespace SolSharp.Programs;
 
 /// <summary>
 /// A compiled legacy Solana transaction message: the ordered account list, the header counts, the recent
-/// blockhash, and the compiled instructions. Build one with <see cref="Compile"/>, then serialize it with
+/// blockhash, and the compiled instructions. Build one with <c>Compile</c>, then serialize it with
 /// <see cref="Serialize()"/> to get the bytes that are signed and sent.
 /// </summary>
 public sealed class Message : ITransactionMessage
@@ -52,6 +52,21 @@ public sealed class Message : ITransactionMessage
     /// signer/writable flags, and orders them as Solana requires - the fee payer first, then every other
     /// account sorted by its bytes within the classes writable signers, read-only signers, writable
     /// non-signers, read-only non-signers - then indexes each instruction against that list.
+    /// </summary>
+    /// <param name="feePayer">The account that pays the fee; always the first account and a writable signer.</param>
+    /// <param name="recentBlockhash">A recent blockhash, e.g. from <c>getLatestBlockhash</c>.</param>
+    /// <param name="instructions">The instructions to include, in execution order.</param>
+    /// <returns>The compiled message.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="instructions"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">
+    /// The instructions reference more than <see cref="MaxAccounts"/> distinct accounts or require more
+    /// than 127 signatures, whose high bit would collide with the versioned-message prefix.
+    /// </exception>
+    public static Message Compile(PublicKey feePayer, Hash recentBlockhash, IReadOnlyList<Instruction> instructions)
+        => Compile(feePayer, recentBlockhash.ToString(), instructions);
+
+    /// <summary>
+    /// Compiles a set of instructions into a legacy message using a base58 blockhash string.
     /// </summary>
     /// <param name="feePayer">The account that pays the fee; always the first account and a writable signer.</param>
     /// <param name="recentBlockhash">A recent blockhash (base58), e.g. from <c>getLatestBlockhash</c>.</param>

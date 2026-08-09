@@ -7,10 +7,11 @@ taken seriously and are appreciated.
 
 | Version | Supported |
 | ------- | --------- |
+| 2.x     | ✅        |
 | 1.x     | ✅        |
 | < 1.0   | ❌        |
 
-Fixes ship as a patch release of the latest 1.x version.
+Fixes ship as patch releases of the latest supported 2.x and 1.x lines.
 
 ## Reporting a vulnerability
 
@@ -34,6 +35,9 @@ prefer otherwise.
 - The Ed25519 engine is [BouncyCastle.Cryptography](https://www.nuget.org/packages/BouncyCastle.Cryptography);
   vulnerabilities in BouncyCastle itself should be reported upstream, but a SolSharp report is
   still welcome so the dependency can be bumped quickly.
+- BLS12-381 operations use [Nethermind.Crypto.Bls](https://www.nuget.org/packages/Nethermind.Crypto.Bls)
+  and its packaged `blst` native backend. Backend or RID-specific failures are in scope for SolSharp;
+  upstream cryptographic vulnerabilities should also be reported to the dependency maintainer.
 - Key handling promises that *are* in scope: `Keypair` zeroes its secret on dispose/finalization,
   secrets never appear in logs or exception messages, and nothing in the library transmits key
   material anywhere.

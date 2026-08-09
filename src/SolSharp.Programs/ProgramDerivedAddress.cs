@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using SolSharp.Core.Primitives;
 using SolSharp.Wallet;
 
@@ -16,7 +17,57 @@ public static class ProgramDerivedAddress
     /// <summary>The maximum number of seeds a PDA derivation accepts (16). The bump seed counts toward the limit.</summary>
     public const int MaxSeeds = 16;
 
+    private static readonly UTF8Encoding StrictUtf8 = new(false, true);
+
     private static ReadOnlySpan<byte> Marker => "ProgramDerivedAddress"u8;
+
+    /// <summary>
+    /// Derives an address for a base account, UTF-8 seed, and owner using Solana's
+    /// <c>create_with_seed</c> SHA-256 construction. Unlike a PDA, the result may be on the curve.
+    /// </summary>
+    /// <param name="baseAddress">The base account whose authority can create the derived account.</param>
+    /// <param name="seed">The UTF-8 seed, at most <see cref="MaxSeedLength"/> encoded bytes.</param>
+    /// <param name="owner">The program that will own the derived account.</param>
+    /// <returns>The SHA-256 hash of the base address, UTF-8 seed bytes, and owner address.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="seed"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="seed"/> is invalid UTF-16 or exceeds <see cref="MaxSeedLength"/> UTF-8 bytes, or the
+    /// owner bytes end with Solana's reserved <c>ProgramDerivedAddress</c> marker.
+    /// </exception>
+    public static PublicKey CreateWithSeed(PublicKey baseAddress, string seed, PublicKey owner)
+    {
+        ArgumentNullException.ThrowIfNull(seed);
+
+        int seedLength;
+        try
+        {
+            seedLength = StrictUtf8.GetByteCount(seed);
+        }
+        catch (EncoderFallbackException exception)
+        {
+            throw new ArgumentException("The derived-address seed must contain valid UTF-16 text.", nameof(seed), exception);
+        }
+
+        if (seedLength > MaxSeedLength)
+            throw new ArgumentException(
+                $"A derived-address seed may be at most {MaxSeedLength} UTF-8 bytes, got {seedLength}.",
+                nameof(seed));
+
+        Span<byte> input = stackalloc byte[PublicKey.Length + seedLength + PublicKey.Length];
+        baseAddress.CopyTo(input);
+        StrictUtf8.GetBytes(seed, input.Slice(PublicKey.Length, seedLength));
+
+        var ownerBytes = input[(PublicKey.Length + seedLength)..];
+        owner.CopyTo(ownerBytes);
+        if (ownerBytes.EndsWith(Marker))
+            throw new ArgumentException(
+                "The owner address ends with Solana's reserved ProgramDerivedAddress marker.",
+                nameof(owner));
+
+        Span<byte> hash = stackalloc byte[PublicKey.Length];
+        SHA256.HashData(input, hash);
+        return new PublicKey(hash);
+    }
 
     /// <summary>
     /// Derives the canonical PDA for <paramref name="seeds"/> under <paramref name="programId"/>, trying bump

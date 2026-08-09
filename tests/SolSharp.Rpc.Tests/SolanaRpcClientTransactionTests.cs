@@ -3,6 +3,7 @@ using FluentAssertions;
 using NUnit.Framework;
 using SolSharp.Core.Constants;
 using SolSharp.Core.Primitives;
+using SolSharp.Rpc.Models;
 
 namespace SolSharp.Rpc.Tests;
 
@@ -110,6 +111,20 @@ public static class SolanaRpcClientTransactionTests
         }
 
         [Test]
+        public async Task MissingErrorMember_ThrowsJsonException()
+        {
+            // Arrange
+            var (client, _) = Make(
+                """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{}},"id":1}""");
+
+            // Act
+            var act = async () => await client.SimulateTransactionAsync([9]);
+
+            // Assert
+            await act.Should().ThrowAsync<JsonException>();
+        }
+
+        [Test]
         public async Task DefaultsCommitmentToConfirmed()
         {
             // Arrange
@@ -174,7 +189,9 @@ public static class SolanaRpcClientTransactionTests
                 .Select(static address => address.GetString()).Should().Equal(system.ToString(), token.ToString());
 
             result.Accounts.Should().ContainSingle();
-            result.Accounts![0]!.Data.Should().Equal(1, 2, 3);
+            var accountData = result.Accounts![0]!.Data.Should().BeOfType<RpcAccountData.Encoded>().Subject;
+            accountData.Encoding.Should().Be(RpcAccountEncoding.Base64);
+            Convert.FromBase64String(accountData.EncodedData).Should().Equal(1, 2, 3);
             result.Accounts[0]!.Space.Should().Be(3);
             result.LoadedAccountsDataSize.Should().Be(456);
             result.ReturnData!.ProgramId.Should().Be(system);
@@ -189,6 +206,69 @@ public static class SolanaRpcClientTransactionTests
             result.PostTokenBalances.Should().BeEmpty();
             result.LoadedAddresses!.Writable.Should().ContainSingle().Which.Should().Be(system);
             result.LoadedAddresses.Readonly.Should().ContainSingle().Which.Should().Be(token);
+        }
+
+        [Test]
+        public async Task JsonParsedAccounts_SendExactEncodingAndPreserveParsedBranch()
+        {
+            // Arrange
+            var account = PublicKey.Parse(SolanaProgramIds.SystemProgram);
+            var (client, handler) = Make(
+                """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"err":null,"accounts":[{"lamports":9,"data":{"program":"system","parsed":{"type":"nonce","info":{}},"space":80},"owner":"11111111111111111111111111111111","executable":false,"rentEpoch":0,"space":80}]}},"id":1}""");
+            var options = new SimulateTransactionOptions
+            {
+                Accounts = [account],
+                AccountsEncoding = RpcAccountEncoding.JsonParsed
+            };
+
+            // Act
+            var result = await client.SimulateTransactionAsync([1], options);
+
+            // Assert
+            using var request = JsonDocument.Parse(handler.CapturedRequestBody!);
+            request.RootElement.GetProperty("params")[1].GetProperty("accounts")
+                .GetProperty("encoding").GetString().Should().Be("jsonParsed");
+            var parsed = result.Accounts.Should().ContainSingle().Subject!.Data
+                .Should().BeOfType<RpcAccountData.Parsed>().Subject;
+            parsed.Program.Should().Be("system");
+            parsed.Value.GetProperty("type").GetString().Should().Be("nonce");
+        }
+
+        [TestCase(RpcAccountEncoding.Binary)]
+        [TestCase(RpcAccountEncoding.Base58)]
+        [TestCase((RpcAccountEncoding)999)]
+        public async Task UnsupportedAccountEncoding_ThrowsBeforeSending(RpcAccountEncoding encoding)
+        {
+            // Arrange
+            var (client, handler) = Make(
+                """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"err":null}},"id":1}""");
+            var options = new SimulateTransactionOptions { Accounts = [], AccountsEncoding = encoding };
+
+            // Act
+            var act = async () => await client.SimulateTransactionAsync([1], options);
+
+            // Assert
+            await act.Should().ThrowAsync<ArgumentOutOfRangeException>().WithParameterName("options");
+            handler.CapturedRequestBody.Should().BeNull();
+        }
+
+        [Test]
+        public async Task UnsupportedUnusedAccountEncoding_IsNotSentOrValidated()
+        {
+            // Arrange
+            var (client, handler) = Make(
+                """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"err":null}},"id":1}""");
+            var options = new SimulateTransactionOptions
+            {
+                AccountsEncoding = RpcAccountEncoding.Base58
+            };
+
+            // Act
+            await client.SimulateTransactionAsync([1], options);
+
+            // Assert
+            using var request = JsonDocument.Parse(handler.CapturedRequestBody!);
+            request.RootElement.GetProperty("params")[1].TryGetProperty("accounts", out _).Should().BeFalse();
         }
 
         [Test]
@@ -217,6 +297,25 @@ public static class SolanaRpcClientTransactionTests
 
             // Assert
             await act.Should().ThrowAsync<JsonException>().WithMessage("*Binary data*base64*");
+        }
+
+        [TestCase("\"logs\":[null]")]
+        [TestCase("\"innerInstructions\":[null]")]
+        [TestCase("\"preTokenBalances\":[null]")]
+        [TestCase("\"postTokenBalances\":[null]")]
+        public async Task NullEntryInOptionalResultCollection_ThrowsJsonException(string member)
+        {
+            // Arrange
+            var response =
+                "{\"jsonrpc\":\"2.0\",\"result\":{\"context\":{\"slot\":1},\"value\":{\"err\":null," +
+                member + "}},\"id\":1}";
+            var (client, _) = Make(response);
+
+            // Act
+            var act = async () => await client.SimulateTransactionAsync([1]);
+
+            // Assert
+            await act.Should().ThrowAsync<JsonException>();
         }
 
         [Test]

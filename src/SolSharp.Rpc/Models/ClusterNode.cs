@@ -9,6 +9,7 @@ public sealed record ClusterNode
 {
     /// <summary>The node's identity public key.</summary>
     [JsonPropertyName("pubkey")]
+    [JsonRequired]
     public PublicKey Pubkey { get; init; }
 
     /// <summary>The node's gossip network address (host:port), or <c>null</c> if unavailable.</summary>
@@ -61,9 +62,9 @@ public sealed record ClusterNode
 
     /// <summary>The node's feature set id, or <c>null</c> if unknown.</summary>
     [JsonPropertyName("featureSet")]
-    public long? FeatureSet { get; init; }
+    public uint? FeatureSet { get; init; }
 
     /// <summary>The node's shred version, or <c>null</c> if unknown.</summary>
     [JsonPropertyName("shredVersion")]
-    public int? ShredVersion { get; init; }
+    public ushort? ShredVersion { get; init; }
 }

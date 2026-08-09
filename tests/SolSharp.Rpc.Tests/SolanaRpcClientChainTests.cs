@@ -73,11 +73,39 @@ public static class SolanaRpcClientChainTests
 
             // Assert
             accounts.Should().ContainSingle();
-            accounts[0].UiAmount.Should().Be(0.0005m);
+            accounts[0].UiAmount.Should().Be(0.0005d);
             accounts[0].Address.Should().Be(PublicKey.Parse(SystemProgram));
             accounts[0].Amount.Should().Be("500");
             accounts[0].Decimals.Should().Be(6);
             handler.CapturedRequestBody.Should().Contain("\"getTokenLargestAccounts\"");
+        }
+
+        [Test]
+        public async Task MissingMandatoryAmountFields_ThrowsJsonException()
+        {
+            // Arrange
+            var (client, _) = Make(
+                """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":[{}]},"id":1}""");
+
+            // Act
+            var act = async () => await client.GetTokenLargestAccountsAsync(PublicKey.Parse(TokenProgram));
+
+            // Assert
+            await act.Should().ThrowAsync<System.Text.Json.JsonException>();
+        }
+
+        [Test]
+        public async Task NullEntry_ThrowsJsonException()
+        {
+            // Arrange
+            var (client, _) = Make(
+                """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":[null]},"id":1}""");
+
+            // Act
+            var act = async () => await client.GetTokenLargestAccountsAsync(PublicKey.Parse(TokenProgram));
+
+            // Assert
+            await act.Should().ThrowAsync<System.Text.Json.JsonException>();
         }
     }
 
@@ -118,6 +146,39 @@ public static class SolanaRpcClientChainTests
 
             // Assert
             block.Should().BeNull();
+        }
+
+        [Test]
+        public async Task MissingMandatoryBlockFields_ThrowsJsonException()
+        {
+            // Arrange
+            var (client, _) = Make("""{"jsonrpc":"2.0","result":{},"id":1}""");
+
+            // Act
+            var act = async () => await client.GetBlockAsync(100);
+
+            // Assert
+            await act.Should().ThrowAsync<System.Text.Json.JsonException>();
+        }
+    }
+
+    [TestFixture]
+    public sealed class GetBlockWithMaxVersionAsync
+    {
+        [Test]
+        public async Task ExplicitVersionOptIn_SendsVersionOne()
+        {
+            // Arrange
+            var (client, handler) = Make(
+                """{"jsonrpc":"2.0","result":{"blockhash":"Ckt","previousBlockhash":"Prev","parentSlot":99,"blockHeight":null,"blockTime":null,"signatures":[]},"id":1}""");
+
+            // Act
+            var block = await client.GetBlockWithMaxVersionAsync(100, maxSupportedTransactionVersion: 1);
+
+            // Assert
+            block.Should().NotBeNull();
+            handler.CapturedRequestBody.Should().Contain("\"transactionDetails\":\"signatures\"");
+            handler.CapturedRequestBody.Should().Contain("\"maxSupportedTransactionVersion\":1");
         }
     }
 }

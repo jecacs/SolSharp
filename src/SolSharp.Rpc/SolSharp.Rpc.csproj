@@ -3,13 +3,13 @@
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <IsAotCompatible>true</IsAotCompatible>
-    <Description>Solana JSON-RPC client for .NET: typed HTTP reads, multiplexed WebSocket subscriptions, and dependency-injection registration with a built-in resilience pipeline.</Description>
+    <Description>Typed Solana JSON-RPC and PubSub for .NET: bounded HTTP reads/send/simulate/batching, multiplexed reconnecting WebSocket subscriptions, source-generated JSON, and resilient DI registration.</Description>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.1" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="8.10.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.3" />
   </ItemGroup>
 
   <ItemGroup>

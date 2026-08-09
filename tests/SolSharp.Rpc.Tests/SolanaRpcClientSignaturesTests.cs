@@ -49,13 +49,39 @@ public static class SolanaRpcClientSignaturesTests
         {
             // Arrange
             var (client, _) = Make(
-                """{"jsonrpc":"2.0","result":[{"signature":"sigErr","slot":5,"err":{"InstructionError":[0,"Custom"]}}],"id":1}""");
+                """{"jsonrpc":"2.0","result":[{"signature":"sigErr","slot":5,"err":{"InstructionError":[0,"Custom"]},"memo":null,"blockTime":null,"confirmationStatus":null}],"id":1}""");
 
             // Act
             var signatures = await client.GetSignaturesForAddressAsync(PublicKey.Parse(Address));
 
             // Assert
             signatures[0].IsError.Should().BeTrue();
+        }
+
+        [Test]
+        public async Task MissingMandatoryEntryFields_ThrowsJsonException()
+        {
+            // Arrange
+            var (client, _) = Make("""{"jsonrpc":"2.0","result":[{}],"id":1}""");
+
+            // Act
+            var act = async () => await client.GetSignaturesForAddressAsync(PublicKey.Parse(Address));
+
+            // Assert
+            await act.Should().ThrowAsync<System.Text.Json.JsonException>();
+        }
+
+        [Test]
+        public async Task NullEntry_ThrowsJsonException()
+        {
+            // Arrange
+            var (client, _) = Make("""{"jsonrpc":"2.0","result":[null],"id":1}""");
+
+            // Act
+            var act = async () => await client.GetSignaturesForAddressAsync(PublicKey.Parse(Address));
+
+            // Assert
+            await act.Should().ThrowAsync<System.Text.Json.JsonException>();
         }
 
         [Test]

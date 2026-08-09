@@ -31,7 +31,7 @@ public sealed class RpcBatch
     public Task<ulong> GetBalanceAsync(PublicKey account, Commitment commitment = Commitment.Confirmed)
         => Add(
             RpcRequests.GetBalance(account, commitment),
-            static result => result.Deserialize(RpcJson.TypeInfo<RpcContextValue<ulong>>())!.Value);
+            static result => RequireContextValue<ulong>(result));
 
     /// <summary>Queues a <c>getAccountInfo</c> call (base64 account data).</summary>
     /// <param name="account">The account to query.</param>
@@ -40,7 +40,7 @@ public sealed class RpcBatch
     public Task<AccountInfo?> GetAccountInfoAsync(PublicKey account, Commitment commitment = Commitment.Confirmed)
         => Add(
             RpcRequests.GetAccountInfo(account, commitment),
-            static result => result.Deserialize(RpcJson.TypeInfo<RpcContextValue<AccountInfo>>())!.Value);
+            static result => DeserializeContext<AccountInfo?>(result).Value);
 
     /// <summary>Queues a <c>getLatestBlockhash</c> call.</summary>
     /// <param name="commitment">The commitment level to query at.</param>
@@ -48,7 +48,7 @@ public sealed class RpcBatch
     public Task<LatestBlockhash> GetLatestBlockhashAsync(Commitment commitment = Commitment.Confirmed)
         => Add(
             RpcRequests.GetLatestBlockhash(commitment),
-            static result => result.Deserialize(RpcJson.TypeInfo<RpcContextValue<LatestBlockhash>>())!.Value!);
+            static result => RequireContextValue<LatestBlockhash>(result));
 
     /// <summary>Queues a <c>getSlot</c> call.</summary>
     /// <param name="commitment">The commitment level to query at.</param>
@@ -65,7 +65,7 @@ public sealed class RpcBatch
     public Task<TokenAmount> GetTokenAccountBalanceAsync(PublicKey tokenAccount, Commitment commitment = Commitment.Confirmed)
         => Add(
             RpcRequests.GetTokenAccountBalance(tokenAccount, commitment),
-            static result => result.Deserialize(RpcJson.TypeInfo<RpcContextValue<TokenAmount>>())!.Value!);
+            static result => RequireContextValue<TokenAmount>(result));
 
     /// <summary>Queues a <c>sendTransaction</c> call - e.g. to submit several signed transactions in one round-trip.</summary>
     /// <param name="transaction">The signed transaction's serialized wire bytes.</param>
@@ -80,7 +80,9 @@ public sealed class RpcBatch
         var encoded = Convert.ToBase64String(transaction);
         return Add(
             RpcRequests.SendTransaction(encoded, options.SkipPreflight, options.PreflightCommitment, options.MaxRetries, options.MinContextSlot),
-            static result => result.GetString()!);
+            static result => result.ValueKind == JsonValueKind.String
+                ? result.GetString()!
+                : throw new JsonException("sendTransaction returned a non-string result."));
     }
 
     /// <summary>Submits every queued call as one JSON-RPC batch and completes their tasks.</summary>
@@ -130,7 +132,8 @@ public sealed class RpcBatch
                     throw new RpcException(-1, $"The batch response contained duplicate request id {value}.");
 
                 var hasResult = element.TryGetProperty("result", out _);
-                var hasError = element.TryGetProperty("error", out var error);
+                var hasError = element.TryGetProperty("error", out var error) &&
+                               error.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined);
                 if (hasResult == hasError)
                     throw new RpcException(
                         -1,
@@ -171,6 +174,19 @@ public sealed class RpcBatch
         _requests.Add(request with { Id = pending.Id });
         _pending.Add(pending);
         return pending.Source.Task;
+    }
+
+    private static RpcContextValue<T> DeserializeContext<T>(JsonElement result)
+        => result.Deserialize(RpcJson.TypeInfo<RpcContextValue<T>>())
+           ?? throw new JsonException("A batched RPC method returned a null context wrapper.");
+
+    private static T RequireContextValue<T>(JsonElement result)
+    {
+        var context = DeserializeContext<T>(result);
+        if (context.Value is null)
+            throw new JsonException("A batched RPC context wrapper carried null for a non-null value contract.");
+
+        return context.Value;
     }
 
     private interface IPending

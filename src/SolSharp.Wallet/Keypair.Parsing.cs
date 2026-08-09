@@ -189,6 +189,33 @@ public sealed partial class Keypair
         }
     }
 
+    /// <summary>
+    /// Exports the 64-byte secret key as the JSON number array used by <c>solana-keygen id.json</c>.
+    /// The returned immutable string contains secret material and cannot be zeroed; prefer
+    /// <see cref="ToBytes"/> when the receiving API accepts bytes.
+    /// </summary>
+    /// <returns>A JSON array containing the 32-byte seed followed by the 32-byte public key.</returns>
+    /// <exception cref="ObjectDisposedException">The keypair has already been disposed.</exception>
+    public string ToJsonArray()
+    {
+        var values = new int[SecretKeyLength];
+        byte[]? bytes = null;
+        try
+        {
+            bytes = ToBytes();
+            for (var i = 0; i < bytes.Length; i++)
+                values[i] = bytes[i];
+
+            return JsonSerializer.Serialize(values, WalletJsonContext.Default.Int32Array);
+        }
+        finally
+        {
+            if (bytes is not null)
+                CryptographicOperations.ZeroMemory(bytes);
+            Array.Clear(values);
+        }
+    }
+
     private static byte[]? TryDecodeHex(string text)
     {
         var digits = text.AsSpan();

@@ -7,29 +7,52 @@ namespace SolSharp.Rpc.Models;
 /// <seealso href="https://solana.com/docs/rpc/http/getsignaturesforaddress">getSignaturesForAddress</seealso>
 public sealed record SignatureInfo
 {
+    private string? _signature;
+    private string? _confirmationStatus;
+
     /// <summary>The transaction signature, base58.</summary>
     [JsonPropertyName("signature")]
-    public string Signature { get; init; } = string.Empty;
+    [JsonRequired]
+    public string Signature
+    {
+        get => _signature ?? throw new InvalidOperationException("The signature entry has not been initialized.");
+        init => _signature = value ?? throw new JsonException("A signature entry must carry its signature.");
+    }
 
     /// <summary>The slot the transaction was processed in.</summary>
     [JsonPropertyName("slot")]
+    [JsonRequired]
     public ulong Slot { get; init; }
 
     /// <summary>The transaction error, or <c>null</c> if it succeeded.</summary>
     [JsonPropertyName("err")]
+    [JsonRequired]
     public JsonElement? Err { get; init; }
 
     /// <summary>The memo attached to the transaction, or <c>null</c> if there was none.</summary>
     [JsonPropertyName("memo")]
+    [JsonRequired]
     public string? Memo { get; init; }
 
     /// <summary>The estimated production time as Unix seconds, or <c>null</c> if not available.</summary>
     [JsonPropertyName("blockTime")]
+    [JsonRequired]
     public long? BlockTime { get; init; }
 
     /// <summary>The cluster confirmation status (<c>processed</c>, <c>confirmed</c>, or <c>finalized</c>), if present.</summary>
     [JsonPropertyName("confirmationStatus")]
-    public string? ConfirmationStatus { get; init; }
+    [JsonRequired]
+    public string? ConfirmationStatus
+    {
+        get => _confirmationStatus;
+        init
+        {
+            if (value is not null and not ("processed" or "confirmed" or "finalized"))
+                throw new JsonException($"Unknown transaction confirmation status '{value}'.");
+
+            _confirmationStatus = value;
+        }
+    }
 
     /// <summary>The transaction's index within its block, when reported.</summary>
     [JsonPropertyName("transactionIndex")]

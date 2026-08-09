@@ -5,13 +5,69 @@ All notable changes to SolSharp are documented here. The format is loosely based
 [semantic versioning](https://semver.org) — from 1.0.0 breaking changes only come with a major
 version (on the earlier 0.x releases, minor versions could carry them).
 
-## [1.4.0]
+## [2.0.0] - 2026-08-09
 
 ### Added
 
+- Published `docs/RUST_PARITY.md` with immutable Anza Solana SDK, Agave, System, ALT, SPL Token,
+  Token-2022, and ATA source pins, explicit client/runtime boundaries, and release verification gates.
+  `THIRD_PARTY_NOTICES.md` records attribution and is included in the NuGet package.
+- Added distinct `Hash` and `Signature` value types with exact byte/base58 semantics, typed blockhash and
+  signing overloads, strict signature verification, verified external `Presigner` support, and `NullSigner`
+  placeholders for multi-stage/offline signing. Transactions now expose ordered typed signature slots and
+  required keys, explicit `PartialSign` / `SignAll`, verified `AddSignature`, completeness and per-slot
+  verification, exact signable bytes, and verify-and-hash. `TransactionMessageHash` computes the Rust SDK's
+  domain-separated BLAKE3 message hash and is checked against its upstream known-answer vector.
+- Added the pinned Solana SDK version-0 `OffchainMessage` contract: canonical ASCII/UTF-8 formats,
+  domain-separated serialization and SHA-256 hashing, strict bounded parsing, typed signing, verification,
+  and exact upstream vectors. `Keypair` can now deliberately export the Rust/wallet 64-byte form, its
+  32-byte seed, base58, or `solana-keygen id.json`, with defensive byte copies and secret-cleanup guidance.
+- Added the pinned minimal-public-key-size BLS12-381 proof-of-possession scheme used by Vote v2/v4:
+  validated compressed public keys/signatures/proofs, deterministic and signer-derived keys, vote-account
+  proof binding with pre-serialization validation, exact Rust-compatible 128-byte/zeroable UTF-8 JSON key
+  files, strict allocation-bounded base64, PoP-provenance-gated same-message key/signature aggregation,
+  upstream vectors, native-AOT coverage,
+  and typed Vote builder overloads. The packaged native backend supports Linux x64/arm64, macOS x64/arm64,
+  and Windows x64; subgroup, infinity, canonical-secret, and secret-cleanup checks are enforced locally.
+  Matching the Rust SDK's rogue-key boundary, raw public keys validate proofs but signature verification is
+  exposed only through derived keypairs or proof-of-possession-verified wrappers.
+- Added the feature-gated SIMD-0385 V1 message and transaction format: inline execution configuration,
+  `0x81` version routing, message-first/fixed-signature framing, compile/sanitize/serialize/deserialize/decompile,
+  version-aware builders, and exact pinned Rust wire vectors. The client documents cluster activation and
+  zero-valued omitted compute/data limits rather than implying universal runtime availability.
+- Added System `create_with_seed` address derivation, `SystemProgram.CreateAccountAllowPrefund`, and
+  `AssociatedTokenAccount.RecoverNested`, including upstream vectors and exact signer/writable layouts.
+  `SystemProgram.TransferMany` and `CreateNonceAccountWithSeed` mirror the remaining stable client helpers.
+- Completed the classic SPL Token instruction family with the current mint/account/multisig initializers,
+  account-size and UI-amount queries, immutable-owner and sync-native variants, excess-lamport withdrawal,
+  unwrap, and batch instructions.
+- Added typed Token-2022 construction for base extension allocation, transfer fees, default account state,
+  required transfer memos, CPI guard, interest-bearing mints, transfer/metadata/group pointers, scaled UI
+  amounts, pausing, checked and confidential permissioned burns, and the Token Metadata interface.
+- Added pinned native-program clients for Stake and Vote (including compact/tower and V2/BLS layouts),
+  legacy/upgradeable/V4 loaders, Ed25519/Secp256k1/Secp256r1 verification precompiles, Address Lookup
+  Table state (including SlotHashes-aware activation, active-prefix, and lookup semantics), raw memo bytes,
+  and a bounded Instructions sysvar constructor/decoder for off-chain instruction introspection. Strict
+  account decoders cover stake, loader, ALT, and feature state.
+- Added all current sysvar IDs and bounded decoders for Clock, Rent, EpochSchedule, EpochRewards,
+  LastRestartSlot, SlotHashes, SlotHistory, and StakeHistory, plus strict version-preserving Vote
+  V1.14.11/V3/V4 account-state decoders and Feature Gate activation/revocation clients.
+- Added SPL token-group and member builders/state, transfer-hook validation PDA and extra-account-meta
+  codecs/resolution, confidential-transfer/fee/mint-burn instruction families, native proof-program POD
+  instructions, ElGamal registry state, and typed classic/Token-2022 instruction, base-account, metadata,
+  group, hook, and extension decoders. Cryptographic proof/ciphertext generation remains explicitly
+  caller-supplied rather than being replaced by an unverifiable local implementation.
+- Added a forward-compatible local `global.json`; after `setup-dotnet` installs 8.x, every CI/release job
+  asserts the SDK resolver's actual selected version, so preinstalled newer SDKs cannot invalidate the
+  minimum-SDK gate. Release publishing now fails unless the pushed tag exactly matches the
+  package version, requires private live-cluster endpoints with zero skipped or inconclusive integration
+  paths, verifies the canonical devnet genesis hash before any write, and Native-AOT publishes and runs the
+  exact packed artifact from an isolated package cache before pushing it. Duplicate immutable NuGet versions
+  fail visibly instead of becoming a green no-op.
 - Added centrally configured StyleCop analysis to every project. Rider, Roslyn, and StyleCop now share an
   explicit modifier order, while repository-conflicting documentation and legacy-layout rules are suppressed
-  in `.editorconfig` instead of producing misleading IDE warnings.
+  in `.editorconfig` instead of producing misleading IDE warnings. CI and release now require a clean
+  solution-wide `dotnet format --severity info` analyzer pass in addition to the warning-free build.
 - SPL Token and Token-2022 authority-bearing instruction builders now have additive multisig overloads:
   the multisig authority remains a non-signer account and the supplied member accounts are appended as
   readonly signers in caller order.
@@ -21,20 +77,51 @@ version (on the earlier 0.x releases, minor versions could carry them).
   late-ACK cleanup records.
 - Added the current Agave `getAgGenesisCert` read as `GetAgGenesisCertificateAsync`, including typed
   Alpenglow block-certificate and aggregate-signature models.
-- Added source- and binary-compatible `GetTransactionWithMaxVersionAsync`, which explicitly advertises a
-  caller-selected maximum transaction version and returns newer wire bytes opaquely; `GetTransactionAsync`
-  remains pinned to legacy/v0 so it never returns bytes the local transaction parser cannot decode.
-- `SimulateTransactionOptions` can now request post-simulation account snapshots and parsed inner
+- Added source- and binary-compatible explicit maximum-version reads and block subscriptions. Raw and parsed
+  HTTP/WebSocket paths can opt into V1, parsed messages preserve Agave's inline `transactionConfig`, and the
+  existing method names remain pinned to legacy/v0 for behavior compatibility.
+- Completed the effective pinned HTTP/PubSub configuration surface through source-safe, explicitly named
+  options/filter methods: minimum-context-slot reads; the full legacy/base58/base64/jsonParsed/base64+zstd
+  account-data union; HTTP account/program data slices and context-wrapped scans; mint-or-program token filters;
+  the full program-account filter union (base58/base64/raw memcmp, unsigned 64-bit data size, and
+  `tokenAccountState`) with pinned validation limits;
+  sortable supply/leader/vote options; raw block/transaction encoding-detail-reward choices; exact logs/block
+  filter unions; parsed program subscriptions; and the optional early `receivedSignature` notification before
+  final processing. `SubscribeAccountWithOptionsAsync` and `SubscribeProgramWithOptionsAsync` expose only the
+  encoding/commitment/filter fields that pinned Agave actually applies and preserve the exact account-data
+  response union, including unknown-program `jsonParsed` fallback and `base64+zstd`.
+- `SimulateTransactionOptions` can now request post-simulation account snapshots in the full effective
+  base64, base64+zstd, or jsonParsed account-data union and parsed inner
   instructions. Simulation and transaction models preserve current node fields including transaction
   version/index, cost and loaded-data units, fees, balances, return data, rewards, loaded addresses,
   parsed v0 lookup references, RPC API version, validator endpoints/client id, and basis-point commissions.
 - Added `SystemProgram.UpgradeNonceAccount`, matching the generated System Program client's discriminator
   and account layout for migrating legacy nonce state.
 
+### Changed
+
+- Blockhash and durable-nonce APIs now accept the typed `Hash` value alongside their existing string forms.
+  Existing calls that pass an untyped `null` or `default` literal must cast it to `string` (or use a typed
+  `Hash`) to disambiguate overload resolution; ordinary string and `Hash` calls are unchanged.
+- RPC models now use the pinned wire widths and closed unions instead of permissive signed/JSON containers:
+  `DataSlice` offsets and lengths are `ulong`; transaction versions use `RpcTransactionVersion`; vote epoch
+  credits and block-production counts are exact typed tuples; transaction indexes use `byte`/`uint`; and
+  simulation account snapshots use the lossless `RpcAccountInfo` union. This is a deliberate 2.0 source and
+  binary migration for callers that stored these fields in the former broad types; assemblies built against
+  1.x must be recompiled for 2.0.
+
 ### Fixed
 
+- Serialized secret-dependent Ed25519/BLS keypair operations against disposal, so concurrent disposal can
+  no longer zero a key while it is being signed or exported. Typed Vote BLS credentials now return defensive
+  copies and serialize through private validated bytes, preventing public memory views from mutating a
+  proof-of-possession-checked instruction after validation. Secret JSON-export temporaries are cleared on
+  allocation and serialization failures as well as successful completion.
 - Bounded Token-2022 metadata vector counts before allocation, preventing a malformed four-byte Borsh
   length from requesting a multi-gigabyte `List` capacity.
+- Matched precompile runtime count semantics: Ed25519 and Secp256r1 offset tables use the first header
+  byte, Secp256r1 accepts only 1-8 signatures, and zero-count trailing-data cases are rejected instead of
+  producing or decoding instructions that Agave refuses.
 - Kept the durable nonce account in v0 static keys even when it also appears in an Address Lookup Table,
   matching the Solana SDK and preserving runtime durable-nonce recognition, including valid advance-nonce
   instructions with trailing data. Durable-nonce-only legacy and v0 builders are now accepted.
@@ -53,6 +140,10 @@ version (on the earlier 0.x releases, minor versions could carry them).
   Lookup Table option tags/padding/address alignment, and classic Token account sizes before typed decode.
   Confirmation polling now falls back to the upstream `confirmations` semantics when an older node omits
   `confirmationStatus`.
+- Address Lookup Table reads now retain the RPC context slot, the full stored address list, and the
+  `last_extended_slot_start_index`; transaction-facing addresses exclude same-slot additions, while lifecycle
+  and nullable usability distinguish active, cooling-down, and status-unknown deactivation states without
+  incorrectly treating every requested deactivation as unusable.
 - Added a configurable 128 MiB default limit for single and batch HTTP response bodies, enforced while
   streaming even when `Content-Length` is absent, so a provider cannot cause an unbounded response buffer.
 - Hardened batch JSON-RPC handling: every entry must be a valid 2.0 envelope with one known, unique id and
@@ -66,6 +157,13 @@ version (on the earlier 0.x releases, minor versions could carry them).
   subscriptions support concurrent consumers, and signature confirmation accepts arbitrarily long or
   infinite timeouts without overflowing the platform timer. Shared-socket sends isolate one subscriber's
   cancellation, duplicate server IDs fail the corrupted generation, and disposal completes the close handshake.
+- WebSocket notifications now validate JSON-RPC versions and the subscription family's exact method before
+  routing, reject null or incomplete context payloads without leaving readers pending, and isolate malformed
+  scalar payloads to their own subscription. An unsolicited `receivedSignature` event can no longer satisfy a
+  final-only confirmation, and a transport-originated cancellation no longer suppresses later reconnect attempts.
+- Exact account responses now require every mandatory upstream field, context wrappers require context/value/slot
+  presence, and malformed single-call JSON-RPC error objects are rejected instead of fabricating code `0` and an
+  empty message. The final guaranteed ALT cooldown slot (`deactivation_slot + 512`) remains classified as usable.
 - `ConfirmTransactionAsync` now applies its timeout to an in-flight HTTP status request as well as the delay
   between polls. The DI resilience policy no longer retries non-idempotent `requestAirdrop` calls.
 - Compiled messages defensively copy instruction data; transactions snapshot the bytes used for their first
@@ -397,8 +495,8 @@ bundles four layered assemblies.
   transaction building, signing and serialization, `Transaction.Deserialize`, and instruction
   decompilation — every wire format validated byte-for-byte against the Rust `solana-sdk`.
 
-[Unreleased]: https://github.com/jecacs/SolSharp/compare/v1.4.0...HEAD
-[1.4.0]: https://github.com/jecacs/SolSharp/compare/v1.3.0...v1.4.0
+[Unreleased]: https://github.com/jecacs/SolSharp/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/jecacs/SolSharp/compare/v1.3.0...v2.0.0
 [1.3.0]: https://github.com/jecacs/SolSharp/releases/tag/v1.3.0
 [1.2.0]: https://github.com/jecacs/SolSharp/releases/tag/v1.2.0
 [1.1.0]: https://github.com/jecacs/SolSharp/releases/tag/v1.1.0

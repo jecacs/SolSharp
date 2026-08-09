@@ -11,7 +11,7 @@ public static class SolanaProgramIdsTests
     // Reflect over every constant so new additions are guarded automatically.
     public static IEnumerable<TestCaseData> AllConstants()
     {
-        foreach (var type in new[] { typeof(SolanaProgramIds), typeof(Sysvars), typeof(Mints) })
+        foreach (var type in new[] { typeof(SolanaProgramIds), typeof(SolanaFeatureIds), typeof(Sysvars), typeof(Mints) })
         {
             foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.Static))
             {

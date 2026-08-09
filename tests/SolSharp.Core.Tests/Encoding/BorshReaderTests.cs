@@ -64,7 +64,7 @@ public static class BorshReaderTests
         public void ReadingPastEnd_Throws()
         {
             // Act
-            Action act = () => ReadU64From([1, 2]);
+            var act = () => ReadU64From([1, 2]);
 
             // Assert
             act.Should().Throw<FormatException>();
@@ -97,7 +97,7 @@ public static class BorshReaderTests
             var data = new[] { value };
 
             // Act
-            Action act = () => ReadBoolFrom(data);
+            var act = () => ReadBoolFrom(data);
 
             // Assert
             act.Should().Throw<FormatException>().WithMessage("*must be 0 or 1*");
@@ -117,7 +117,7 @@ public static class BorshReaderTests
             var data = new[] { value };
 
             // Act
-            Action act = () => ReadOptionFrom(data);
+            var act = () => ReadOptionFrom(data);
 
             // Assert
             act.Should().Throw<FormatException>().WithMessage("*must be 0 or 1*");
@@ -151,7 +151,7 @@ public static class BorshReaderTests
             var data = Convert.FromHexString("01000000ff");
 
             // Act
-            Action act = () => ReadStringFrom(data);
+            var act = () => ReadStringFrom(data);
 
             // Assert
             act.Should().Throw<FormatException>()

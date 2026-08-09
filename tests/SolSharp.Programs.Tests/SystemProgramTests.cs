@@ -39,6 +39,38 @@ public static class SystemProgramTests
     }
 
     [TestFixture]
+    public sealed class TransferMany
+    {
+        [Test]
+        public void PreservesOrderAndUsesCanonicalTransferWire()
+        {
+            // Act
+            var instructions = SystemProgram.TransferMany(Key(1), (Key(2), 7), (Key(3), 9));
+
+            // Assert
+            instructions.Should().HaveCount(2);
+            instructions[0].Data.Should().Equal(Hex("020000000700000000000000"));
+            instructions[1].Data.Should().Equal(Hex("020000000900000000000000"));
+            Metas(instructions[0]).Should().Equal((Key(1), true, true), (Key(2), false, true));
+            Metas(instructions[1]).Should().Equal((Key(1), true, true), (Key(3), false, true));
+        }
+
+        [Test]
+        public void EmptyInput_ReturnsEmptyArray()
+            => SystemProgram.TransferMany(Key(1)).Should().BeEmpty();
+
+        [Test]
+        public void NullInput_Throws()
+        {
+            // Act
+            Action act = () => _ = SystemProgram.TransferMany(Key(1), null!);
+
+            // Assert
+            act.Should().Throw<ArgumentNullException>().WithParameterName("transfers");
+        }
+    }
+
+    [TestFixture]
     public sealed class CreateAccount
     {
         // Reference bytes from solders: create_account(from=[1;32], new=[2;32], lamports=2_039_280, space=165, owner=[9;32]).
@@ -64,6 +96,48 @@ public static class SystemProgramTests
             instruction.Accounts[1].PublicKey.Should().Be(newAccount);
             instruction.Accounts[1].IsSigner.Should().BeTrue();
             instruction.Accounts[1].IsWritable.Should().BeTrue();
+        }
+    }
+
+    [TestFixture]
+    public sealed class CreateAccountAllowPrefund
+    {
+        // Exact layout from the pinned generated System client: discriminator 13 followed by
+        // lamports, space, and owner. The payer account is optional and follows the new account.
+        [Test]
+        public void MatchesGeneratedSystemClientWithoutPayer()
+        {
+            // Act
+            var instruction = SystemProgram.CreateAccountAllowPrefund(Key(2), 165, Key(9));
+
+            // Assert
+            instruction.Data.Should().Equal(Hex(
+                "0d0000000000000000000000a500000000000000" +
+                "0909090909090909090909090909090909090909090909090909090909090909"));
+            Metas(instruction).Should().Equal((Key(2), true, true));
+        }
+
+        [Test]
+        public void MatchesGeneratedSystemClientWithPayer()
+        {
+            // Act
+            var instruction = SystemProgram.CreateAccountAllowPrefund(Key(2), 165, Key(9), 42, Key(1));
+
+            // Assert
+            instruction.Data.Should().Equal(Hex(
+                "0d0000002a00000000000000a500000000000000" +
+                "0909090909090909090909090909090909090909090909090909090909090909"));
+            Metas(instruction).Should().Equal((Key(2), true, true), (Key(1), true, true));
+        }
+
+        [Test]
+        public void AdditionalLamportsWithoutPayer_ThrowsArgumentException()
+        {
+            // Act
+            Action act = () => _ = SystemProgram.CreateAccountAllowPrefund(Key(2), 165, Key(9), lamports: 1);
+
+            // Assert
+            act.Should().Throw<ArgumentException>().WithParameterName("payer");
         }
     }
 
@@ -280,6 +354,37 @@ public static class SystemProgramTests
 
             instructions[1].Data.Should().Equal(Hex("060000000303030303030303030303030303030303030303030303030303030303030303"));
             Metas(instructions[1]).Should().Equal((Key(2), false, true), (RecentBlockhashes, false, false), (Rent, false, false));
+        }
+    }
+
+    [TestFixture]
+    public sealed class CreateNonceAccountWithSeed
+    {
+        // Exact bincode layout from pinned solana-system-interface create_nonce_account_with_seed.
+        [Test]
+        public void MatchesPinnedSystemInterface()
+        {
+            // Act
+            var instructions = SystemProgram.CreateNonceAccountWithSeed(
+                Key(1), Key(8), Key(2), "hello", Key(3), 1_447_680);
+
+            // Assert
+            instructions.Should().HaveCount(2);
+            instructions[0].Data.Should().Equal(Hex(
+                "03000000" +
+                "0202020202020202020202020202020202020202020202020202020202020202" +
+                "050000000000000068656c6c6f00171600000000005000000000000000" +
+                "0000000000000000000000000000000000000000000000000000000000000000"));
+            Metas(instructions[0]).Should().Equal(
+                (Key(1), true, true),
+                (Key(8), false, true),
+                (Key(2), true, false));
+            instructions[1].Data.Should().Equal(Hex(
+                "060000000303030303030303030303030303030303030303030303030303030303030303"));
+            Metas(instructions[1]).Should().Equal(
+                (Key(8), false, true),
+                (RecentBlockhashes, false, false),
+                (Rent, false, false));
         }
     }
 

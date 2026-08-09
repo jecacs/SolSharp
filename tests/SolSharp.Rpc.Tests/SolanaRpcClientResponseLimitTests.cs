@@ -86,7 +86,7 @@ public static class SolanaRpcClientResponseLimitTests
             var batch = client.CreateBatch();
             var call = batch.GetSlotAsync();
 
-            Func<Task> act = () => batch.ExecuteAsync();
+            var act = () => batch.ExecuteAsync();
 
             await act.Should().ThrowAsync<HttpRequestException>()
                 .WithMessage("*16-byte limit*");

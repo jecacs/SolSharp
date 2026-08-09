@@ -68,6 +68,22 @@ public static class MessageTests
                 "01020200010c0200000040420f0000000000"));
         }
 
+        [Test]
+        public void TypedBlockhash_MatchesStringOverload()
+        {
+            // Arrange
+            var payer = Key(1);
+            var instruction = new Instruction { ProgramId = Key(9), Accounts = [], Data = [7] };
+            var blockhash = new Hash(Key(8).ToBytes());
+
+            // Act
+            var typed = Message.Compile(payer, blockhash, [instruction]);
+            var text = Message.Compile(payer, blockhash.ToString(), [instruction]);
+
+            // Assert
+            typed.Serialize().Should().Equal(text.Serialize());
+        }
+
         // Reference bytes from solders for a case that exercises dedup, flag merging (an account that is
         // read-only in one instruction and writable in another becomes writable), all four account
         // classes, and the by-public-key ordering within each class.

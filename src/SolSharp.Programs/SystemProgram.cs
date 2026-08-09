@@ -27,6 +27,7 @@ public static class SystemProgram
     private const uint AssignWithSeedDiscriminator = 10;
     private const uint TransferWithSeedDiscriminator = 11;
     private const uint UpgradeNonceAccountDiscriminator = 12;
+    private const uint CreateAccountAllowPrefundDiscriminator = 13;
     private const int MaxSeedLength = 32;
 
     /// <summary>The serialized size of a durable nonce account, in bytes (80).</summary>
@@ -55,6 +56,23 @@ public static class SystemProgram
         };
     }
 
+    /// <summary>Builds one canonical System transfer instruction for each destination and amount.</summary>
+    /// <param name="from">The funding account used by every transfer; signs and is debited.</param>
+    /// <param name="transfers">Destination and lamport pairs, preserved in caller order.</param>
+    /// <returns>One transfer instruction per supplied pair; an empty input yields an empty array.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="transfers"/> is <c>null</c>.</exception>
+    public static Instruction[] TransferMany(
+        PublicKey from,
+        params (PublicKey Recipient, ulong Lamports)[] transfers)
+    {
+        ArgumentNullException.ThrowIfNull(transfers);
+
+        var instructions = new Instruction[transfers.Length];
+        for (var i = 0; i < transfers.Length; i++)
+            instructions[i] = Transfer(from, transfers[i].Recipient, transfers[i].Lamports);
+        return instructions;
+    }
+
     /// <summary>Builds an instruction that creates a new account, funds it, and assigns its owner.</summary>
     /// <param name="from">The funding account; signs the transaction and pays for the new account.</param>
     /// <param name="newAccount">The address of the account to create; must also sign.</param>
@@ -74,6 +92,48 @@ public static class SystemProgram
         {
             ProgramId = ProgramId,
             Accounts = [AccountMeta.WritableSigner(from), AccountMeta.WritableSigner(newAccount)],
+            Data = data
+        };
+    }
+
+    /// <summary>
+    /// Builds the current System Program instruction that initializes an already prefunded account, optionally
+    /// transferring additional lamports from <paramref name="payer"/> before allocating and assigning it.
+    /// </summary>
+    /// <param name="newAccount">The prefunded account to initialize; writable and required to sign.</param>
+    /// <param name="space">The number of bytes to allocate for the account's data.</param>
+    /// <param name="owner">The program that will own the initialized account.</param>
+    /// <param name="lamports">Additional lamports to transfer from <paramref name="payer"/>; zero by default.</param>
+    /// <param name="payer">
+    /// Optional writable funding signer. Supply it when <paramref name="lamports"/> is nonzero; omit it when the
+    /// new account already contains all required lamports.
+    /// </param>
+    /// <returns>The create-account-allow-prefund instruction.</returns>
+    /// <exception cref="ArgumentException"><paramref name="lamports"/> is nonzero but <paramref name="payer"/> is absent.</exception>
+    public static Instruction CreateAccountAllowPrefund(
+        PublicKey newAccount,
+        ulong space,
+        PublicKey owner,
+        ulong lamports = 0,
+        PublicKey? payer = null)
+    {
+        if (lamports != 0 && payer is null)
+            throw new ArgumentException("A payer is required when additional lamports are requested.", nameof(payer));
+
+        var data = new byte[52];
+        BinaryPrimitives.WriteUInt32LittleEndian(data, CreateAccountAllowPrefundDiscriminator);
+        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(4), lamports);
+        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(12), space);
+        owner.CopyTo(data.AsSpan(20));
+
+        var accounts = payer is { } fundingAccount
+            ? new[] { AccountMeta.WritableSigner(newAccount), AccountMeta.WritableSigner(fundingAccount) }
+            : [AccountMeta.WritableSigner(newAccount)];
+
+        return new Instruction
+        {
+            ProgramId = ProgramId,
+            Accounts = accounts,
             Data = data
         };
     }
@@ -306,6 +366,42 @@ public static class SystemProgram
         =>
         [
             CreateAccount(payer, nonceAccount, lamports, NonceAccountLength, ProgramId),
+            InitializeNonceAccount(nonceAccount, authority)
+        ];
+
+    /// <summary>
+    /// Builds the two instructions that create a durable nonce account at a System
+    /// <c>create_with_seed</c> address and initialize its authority. The derived nonce address does
+    /// not sign; the base account signs in its place.
+    /// </summary>
+    /// <param name="payer">The funding account; signs and pays for the nonce account.</param>
+    /// <param name="nonceAccount">The derived nonce-account address to create.</param>
+    /// <param name="baseAccount">The base key used to derive <paramref name="nonceAccount"/>; signs.</param>
+    /// <param name="seed">The seed used to derive <paramref name="nonceAccount"/>.</param>
+    /// <param name="authority">The authority allowed to advance and withdraw the nonce.</param>
+    /// <param name="lamports">The rent-exempt lamports to deposit.</param>
+    /// <returns>The seeded create-account instruction followed by initialize-nonce.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="seed"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="seed"/> contains invalid Unicode or exceeds 32 UTF-8 bytes.
+    /// </exception>
+    public static Instruction[] CreateNonceAccountWithSeed(
+        PublicKey payer,
+        PublicKey nonceAccount,
+        PublicKey baseAccount,
+        string seed,
+        PublicKey authority,
+        ulong lamports)
+        =>
+        [
+            CreateAccountWithSeed(
+                payer,
+                nonceAccount,
+                baseAccount,
+                seed,
+                lamports,
+                NonceAccountLength,
+                ProgramId),
             InitializeNonceAccount(nonceAccount, authority)
         ];
 

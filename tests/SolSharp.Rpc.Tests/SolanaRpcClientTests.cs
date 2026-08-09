@@ -35,6 +35,20 @@ public static class SolanaRpcClientTests
             result.Blockhash.Should().Be("EkSnNWid2cvwEVnVx9aBqawnmiCNiDgp3gUdkDPTKN1N");
             result.LastValidBlockHeight.Should().Be(3090);
         }
+
+        [Test]
+        public async Task NullContextValue_ThrowsJsonException()
+        {
+            // Arrange
+            var client = Client(
+                """{"jsonrpc":"2.0","result":{"context":{"slot":328},"value":null},"id":1}""");
+
+            // Act
+            var act = async () => await client.GetLatestBlockhashAsync();
+
+            // Assert
+            await act.Should().ThrowAsync<System.Text.Json.JsonException>();
+        }
     }
 
     [TestFixture]
@@ -102,6 +116,19 @@ public static class SolanaRpcClientTests
             // Act & Assert
             (await client.GetVersionAsync()).SolanaCore.Should().Be("2.0.14");
         }
+
+        [Test]
+        public async Task NullResult_ThrowsJsonException()
+        {
+            // Arrange
+            var client = Client("""{"jsonrpc":"2.0","result":null,"id":1}""");
+
+            // Act
+            var act = async () => await client.GetVersionAsync();
+
+            // Assert
+            await act.Should().ThrowAsync<System.Text.Json.JsonException>();
+        }
     }
 
     [TestFixture]
@@ -134,6 +161,20 @@ public static class SolanaRpcClientTests
             // Assert
             supply.Amount.Should().Be("1000000000");
             supply.Decimals.Should().Be(6);
+        }
+
+        [Test]
+        public async Task MissingMandatoryAmountFields_ThrowsJsonException()
+        {
+            // Arrange
+            var client = Client(
+                """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{}},"id":1}""");
+
+            // Act
+            var act = async () => await client.GetTokenSupplyAsync(PublicKey.Parse(SolanaProgramIds.TokenProgram));
+
+            // Assert
+            await act.Should().ThrowAsync<System.Text.Json.JsonException>();
         }
     }
 
@@ -276,6 +317,21 @@ public static class SolanaRpcClientTests
         }
 
         [Test]
+        public async Task NonNullResultAndError_ThrowsProtocolError()
+        {
+            // Arrange
+            var client = Client(
+                "{\"jsonrpc\":\"2.0\",\"result\":123,\"error\":{\"code\":-32005,\"message\":\"Node is behind\"},\"id\":1}");
+
+            // Act
+            var act = async () => await client.GetSlotAsync();
+
+            // Assert
+            await act.Should().ThrowAsync<RpcException>()
+                .WithMessage("RPC error -1: JSON-RPC response contained both a non-null result and an error.");
+        }
+
+        [Test]
         public async Task ErrorWithNullId_SurfacesTheNodeError()
         {
             // Arrange: JSON-RPC 2.0 mandates "id": null when the server could not process the request.
@@ -287,6 +343,56 @@ public static class SolanaRpcClientTests
             // Assert
             await act.Should().ThrowAsync<RpcException>()
                 .WithMessage("RPC error -32700: Parse error");
+        }
+
+        [Test]
+        public async Task ErrorWithMismatchedNumericId_ThrowsProtocolError()
+        {
+            // Arrange
+            var client = Client(
+                "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32005,\"message\":\"Other request\"},\"id\":2}");
+
+            // Act
+            var act = async () => await client.GetSlotAsync();
+
+            // Assert
+            await act.Should().ThrowAsync<RpcException>()
+                .WithMessage("RPC error -1: JSON-RPC response id did not match the request id.");
+        }
+
+        [Test]
+        public async Task ErrorWithWrongProtocolVersion_ThrowsProtocolError()
+        {
+            // Arrange
+            var client = Client(
+                "{\"jsonrpc\":\"1.0\",\"error\":{\"code\":-32005,\"message\":\"Node is behind\"},\"id\":1}");
+
+            // Act
+            var act = async () => await client.GetSlotAsync();
+
+            // Assert
+            await act.Should().ThrowAsync<RpcException>()
+                .WithMessage("RPC error -1: Invalid JSON-RPC response version.");
+        }
+
+        [TestCase("{}")]
+        [TestCase("{\"code\":-1}")]
+        [TestCase("{\"message\":\"bad\"}")]
+        [TestCase("{\"code\":\"-1\",\"message\":\"bad\"}")]
+        [TestCase("{\"code\":-1,\"message\":null}")]
+        public async Task MalformedErrorObject_ThrowsProtocolError(string error)
+        {
+            // Arrange
+            var client = Client(
+                """{"jsonrpc":"2.0","error":__ERROR__,"id":1}"""
+                    .Replace("__ERROR__", error, StringComparison.Ordinal));
+
+            // Act
+            var act = async () => await client.GetSlotAsync();
+
+            // Assert
+            await act.Should().ThrowAsync<RpcException>()
+                .WithMessage("RPC error -1: JSON-RPC response carried a malformed error object.");
         }
 
         [Test]

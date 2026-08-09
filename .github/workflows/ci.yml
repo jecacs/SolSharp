@@ -10,19 +10,34 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up .NET 8
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: 8.0.x
 
+      # setup-dotnet proves installation, while global.json controls selection. Assert the actual
+      # resolver result because hosted runners also have newer SDK majors preinstalled.
+      - name: Verify .NET 8 SDK selection
+        shell: bash
+        run: |
+          selected_version="$(dotnet --version)"
+          if [[ "${selected_version}" != 8.* ]]; then
+            echo "Expected a .NET 8 SDK, but dotnet selected ${selected_version}."
+            dotnet --info
+            exit 1
+          fi
+
       - name: Restore
-        run: dotnet restore
+        run: dotnet restore -p:NuGetAuditMode=all -warnaserror
 
       # Hard gate: the project keeps a zero-warning build, so fail CI on any warning.
       - name: Build
         run: dotnet build --no-restore --configuration Release -warnaserror
+
+      - name: Verify formatting and analyzer style
+        run: dotnet format --no-restore --verify-no-changes --severity info
 
       # The SolSharp.IntegrationTests suite hits a live cluster, so it is excluded here to keep CI
       # deterministic and offline; run it locally with a configured SOLSHARP_RPC_URL.
@@ -34,18 +49,59 @@ jobs:
   aot-smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up .NET 8
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: 8.0.x
 
+      - name: Verify .NET 8 SDK selection
+        shell: bash
+        run: |
+          selected_version="$(dotnet --version)"
+          if [[ "${selected_version}" != 8.* ]]; then
+            echo "Expected a .NET 8 SDK, but dotnet selected ${selected_version}."
+            dotnet --info
+            exit 1
+          fi
+
+      - name: Restore and audit dependencies
+        run: dotnet restore -p:NuGetAuditMode=all -warnaserror
+
       - name: Pack and validate public API
-        run: dotnet pack src/SolSharp/SolSharp.csproj -c Release -o artifacts -p:Version=999.0.0-ci
+        run: dotnet pack src/SolSharp/SolSharp.csproj -c Release -o artifacts -p:Version=999.0.0-ci --no-restore -warnaserror
 
       - name: Publish packed package consumer (Native AOT)
-        run: dotnet publish samples/SolSharp.AotSmoke -c Release -r linux-x64 -p:UsePackedSolSharp=true -p:SolSharpPackageVersion=999.0.0-ci --source artifacts --source https://api.nuget.org/v3/index.json
+        shell: bash
+        env:
+          NUGET_PACKAGES: ${{ runner.temp }}/solsharp-ci-packages
+        run: |
+          package_version="999.0.0-ci"
+          dotnet restore samples/SolSharp.AotSmoke \
+            --runtime linux-x64 \
+            -p:UsePackedSolSharp=true \
+            -p:SolSharpPackageVersion="${package_version}" \
+            --source artifacts \
+            --source https://api.nuget.org/v3/index.json \
+            -p:NuGetAuditMode=all \
+            -warnaserror
+
+          artifact_path="$(find artifacts -maxdepth 1 -iname "solsharp.${package_version}.nupkg" -print -quit)"
+          restored_path="${NUGET_PACKAGES}/solsharp/${package_version}/solsharp.${package_version}.nupkg"
+          if [[ -z "${artifact_path}" || ! -f "${restored_path}" ]] || ! cmp --silent "${artifact_path}" "${restored_path}"; then
+            echo "The AOT consumer did not restore the exact package artifact produced by this job."
+            sha256sum "${artifact_path}" "${restored_path}" 2>/dev/null || true
+            exit 1
+          fi
+
+          dotnet publish samples/SolSharp.AotSmoke \
+            --configuration Release \
+            --runtime linux-x64 \
+            --no-restore \
+            -warnaserror \
+            -p:UsePackedSolSharp=true \
+            -p:SolSharpPackageVersion="${package_version}"
 
       - name: Run sample
         run: samples/SolSharp.AotSmoke/bin/Release/net8.0/linux-x64/publish/SolSharp.AotSmoke

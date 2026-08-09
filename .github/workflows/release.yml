@@ -13,40 +13,173 @@ jobs:
       id-token: write   # required for the OIDC token exchange with NuGet
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
 
       - name: Set up .NET 8
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: 8.0.x
 
-      - name: Build
-        run: dotnet build --configuration Release -warnaserror
+      - name: Verify .NET 8 SDK selection
+        shell: bash
+        run: |
+          selected_version="$(dotnet --version)"
+          if [[ "${selected_version}" != 8.* ]]; then
+            echo "Expected a .NET 8 SDK, but dotnet selected ${selected_version}."
+            dotnet --info
+            exit 1
+          fi
 
-      # Unlike CI (which stays offline), the release gate runs the FULL suite, including the live-cluster
-      # integration tests, so nothing is published without the real read/streaming paths passing - and the
-      # write path (airdrop, transfer, durable nonce) against devnet. Rate limits report inconclusive (not
-      # failed), so a busy node will not block a release; a real regression will. Set SOLSHARP_RPC_URL /
-      # SOLSHARP_WS_URL secrets for a private mainnet node, SOLSHARP_DEVNET_RPC_URL for a private devnet one.
-      - name: Test (full suite, including live integration)
-        run: dotnet test --no-build --configuration Release
+      - name: Restore and audit dependencies
+        run: dotnet restore -p:NuGetAuditMode=all -warnaserror
+
+      - name: Validate tag matches package version
+        shell: bash
+        run: |
+          package_version="$(dotnet msbuild src/SolSharp/SolSharp.csproj -getProperty:Version -nologo)"
+          expected_tag="v${package_version}"
+          if [[ "${GITHUB_REF_NAME}" != "${expected_tag}" ]]; then
+            echo "Release tag ${GITHUB_REF_NAME} does not match package version ${package_version}."
+            exit 1
+          fi
+
+      - name: Require the tagged commit to be merged into main
+        shell: bash
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/main; then
+            echo "Release commit ${GITHUB_SHA} is not contained in origin/main."
+            exit 1
+          fi
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore -warnaserror
+
+      - name: Verify formatting and analyzer style
+        run: dotnet format --no-restore --verify-no-changes --severity info
+
+      - name: Require private integration endpoints
+        shell: bash
         env:
           SOLSHARP_RPC_URL: ${{ secrets.SOLSHARP_RPC_URL }}
           SOLSHARP_WS_URL: ${{ secrets.SOLSHARP_WS_URL }}
           SOLSHARP_DEVNET_RPC_URL: ${{ secrets.SOLSHARP_DEVNET_RPC_URL }}
+        run: |
+          for variable in SOLSHARP_RPC_URL SOLSHARP_WS_URL SOLSHARP_DEVNET_RPC_URL; do
+            value="${!variable:-}"
+            if [[ -z "${value}" ]]; then
+              echo "Required release integration secret ${variable} is not configured."
+              exit 1
+            fi
+
+            parsed_endpoint="$(python3 -c '
+          import sys
+          from urllib.parse import urlsplit
+
+          try:
+              endpoint = urlsplit(sys.argv[1])
+              _ = endpoint.port
+          except ValueError as error:
+              raise SystemExit(f"Invalid endpoint URI: {error}") from error
+
+          if not endpoint.scheme or not endpoint.hostname:
+              raise SystemExit("Endpoint URI must include a scheme and hostname.")
+
+          print(endpoint.scheme.lower(), endpoint.hostname.rstrip(".").lower())
+          ' "${value}")" || exit 1
+            read -r endpoint_scheme endpoint_host <<< "${parsed_endpoint}"
+            case "${variable}:${endpoint_scheme}" in
+              SOLSHARP_RPC_URL:http|SOLSHARP_RPC_URL:https|SOLSHARP_DEVNET_RPC_URL:http|SOLSHARP_DEVNET_RPC_URL:https|SOLSHARP_WS_URL:ws|SOLSHARP_WS_URL:wss)
+                ;;
+              *)
+                echo "Release integration secret ${variable} has an unsupported URI scheme."
+                exit 1
+                ;;
+            esac
+            case "${endpoint_host}" in
+              api.mainnet-beta.solana.com|api.devnet.solana.com|api.testnet.solana.com)
+                echo "Release integration secret ${variable} must use a private endpoint, not a public fallback."
+                exit 1
+                ;;
+            esac
+          done
+
+      # Unlike ordinary local runs, release integration is strict: transport failures, rate limits, and
+      # every inconclusive/skipped result fail the job. The required private endpoints keep that gate stable.
+      - name: Test (full suite, including live integration)
+        run: dotnet test --no-build --configuration Release --logger trx
+        env:
+          SOLSHARP_RPC_URL: ${{ secrets.SOLSHARP_RPC_URL }}
+          SOLSHARP_WS_URL: ${{ secrets.SOLSHARP_WS_URL }}
+          SOLSHARP_DEVNET_RPC_URL: ${{ secrets.SOLSHARP_DEVNET_RPC_URL }}
+          SOLSHARP_INTEGRATION_STRICT: 'true'
+
+      - name: Reject inconclusive or skipped tests
+        shell: bash
+        run: |
+          mapfile -t result_files < <(find . -type f -path '*/TestResults/*.trx')
+          if (( ${#result_files[@]} == 0 )); then
+            echo "No TRX test results were produced."
+            exit 1
+          fi
+
+          if grep --with-filename --extended-regexp \
+            'outcome="(NotExecuted|Skipped|Inconclusive|NotRunnable|Warning)"' "${result_files[@]}"; then
+            echo "Release tests contained an inconclusive or skipped result."
+            exit 1
+          fi
 
       # No --no-build: packing rebuilds so the facade's bundling target (which folds the four
       # assemblies into the single SolSharp package) runs against fully resolved references.
       - name: Pack
-        run: dotnet pack src/SolSharp/SolSharp.csproj --configuration Release --output ./artifacts
+        run: dotnet pack src/SolSharp/SolSharp.csproj --configuration Release --output ./artifacts --no-restore -warnaserror
+
+      # Exercise the exact artifact about to be published, including bundled assemblies and the native
+      # BLS backend. This catches package-only dependency/RID regressions that a project-reference build
+      # cannot see.
+      - name: Publish packed package consumer (Native AOT)
+        shell: bash
+        env:
+          NUGET_PACKAGES: ${{ runner.temp }}/solsharp-release-packages
+        run: |
+          package_version="${GITHUB_REF_NAME#v}"
+          dotnet restore samples/SolSharp.AotSmoke \
+            --runtime linux-x64 \
+            -p:UsePackedSolSharp=true \
+            -p:SolSharpPackageVersion="${package_version}" \
+            --source ./artifacts \
+            --source https://api.nuget.org/v3/index.json \
+            -p:NuGetAuditMode=all \
+            -warnaserror
+
+          artifact_path="$(find ./artifacts -maxdepth 1 -iname "solsharp.${package_version}.nupkg" -print -quit)"
+          restored_path="${NUGET_PACKAGES}/solsharp/${package_version}/solsharp.${package_version}.nupkg"
+          if [[ -z "${artifact_path}" || ! -f "${restored_path}" ]] || ! cmp --silent "${artifact_path}" "${restored_path}"; then
+            echo "The AOT consumer did not restore the exact package artifact produced by this release."
+            sha256sum "${artifact_path}" "${restored_path}" 2>/dev/null || true
+            exit 1
+          fi
+
+          dotnet publish samples/SolSharp.AotSmoke \
+            --configuration Release \
+            --runtime linux-x64 \
+            --no-restore \
+            -warnaserror \
+            -p:UsePackedSolSharp=true \
+            -p:SolSharpPackageVersion="${package_version}"
+
+      - name: Run packed package consumer
+        run: samples/SolSharp.AotSmoke/bin/Release/net8.0/linux-x64/publish/SolSharp.AotSmoke
 
       # Trusted Publishing: exchange the GitHub OIDC token for a short-lived NuGet API key
       # (the jecacs/SolSharp policy authorizes this repo + this workflow file), then push with it.
       - name: NuGet login (OIDC)
-        uses: NuGet/login@v1
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
         id: login
         with:
           user: jecacs
 
       - name: Push to NuGet
-        run: dotnet nuget push "./artifacts/*.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+        run: dotnet nuget push "./artifacts/*.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json

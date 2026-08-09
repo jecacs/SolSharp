@@ -12,9 +12,8 @@ public static class MessageDecompileTests
         => [.. instruction.Accounts.Select(a => (a.PublicKey, a.IsSigner, a.IsWritable))];
 
     [TestFixture]
-    public sealed class Legacy
+    public sealed class MessageDecompileInstructions
     {
-        // Compile then decompile must round-trip an instruction touching all four account classes.
         [Test]
         public void ReproducesAllFourAccountClasses()
         {
@@ -31,12 +30,12 @@ public static class MessageDecompileTests
                 ],
                 Data = [7]
             };
-
-            // Act
             var message = Message.Compile(Pk(1), Pk(8).ToString(), [instruction]);
 
-            // Assert
+            // Act
             var decompiled = message.DecompileInstructions([]).Should().ContainSingle().Subject;
+
+            // Assert
             decompiled.ProgramId.Should().Be(Pk(9));
             decompiled.Data.Should().Equal(7);
             Metas(decompiled).Should().Equal(
@@ -44,9 +43,6 @@ public static class MessageDecompileTests
                 (Pk(2), true, false),
                 (Pk(3), false, true),
                 (Pk(4), false, false));
-
-            // The parameterless default (via the interface) works for a message with no lookup tables.
-            ((ITransactionMessage)message).DecompileInstructions().Should().ContainSingle();
         }
 
         [Test]
@@ -112,9 +108,8 @@ public static class MessageDecompileTests
     }
 
     [TestFixture]
-    public sealed class Versioned
+    public sealed class MessageV0DecompileInstructions
     {
-        // Same instruction as MessageV0Tests (A=[2] drains writable, B=[3] drains readonly from table [5]).
         [Test]
         public void ResolvesLookupTableAccounts()
         {
@@ -132,12 +127,12 @@ public static class MessageDecompileTests
                 Data = [1, 2]
             };
             var table = new AddressLookupTableAccount(Pk(5), [Pk(2), Pk(3), Pk(7)]);
-
-            // Act
             var message = MessageV0.Compile(Pk(1), Pk(8).ToString(), [instruction], [table]);
 
-            // Assert
+            // Act
             var decompiled = message.DecompileInstructions([table]).Should().ContainSingle().Subject;
+
+            // Assert
             decompiled.ProgramId.Should().Be(Pk(9));
             decompiled.Data.Should().Equal(1, 2);
             Metas(decompiled).Should().Equal(
@@ -145,9 +140,6 @@ public static class MessageDecompileTests
                 (Pk(3), false, false),
                 (Pk(4), false, true),
                 (Pk(6), true, true));
-
-            // Full index space = static (payer, signer, writable, program) ++ loaded-writable ++ loaded-readonly.
-            message.GetAccountKeys([table]).Should().Equal(Pk(1), Pk(6), Pk(4), Pk(9), Pk(2), Pk(3));
         }
 
         [Test]
@@ -231,6 +223,145 @@ public static class MessageDecompileTests
 
             // Assert
             act.Should().Throw<ArgumentException>().WithMessage("Lookup index 0 is out of range*");
+        }
+
+        [Test]
+        public void NullLookupTableList_ThrowsDocumentedException()
+        {
+            // Arrange
+            var message = MessageV0.Compile(Pk(1), Pk(8).ToString(), [], []);
+
+            // Act
+            Action act = () => _ = message.DecompileInstructions(null!);
+
+            // Assert
+            act.Should().Throw<ArgumentNullException>().WithParameterName("lookupTables");
+        }
+    }
+
+    [TestFixture]
+    public sealed class MessageV0GetAccountKeys
+    {
+        [Test]
+        public void LookupTables_ProduceTheCompleteStaticAndLoadedIndexSpace()
+        {
+            // Arrange
+            var instruction = new Instruction
+            {
+                ProgramId = Pk(9),
+                Accounts =
+                [
+                    AccountMeta.Writable(Pk(2)),
+                    AccountMeta.Readonly(Pk(3)),
+                    AccountMeta.Writable(Pk(4)),
+                    AccountMeta.WritableSigner(Pk(6))
+                ],
+                Data = [1, 2]
+            };
+            var table = new AddressLookupTableAccount(Pk(5), [Pk(2), Pk(3), Pk(7)]);
+            var message = MessageV0.Compile(Pk(1), Pk(8).ToString(), [instruction], [table]);
+
+            // Act
+            var keys = message.GetAccountKeys([table]);
+
+            // Assert
+            keys.Should().Equal(Pk(1), Pk(6), Pk(4), Pk(9), Pk(2), Pk(3));
+        }
+
+        [Test]
+        public void NullLookupTableList_ThrowsDocumentedException()
+        {
+            // Arrange
+            var message = MessageV0.Compile(Pk(1), Pk(8).ToString(), [], []);
+
+            // Act
+            Action act = () => _ = message.GetAccountKeys(null!);
+
+            // Assert
+            act.Should().Throw<ArgumentNullException>().WithParameterName("lookupTables");
+        }
+    }
+
+    [TestFixture]
+    public sealed class MessageV1DecompileInstructions
+    {
+        [Test]
+        public void ParameterlessAndLookupTableOverloads_ResolveTheSameInlineAccounts()
+        {
+            // Arrange
+            var instruction = new Instruction
+            {
+                ProgramId = Pk(9),
+                Accounts =
+                [
+                    AccountMeta.WritableSigner(Pk(1)),
+                    AccountMeta.Readonly(Pk(2)),
+                    AccountMeta.Writable(Pk(3))
+                ],
+                Data = [7]
+            };
+            var message = MessageV1.Compile(Pk(1), new Hash(Pk(8).ToBytes()), [instruction]);
+
+            // Act
+            var direct = message.DecompileInstructions().Should().ContainSingle().Subject;
+            var withLookupTables = message.DecompileInstructions([]).Should().ContainSingle().Subject;
+
+            // Assert
+            direct.ProgramId.Should().Be(Pk(9));
+            direct.Data.Should().Equal(7);
+            Metas(direct).Should().Equal(
+                (Pk(1), true, true),
+                (Pk(2), false, false),
+                (Pk(3), false, true));
+            Metas(withLookupTables).Should().Equal(Metas(direct));
+        }
+
+        [Test]
+        public void NullLookupTableList_ThrowsDocumentedException()
+        {
+            // Arrange
+            var message = MessageV1.Compile(Pk(1), new Hash(Pk(8).ToBytes()), []);
+
+            // Act
+            Action act = () => _ = message.DecompileInstructions(null!);
+
+            // Assert
+            act.Should().Throw<ArgumentNullException>().WithParameterName("lookupTables");
+        }
+    }
+
+    [TestFixture]
+    public sealed class ITransactionMessageDecompileInstructions
+    {
+        [Test]
+        public void LegacyMessage_DefaultMethodUsesAnEmptyLookupTableList()
+        {
+            // Arrange
+            var instruction = new Instruction { ProgramId = Pk(9), Accounts = [], Data = [7] };
+            var message = Message.Compile(Pk(1), Pk(8).ToString(), [instruction]);
+
+            // Act & Assert
+            ((ITransactionMessage)message).DecompileInstructions().Should().ContainSingle();
+        }
+
+        [Test]
+        public void VersionZeroMessageWithLookups_DefaultMethodRejectsTheMissingTable()
+        {
+            // Arrange
+            var instruction = new Instruction
+            {
+                ProgramId = Pk(9),
+                Accounts = [AccountMeta.Writable(Pk(2))],
+                Data = []
+            };
+            var table = new AddressLookupTableAccount(Pk(5), [Pk(2)]);
+            var message = MessageV0.Compile(Pk(1), Pk(8).ToString(), [instruction], [table]);
+
+            // Act
+            Action act = () => _ = ((ITransactionMessage)message).DecompileInstructions();
+
+            // Assert
+            act.Should().Throw<ArgumentException>();
         }
     }
 }

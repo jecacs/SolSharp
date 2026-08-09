@@ -81,6 +81,31 @@ public static class RpcBatchTests
         }
 
         [Test]
+        public async Task NullRequiredValues_FaultOnlyThoseCalls()
+        {
+            // Arrange
+            var (client, _) = Make(
+                """
+                [
+                  {"jsonrpc":"2.0","result":{"context":{"slot":1},"value":null},"id":1},
+                  {"jsonrpc":"2.0","result":null,"id":2}
+                ]
+                """);
+            var batch = client.CreateBatch();
+            var blockhash = batch.GetLatestBlockhashAsync();
+            var signature = batch.SendTransactionAsync([1]);
+
+            // Act
+            await batch.ExecuteAsync();
+            var blockhashAct = async () => await blockhash;
+            var signatureAct = async () => await signature;
+
+            // Assert
+            await blockhashAct.Should().ThrowAsync<System.Text.Json.JsonException>();
+            await signatureAct.Should().ThrowAsync<System.Text.Json.JsonException>();
+        }
+
+        [Test]
         public async Task PerCallError_PreservesStructuredErrorData()
         {
             // Arrange
@@ -140,7 +165,6 @@ public static class RpcBatchTests
         [TestCase("[[]]")]
         [TestCase("[{\"jsonrpc\":\"1.0\",\"result\":1,\"id\":1}]")]
         [TestCase("[{\"jsonrpc\":\"2.0\",\"result\":1,\"error\":{\"code\":-1,\"message\":\"bad\"},\"id\":1}]")]
-        [TestCase("[{\"jsonrpc\":\"2.0\",\"result\":1,\"error\":null,\"id\":1}]")]
         [TestCase("[{\"jsonrpc\":\"2.0\",\"error\":null,\"id\":1}]")]
         [TestCase("[{\"jsonrpc\":\"2.0\",\"id\":1}]")]
         [TestCase("[{\"jsonrpc\":\"2.0\",\"result\":1,\"id\":2}]")]
@@ -164,6 +188,21 @@ public static class RpcBatchTests
             call.IsCompleted.Should().BeTrue();
             var callAct = async () => await call;
             await callAct.Should().ThrowAsync<RpcException>();
+        }
+
+        [Test]
+        public async Task NullErrorAlongsideResult_IsTreatedAsAbsent()
+        {
+            // Arrange
+            var (client, _) = Make("""[{"jsonrpc":"2.0","result":7,"error":null,"id":1}]""");
+            var batch = client.CreateBatch();
+            var call = batch.GetSlotAsync();
+
+            // Act
+            await batch.ExecuteAsync();
+
+            // Assert
+            (await call).Should().Be(7ul);
         }
 
         [Test]

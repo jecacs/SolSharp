@@ -137,7 +137,7 @@ public static class PublicKeyTests
             var key = PublicKey.Parse(Sample);
 
             // Act
-            Action act = () => key.CopyTo(new byte[PublicKey.Length - 1]);
+            var act = () => key.CopyTo(new byte[PublicKey.Length - 1]);
 
             // Assert
             act.Should().Throw<ArgumentException>();

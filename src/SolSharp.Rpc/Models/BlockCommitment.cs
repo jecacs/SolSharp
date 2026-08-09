@@ -15,5 +15,6 @@ public sealed record BlockCommitment
 
     /// <summary>The total active stake in lamports for the current epoch.</summary>
     [JsonPropertyName("totalStake")]
+    [JsonRequired]
     public ulong TotalStake { get; init; }
 }

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace SolSharp.Rpc.Models;
@@ -6,19 +7,34 @@ namespace SolSharp.Rpc.Models;
 /// <seealso href="https://solana.com/docs/rpc/http/gettokenaccountbalance">getTokenAccountBalance</seealso>
 public sealed record TokenAmount
 {
+    private string? _amount;
+    private string? _uiAmountString;
+
     /// <summary>The raw amount in the token's base units.</summary>
     [JsonPropertyName("amount")]
-    public string Amount { get; init; } = string.Empty;
+    [JsonRequired]
+    public string Amount
+    {
+        get => _amount ?? throw new InvalidOperationException("The token amount has not been initialized.");
+        init => _amount = value ?? throw new JsonException("A token amount must carry its base-unit string.");
+    }
 
     /// <summary>The number of base-10 digits to the right of the decimal point.</summary>
     [JsonPropertyName("decimals")]
-    public int Decimals { get; init; }
+    [JsonRequired]
+    public byte Decimals { get; init; }
 
     /// <summary>The amount in UI units, or null if it cannot be represented.</summary>
     [JsonPropertyName("uiAmount")]
-    public decimal? UiAmount { get; init; }
+    [JsonRequired]
+    public double? UiAmount { get; init; }
 
     /// <summary>The amount in UI units as a string.</summary>
     [JsonPropertyName("uiAmountString")]
-    public string? UiAmountString { get; init; }
+    [JsonRequired]
+    public string UiAmountString
+    {
+        get => _uiAmountString ?? throw new InvalidOperationException("The UI token amount has not been initialized.");
+        init => _uiAmountString = value ?? throw new JsonException("A token amount must carry its UI amount string.");
+    }
 }

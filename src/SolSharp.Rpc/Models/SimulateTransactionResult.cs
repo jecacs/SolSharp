@@ -6,10 +6,11 @@ namespace SolSharp.Rpc.Models;
 
 /// <summary>The result of simulating a transaction.</summary>
 /// <seealso href="https://solana.com/docs/rpc/http/simulatetransaction">simulateTransaction</seealso>
-public sealed record SimulateTransactionResult
+public sealed record SimulateTransactionResult : IJsonOnDeserialized
 {
     /// <summary>The transaction error, or <c>null</c> if the simulation succeeded.</summary>
     [JsonPropertyName("err")]
+    [JsonRequired]
     public JsonElement? Err { get; init; }
 
     /// <summary>The log lines the transaction emitted, or <c>null</c> if the node returned none.</summary>
@@ -24,9 +25,12 @@ public sealed record SimulateTransactionResult
     [JsonPropertyName("loadedAccountsDataSize")]
     public uint? LoadedAccountsDataSize { get; init; }
 
-    /// <summary>The requested post-simulation account states, or <c>null</c> when none were requested.</summary>
+    /// <summary>
+    /// The requested post-simulation account states in their exact encoded or parsed branch, or <c>null</c>
+    /// when none were requested. Individual entries are <c>null</c> when simulation failed or an account is absent.
+    /// </summary>
     [JsonPropertyName("accounts")]
-    public IReadOnlyList<AccountInfo?>? Accounts { get; init; }
+    public IReadOnlyList<RpcAccountInfo?>? Accounts { get; init; }
 
     /// <summary>Data returned by a program, or <c>null</c> when no program set return data.</summary>
     [JsonPropertyName("returnData")]
@@ -71,4 +75,13 @@ public sealed record SimulateTransactionResult
     /// <summary>The decoded transaction error, or <c>null</c> if the simulation succeeded.</summary>
     [JsonIgnore]
     public TransactionError? Error => TransactionError.Parse(Err);
+
+    /// <inheritdoc/>
+    public void OnDeserialized()
+    {
+        RpcCollectionValidator.ValidateOptional(Logs, "simulation log messages");
+        RpcCollectionValidator.ValidateOptional(InnerInstructions, "simulation inner-instruction groups");
+        RpcCollectionValidator.ValidateOptional(PreTokenBalances, "simulation pre-token balances");
+        RpcCollectionValidator.ValidateOptional(PostTokenBalances, "simulation post-token balances");
+    }
 }

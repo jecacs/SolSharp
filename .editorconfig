@@ -146,9 +146,9 @@ dotnet_diagnostic.SA1519.severity = none
 dotnet_diagnostic.SA1520.severity = none
 dotnet_diagnostic.SA1633.severity = none
 
-# XML documentation content is already enforced for public API by CS1591.
-# StyleCop's internal-element and fixed-wording rules add boilerplate without
-# improving the public contract.
+# CS1591 build-gates the presence of XML documentation on production public API.
+# Completeness is a review policy; StyleCop's fixed wording/internal-element rules
+# conflict with the repository's concise contract style and are disabled explicitly.
 dotnet_diagnostic.SA1600.severity = none
 dotnet_diagnostic.SA1601.severity = none
 dotnet_diagnostic.SA1611.severity = none

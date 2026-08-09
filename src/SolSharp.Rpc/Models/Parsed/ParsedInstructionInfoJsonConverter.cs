@@ -16,13 +16,19 @@ internal sealed class ParsedInstructionInfoJsonConverter : JsonConverter<ParsedI
         using var document = JsonDocument.ParseValue(ref reader);
         var root = document.RootElement;
 
-        if (root.ValueKind is not JsonValueKind.Object)
+        if (root.ValueKind is not JsonValueKind.Object ||
+            !root.TryGetProperty("type", out var type) ||
+            type.ValueKind is not JsonValueKind.String ||
+            !root.TryGetProperty("info", out var info) ||
+            root.EnumerateObject().Count() != 2)
+        {
             return new ParsedInstructionInfo { Info = root.Clone() };
+        }
 
         return new ParsedInstructionInfo
         {
-            Type = root.TryGetProperty("type", out var type) ? type.GetString() ?? string.Empty : string.Empty,
-            Info = root.TryGetProperty("info", out var info) ? info.Clone() : root.Clone()
+            Type = type.GetString()!,
+            Info = info.Clone()
         };
     }
 

@@ -7,7 +7,7 @@ namespace SolSharp.Programs;
 /// <summary>
 /// A compiled v0 (versioned) transaction message: like a legacy <see cref="Message"/>, but able to load
 /// extra accounts from on-chain address lookup tables so a transaction can reference far more accounts.
-/// Build one with <see cref="Compile"/>, then <see cref="Serialize()"/> for the signed-and-sent bytes, which
+/// Build one with <c>Compile</c>, then <see cref="Serialize()"/> for the signed-and-sent bytes, which
 /// begin with the <see cref="VersionPrefix"/> byte.
 /// </summary>
 public sealed class MessageV0 : ITransactionMessage
@@ -63,6 +63,27 @@ public sealed class MessageV0 : ITransactionMessage
     /// then orders the remaining static keys as Solana requires - fee payer first, then the rest sorted by
     /// their bytes within the classes writable signers, read-only signers, writable non-signers, read-only
     /// non-signers - and indexes each instruction against the static keys followed by the loaded accounts.
+    /// </summary>
+    /// <param name="feePayer">The account that pays the fee; always the first static account and a writable signer.</param>
+    /// <param name="recentBlockhash">A recent blockhash, e.g. from <c>getLatestBlockhash</c>.</param>
+    /// <param name="instructions">The instructions to include, in execution order.</param>
+    /// <param name="addressLookupTables">The lookup tables to source extra accounts from; pass an empty list for none.</param>
+    /// <returns>The compiled v0 message.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="instructions"/> or <paramref name="addressLookupTables"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">
+    /// The instructions reference more than <see cref="MaxAccounts"/> distinct accounts, require more than
+    /// 255 signatures, or a supplied lookup table holds more than <see cref="MaxAccounts"/> addresses.
+    /// </exception>
+    public static MessageV0 Compile(
+        PublicKey feePayer,
+        Hash recentBlockhash,
+        IReadOnlyList<Instruction> instructions,
+        IReadOnlyList<AddressLookupTableAccount> addressLookupTables)
+        => Compile(feePayer, recentBlockhash.ToString(), instructions, addressLookupTables);
+
+    /// <summary>
+    /// Compiles instructions into a v0 message using a base58 blockhash string and optional address
+    /// lookup tables.
     /// </summary>
     /// <param name="feePayer">The account that pays the fee; always the first static account and a writable signer.</param>
     /// <param name="recentBlockhash">A recent blockhash (base58), e.g. from <c>getLatestBlockhash</c>.</param>

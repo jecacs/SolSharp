@@ -1,4 +1,6 @@
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using FluentAssertions;
 using NUnit.Framework;
 using SolSharp.Core.Primitives;
@@ -96,6 +98,34 @@ public static class KeypairTests
     }
 
     [TestFixture]
+    public sealed class SignSignature
+    {
+        [Test]
+        public void Rfc8032Test1_EmptyMessage_MatchesVector()
+        {
+            // Arrange
+            using var keypair = Keypair.FromSeed(Hex(Test1Seed));
+
+            // Act & Assert
+            keypair.SignSignature([]).ToBytes().Should().Equal(Hex(Test1Signature));
+        }
+
+        [Test]
+        public void AfterDispose_Throws()
+        {
+            // Arrange
+            var keypair = Keypair.FromSeed(Hex(Test1Seed));
+            keypair.Dispose();
+
+            // Act
+            Action act = () => keypair.SignSignature([]);
+
+            // Assert
+            act.Should().Throw<ObjectDisposedException>();
+        }
+    }
+
+    [TestFixture]
     public sealed class FromSecretKey
     {
         [Test]
@@ -166,8 +196,153 @@ public static class KeypairTests
     }
 
     [TestFixture]
+    public sealed class Export
+    {
+        [Test]
+        public void BytesSeedBase58AndJson_RoundTripExactUpstreamLayout()
+        {
+            // Arrange
+            var expected = Hex(Test1Seed + Test1PublicKey);
+            using var keypair = Keypair.FromSeed(Hex(Test1Seed));
+
+            // Act
+            var bytes = keypair.ToBytes();
+            var seed = keypair.ToSeedBytes();
+            var base58 = keypair.ToBase58String();
+            var json = keypair.ToJsonArray();
+            byte[]? fromBase58Bytes = null;
+            byte[]? fromJsonBytes = null;
+
+            try
+            {
+                // Assert
+                bytes.Should().Equal(expected);
+                seed.Should().Equal(Hex(Test1Seed));
+                using var fromBase58 = Keypair.FromBase58String(base58);
+                using var fromJson = Keypair.FromJsonArray(json);
+                fromBase58Bytes = fromBase58.ToBytes();
+                fromJsonBytes = fromJson.ToBytes();
+                fromBase58Bytes.Should().Equal(expected);
+                fromJsonBytes.Should().Equal(expected);
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(expected);
+                CryptographicOperations.ZeroMemory(bytes);
+                CryptographicOperations.ZeroMemory(seed);
+                if (fromBase58Bytes is not null)
+                    CryptographicOperations.ZeroMemory(fromBase58Bytes);
+                if (fromJsonBytes is not null)
+                    CryptographicOperations.ZeroMemory(fromJsonBytes);
+            }
+        }
+
+        [Test]
+        public void ReturnedArraysAreIndependentCopies()
+        {
+            // Arrange
+            using var keypair = Keypair.FromSeed(Hex(Test1Seed));
+            var exported = keypair.ToBytes();
+            var seed = keypair.ToSeedBytes();
+            byte[]? afterMutation = null;
+
+            // Act
+            exported[0] ^= byte.MaxValue;
+            seed[0] ^= byte.MaxValue;
+
+            try
+            {
+                // Assert
+                afterMutation = keypair.ToBytes();
+                afterMutation.Should().Equal(Hex(Test1Seed + Test1PublicKey));
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(exported);
+                CryptographicOperations.ZeroMemory(seed);
+                if (afterMutation is not null)
+                    CryptographicOperations.ZeroMemory(afterMutation);
+            }
+        }
+
+        [Test]
+        public void AfterDispose_ThrowsForEveryExport()
+        {
+            // Arrange
+            var keypair = Keypair.FromSeed(Hex(Test1Seed));
+            keypair.Dispose();
+            var toBytes = keypair.ToBytes;
+            var toSeedBytes = keypair.ToSeedBytes;
+            var toBase58 = keypair.ToBase58String;
+            var toJson = keypair.ToJsonArray;
+
+            // Act & Assert
+            toBytes.Should().Throw<ObjectDisposedException>();
+            toSeedBytes.Should().Throw<ObjectDisposedException>();
+            toBase58.Should().Throw<ObjectDisposedException>();
+            toJson.Should().Throw<ObjectDisposedException>();
+        }
+    }
+
+    [TestFixture]
     public sealed class Dispose
     {
+        [Test]
+        public async Task RacingWithExports_ReturnsOnlyCoherentKeysOrObjectDisposed()
+        {
+            // Arrange
+            var keypair = Keypair.FromSeed(Hex(Test1Seed));
+            var expectedPublicKey = keypair.PublicKey;
+            var exported = new ConcurrentBag<byte[]>();
+            using var ready = new CountdownEvent(8);
+            using var start = new ManualResetEventSlim();
+            var workers = Enumerable.Range(0, 8).Select(_ => Task.Run(() =>
+            {
+                exported.Add(keypair.ToBytes());
+                ready.Signal();
+                start.Wait();
+                for (var i = 0; i < 128; i++)
+                {
+                    try
+                    {
+                        exported.Add(keypair.ToBytes());
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        break;
+                    }
+                }
+            })).ToArray();
+
+            ready.Wait();
+            var dispose = Task.Run(() =>
+            {
+                start.Wait();
+                keypair.Dispose();
+            });
+
+            // Act
+            start.Set();
+            await Task.WhenAll(workers.Append(dispose));
+
+            // Assert
+            try
+            {
+                exported.Should().NotBeEmpty();
+                foreach (var bytes in exported)
+                {
+                    using var imported = Keypair.FromSecretKey(bytes);
+                    imported.PublicKey.Should().Be(expectedPublicKey);
+                }
+            }
+            finally
+            {
+                foreach (var bytes in exported)
+                    CryptographicOperations.ZeroMemory(bytes);
+                keypair.Dispose();
+            }
+        }
+
         [Test]
         public void SignAfterDispose_Throws()
         {
@@ -190,7 +365,7 @@ public static class KeypairTests
             keypair.Dispose();
 
             // Act
-            Action act = keypair.Dispose;
+            var act = keypair.Dispose;
 
             // Assert
             act.Should().NotThrow();

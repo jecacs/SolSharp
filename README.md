@@ -9,68 +9,103 @@
 [![build](https://github.com/jecacs/SolSharp/actions/workflows/ci.yml/badge.svg)](https://github.com/jecacs/SolSharp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A lean, modern, Native AOT-ready .NET SDK for Solana — RPC, WebSocket streaming, and
-wire-level transaction signing and building. No reflection anywhere: all JSON is
-source-generated, and every assembly compiles clean to a native binary.
+A modern, contract-driven, Native AOT-ready .NET SDK for Solana — keys and signatures,
+program instructions, transaction wire formats, RPC, and WebSocket streaming. SolSharp is
+independently implemented in C# from pinned Anza Solana SDK, Agave, and SPL source contracts;
+money-critical encodings are checked against exact upstream-compatible vectors. No reflection
+is used by the library: JSON is source-generated, all four functional assemblies declare Native AOT
+compatibility, and CI native-publishes and runs a consumer of the packed NuGet artifact.
 
-SolSharp is built for low latency and a small dependency footprint. It is a focused,
-hackable alternative to the heavier general-purpose SDKs: you get direct control over the
-wire format and the signing path, without dragging in a large dependency graph. If you are
-writing bots, indexers, or backend services that talk to Solana from .NET and care about
-speed and control, this is aimed at you.
+SolSharp is built for low latency with focused dependencies and a dependency-light Core. It exposes the protocol
+instead of hiding it: typed byte-level values, explicit signing, exact instruction layouts,
+bounded codecs, and typed network responses. If you are
+writing wallets, bots, indexers, or backend services that talk to Solana from .NET and care
+about correctness, speed, and control, this is aimed at you.
 
-> **Status: 1.4.0 — stable release.** SolSharp ships as a single NuGet package — `SolSharp` —
-> bundling the Core (primitives + encodings), Wallet (Ed25519 keys, signing, verification, BIP-39/SLIP-0010
-> mnemonic import), Rpc (the full JSON-RPC HTTP read surface + send/simulate + WebSocket streaming + DI), and
+> **Status: 2.0.0.** SolSharp ships as a single NuGet package — `SolSharp` —
+> bundling the Core (primitives + encodings), Wallet (Ed25519 and BLS12-381 keys, signing, verification,
+> key import/export, BIP-39/SLIP-0010 derivation, and signed off-chain messages), Rpc (the full applicable
+> non-admin JSON-RPC HTTP surface + WebSocket streaming + DI), and
 > Programs (instructions + transaction building + signing, durable nonces) assemblies. JSON is
-> source-generated and all four assemblies are Native AOT compatible. Versioning follows semver: from 1.0.0,
+> source-generated and all four functional assemblies are Native AOT compatible. Versioning follows semver: from 1.0.0,
 > breaking changes only come with a major version.
 
 📖 **New here? Read the [usage guide](docs/USAGE.md)** — a task-oriented cookbook covering keys, reads,
-SPL token state, building/signing/sending transactions, v0 + address lookup tables, decoding transactions,
+SPL token state, building/signing/sending transactions, v0 + address lookup tables, SIMD-0385 V1, decoding transactions,
 WebSocket subscriptions, confirmation, Native AOT publishing, and more.
 
 ## Motivation
 
 When this was started, the .NET options for Solana were either unmaintained and stale or
 heavy and not built for performance — there was no modern, fast, actively-developed client.
-SolSharp is a from-scratch answer to that: modern C# 12, allocation-conscious, and tuned for
-latency-sensitive workloads.
+SolSharp is an independently written C# 12 answer: allocation-conscious, tuned for
+latency-sensitive workloads, and engineered from the Rust implementations that define the
+network's actual wire behavior rather than from prose documentation alone.
+
+## Upstream provenance and parity
+
+Compatibility work is tied to immutable source revisions. The
+[Rust parity matrix](docs/RUST_PARITY.md) records the exact Anza Solana SDK, Agave, System,
+Address Lookup Table, SPL Token, Token-2022, and Associated Token Account commits used for
+each contract, what SolSharp currently covers, and what is intentionally outside a client
+SDK. Tests use upstream known-answer vectors or independently generated compatible vectors;
+a C# round trip alone is not treated as proof of wire compatibility.
+
+SolSharp is not a generated binding, a fork, or an official Anza/Solana product. It is an
+idiomatic C# implementation whose public client behavior is verified against the pinned Rust
+sources. See [third-party notices](THIRD_PARTY_NOTICES.md) for attribution and licensing.
 
 ## Why
 
 - **Native AOT ready.** JSON is source-generated (no reflection anywhere), every assembly is trimmable
-  and AOT-clean, and CI publishes and runs a native-compiled smoke sample on every push. Ship your bot
+  and AOT-clean, and CI publishes and runs a native-compiled smoke sample on every push and pull request
+  targeting `main`. Ship your bot
   as a self-contained native binary with instant startup.
 - **Lean.** No kitchen-sink dependency graph. `Core` depends on a single package (base58).
-- **Wire-level control.** Hand-rolled, spec-accurate transaction and message encoding — the part
-  most SDKs hide — with Ed25519 signing on a vetted crypto library, all tested against known vectors.
+- **Wire-level control.** Hand-written, bounds-checked transaction, message, account, and instruction
+  codecs — the part most SDKs hide — with Ed25519 signing on a vetted crypto library and exact
+  vectors derived from the pinned Rust contracts.
 - **Latency-minded.** Value types, allocation-free hot paths, span-based APIs.
 - **Modern .NET 8.** C# 12, nullable reference types, code style enforced on build.
 
 ## How it compares to Solnet
 
-[Solnet](https://github.com/bmresearch/Solnet) is the longest-standing .NET SDK for Solana — actively
-maintained, with a wide ecosystem of program integrations. SolSharp is not a fork of it: it is a
-from-scratch SDK with different priorities. The differences that actually matter when choosing:
+[Solnet](https://github.com/bmresearch/Solnet) is the longest-standing .NET SDK for Solana and has a
+valuable ecosystem-oriented program surface. SolSharp is independently written with a different target:
+application-side parity with immutable official Rust contracts, plus a verifiable .NET deployment story.
+The official Rust column below is the reference contract rather than another client implementation.
 
-| | SolSharp | Solnet |
-| --- | --- | --- |
-| **Native AOT & trimming** | Guaranteed and CI-enforced: source-generated JSON (zero reflection), `IsAotCompatible`, trim/AOT analyzers as errors, a native-compiled smoke test on every push | No AOT/trimming compatibility markings |
-| **API shape** | `async`-only; methods return typed values and throw typed exceptions (`RpcException`) | Sync + async; calls return `RequestResult<T>` wrappers to unwrap |
-| **Packaging** | One package, four layered assemblies | Per-area packages (`Solana.Rpc`, `Solana.Wallet`, `Solana.Programs`, ...) |
-| **Program coverage** | Focused core: System, Token + Token-2022 extensions, ATA, Compute Budget, Memo, Address Lookup Table | Broader: also Stake, Governance, StakePool, Name Service, and ecosystem packages (Metaplex, Raydium, Jupiter, ...) |
-| **Footprint** | Hot paths allocation-free; RPC depends on `Microsoft.Extensions.Http`, `Microsoft.Extensions.Http.Resilience`, and `Microsoft.Extensions.Logging.Abstractions` | RPC package pulls full `Logging` + `Logging.Console` |
+Comparison basis: SolSharp is release `2.0.0`; Solnet means its
+[published `8.7.0` release](https://github.com/bmresearch/Solnet/commit/e8df87bdb2006376ba3eea9e1d3b857c84fc5685)
+(2025-11-26), with unreleased-head differences called out explicitly; the Rust reference is the
+[pinned Anza SDK/Agave/SPL matrix](docs/RUST_PARITY.md).
 
-Pick **Solnet** when you need its program breadth — NFT/DEX integrations and the wider ecosystem
-packages around it. Pick **SolSharp** when you care about native binaries and startup time, typed
-async APIs, minimal dependencies, and wire-level control with byte-for-byte verified encoding —
-bots, indexers, latency-sensitive backends.
+| Dimension | Official Rust SDK / Agave reference | SolSharp 2.0.0 | Solnet official packages/source |
+| --- | --- | --- | --- |
+| **Transaction formats** | Legacy, V0, and feature-gated [SIMD-0385 V1](https://github.com/anza-xyz/solana-sdk/blob/ec7a0467e268774b724d55120ad952b518f27d64/message/src/versions/v1/message.rs), including inline V1 configuration and a message-first signature envelope | Legacy/V0/V1 build, sanitize, parse, sign, serialize, and decompile; exact V1 config/framing and envelope vectors | Published 8.7: Legacy/V0 and [rejects versions above 0](https://github.com/bmresearch/Solnet/blob/e8df87bdb2006376ba3eea9e1d3b857c84fc5685/src/Solnet.Rpc/Models/Message.cs#L275-L286). Unreleased head names V1, but its current body/envelope is not the pinned SIMD-0385 layout (details below) |
+| **Native and SPL clients** | Canonical native-program and SPL interface crates, split by contract | System, Stake, Vote, legacy/upgradeable/V4 loaders, Compute Budget, ALT, Memo, three signature precompiles; Token, Token-2022 extensions/interfaces, ATA, metadata/group/transfer-hook, and ElGamal proof/registry client contracts with typed decoders | Broader ecosystem-oriented set including Governance, Stake Pool, Token Swap, Account Compression, Name Service, and Shared Memory; repository head adds an initial Token-2022 surface |
+| **HTTP RPC** | [53 applicable non-admin, non-obsolete request variants](https://github.com/anza-xyz/agave/blob/ab6553293094e59dee7d3e7c928c7fa1023d0684/rpc-client-types/src/request.rs#L12-L75) in the pinned Agave client enum | 53/53 typed async methods, including current context-slot, filter, slice, encoding/detail/reward, raw/parsed V1, and context-wrapped response variants; batching, bounded responses, typed errors, and send/simulate/confirm | 50/53 pinned methods through sync/async `RequestResult<T>` APIs; no `getAgGenesisCert`, `getRecentPrioritizationFees`, or `getStakeMinimumDelegation` at the examined head |
+| **PubSub** | Nine families: account, program, logs, signature, slot, slots-updates, block, vote, and root | 9/9, including exact logs/block filter unions, parsed account/program forms, early signature-receipt events, bounded channels, cancellation isolation, reconnect/replay, and V1 block opt-ins | [Six families](https://github.com/bmresearch/Solnet/blob/ebec9e1a3b708dbe86d103dd8fcf869d0cd923b6/src/Solnet.Rpc/IStreamingRpcClient.cs): account, program, logs, signature, slot, and root |
+| **Offline / multisig signing** | Signer, presigner/null-signer, partial signing, fixed signature slots, and per-slot verification primitives | Exact message-byte export/hash, typed fixed slots, partial/all signing, verified external insertion, `Presigner`, `NullSigner`, and SPL multisig builders | Partial signing, externally supplied signatures, and program multisig builders/examples |
+| **AOT / trimming** | Native Rust output; not a .NET compatibility contract | Every assembly declares `IsAotCompatible`; generated JSON metadata, trim/AOT analyzers, and CI that publishes and runs a native package consumer | Targets .NET 8, but the examined projects publish no solution-wide AOT/trimming declaration or native-publish CI contract; reflection paths remain |
+| **Packaging** | Modular Cargo crates | One NuGet package containing four compiler-layered functional assemblies plus a minimal packaging facade | Five installable packages: `Solana.Rpc`, `Solana.Wallet`, `Solana.Programs`, `Solana.Extensions`, and `Solana.KeyStore` |
+| **Reproducibility** | The authoritative source itself | Seven immutable upstream revisions plus exact byte/KAT tests tied to named Rust/RFC/BIP/SLIP vectors | Own unit/RPC fixtures; published documentation has no equivalent immutable upstream revision matrix |
+
+Solnet's unreleased [`ebec9e1` head](https://github.com/bmresearch/Solnet/commit/ebec9e1a3b708dbe86d103dd8fcf869d0cd923b6)
+contains `MessageV1`, but the examined [message](https://github.com/bmresearch/Solnet/blob/ebec9e1a3b708dbe86d103dd8fcf869d0cd923b6/src/Solnet.Rpc/Models/Message.cs#L256-L524)
+and [transaction](https://github.com/bmresearch/Solnet/blob/ebec9e1a3b708dbe86d103dd8fcf869d0cd923b6/src/Solnet.Rpc/Models/Transaction.cs#L265-L290)
+still use a V0-shaped body and signatures-first envelope. That is why the table does not count it as parity
+with the pinned Rust [V1 envelope](https://github.com/anza-xyz/solana-sdk/blob/ec7a0467e268774b724d55120ad952b518f27d64/transaction/src/versioned/mod.rs#L345-L390).
+
+Choose **Solnet** when its broader ecosystem integrations or modular package topology match the application.
+Choose **SolSharp** when exact pinned native/SPL wire contracts, complete pinned RPC/PubSub coverage,
+Native AOT, bounded hostile-input behavior, and reproducible upstream parity are the primary constraints.
 
 ## Package
 
 SolSharp ships as a **single NuGet package** — `SolSharp` — so one `dotnet add package SolSharp` pulls in
-everything. Internally it stays four layered assemblies, bundled into that one package (namespaces are
+everything. Internally it stays four layered functional assemblies plus a minimal packaging facade,
+bundled into that one package (namespaces are
 unchanged: `SolSharp.Core.*`, `SolSharp.Rpc`, `SolSharp.Wallet`, `SolSharp.Programs`):
 
 Install from [NuGet](https://www.nuget.org/packages/SolSharp):
@@ -80,15 +115,15 @@ dotnet add package SolSharp
 ```
 
 ```xml
-<PackageReference Include="SolSharp" Version="1.4.0" />
+<PackageReference Include="SolSharp" Version="2.0.0" />
 ```
 
 | Assembly           | Purpose                                              |
 | ------------------ | ---------------------------------------------------- |
 | `SolSharp.Core`    | Primitives, encoding, JSON, program/sysvar constants |
-| `SolSharp.Wallet`  | Ed25519 keys, key parsing, signing and verification  |
-| `SolSharp.Rpc`     | Full HTTP JSON-RPC read surface + bounded, auto-reconnecting WebSocket streaming + DI |
-| `SolSharp.Programs`| Instructions (System/Token/ATA/Memo/Compute Budget/ALT) + transaction building |
+| `SolSharp.Wallet`  | Ed25519/BLS keys, secure import/export, signing, verification, and off-chain messages |
+| `SolSharp.Rpc`     | Full applicable non-admin HTTP JSON-RPC surface + bounded, auto-reconnecting WebSocket streaming + DI |
+| `SolSharp.Programs`| Native/SPL instructions and state decoders + legacy/v0/V1 transaction building |
 
 Keeping the split in the source means the layering stays compiler-enforced — dependencies point downward
 only: `Rpc` and `Wallet` build on `Core`, and `Programs` builds on `Core` and `Wallet`. `Core` depends on
@@ -100,12 +135,15 @@ See the [changelog](CHANGELOG.md) for what changed in each release.
 
 `SolSharp.Core`:
 
-- `PublicKey` — a 32-byte value type with value equality, base58 parsing, and JSON support.
+- `PublicKey` and `Hash` — distinct 32-byte value types with value equality, base58 parsing, byte-copy APIs,
+  and source-generated JSON support.
 - `Base58`, `ShortVec` (compact-u16), and `BorshReader` / `BorshWriter` — the encodings Solana uses on the
   wire, plus a bounds-checked reader and writer for Anchor / Borsh account data and instruction arguments.
 - `Commitment` — an RPC enum that serializes to its exact wire string.
-- `SolanaProgramIds`, `Sysvars`, `Mints` — well-known on-chain addresses, guarded by a test
-  that every constant decodes to a valid 32-byte key.
+- `SolanaProgramIds`, `Sysvars`, `SolanaFeatureIds`, and `Mints` — well-known
+  on-chain addresses, guarded by tests that every constant decodes to a valid 32-byte key.
+- Bounded current sysvar states for Clock, Rent, EpochSchedule, EpochRewards, LastRestartSlot,
+  SlotHashes, SlotHistory, and StakeHistory.
 - `SolanaUnits` — SOL ↔ lamports conversion.
 
 ```csharp
@@ -118,10 +156,12 @@ bool ok = PublicKey.TryParse(input, out var key);
 
 `SolSharp.Rpc`:
 
-- HTTP JSON-RPC reads — the full current read surface: accounts (`getAccountInfo`,
-  `getMultipleAccounts`, `getProgramAccounts` with memcmp / data-size filters and data slices,
+- HTTP JSON-RPC methods — the full applicable non-admin surface from the pinned Agave revision: accounts (`getAccountInfo`,
+  `getMultipleAccounts`, `getProgramAccounts` with the complete base58/base64/raw memcmp, unsigned data-size,
+  token-account-state filter union and data slices,
   `getTokenAccountsByOwner`, `getTokenAccountsByDelegate`, `getTokenLargestAccounts`,
-  `getTokenAccountBalance`, `getLargestAccounts`, `getAddressLookupTable` fetch + decode),
+  `getTokenAccountBalance`, `getLargestAccounts`, plus the `GetAddressLookupTableAsync` helper
+  (fetch + decode through `getAccountInfo`)),
   transactions and blocks (`getTransaction`, `getSignaturesForAddress`, `getSignatureStatuses`,
   `getBlock`, `getBlockHeight`, `getBlockTime`, `getBlockCommitment`, `getBlockProduction`,
   `getTransactionCount`, `getFeeForMessage`), and cluster state (`getBalance`, `getSlot`,
@@ -134,6 +174,11 @@ bool ok = PublicKey.TryParse(input, out var key);
   `getBlocksWithLimit`, `getFirstAvailableBlock`, `getClusterNodes`, `getHighestSnapshotSlot`,
   `getMaxRetransmitSlot`, `getMaxShredInsertSlot`, `getStakeMinimumDelegation`,
   `minimumLedgerSlot`, `requestAirdrop`); each typed, fully documented, and tested.
+  Full configuration methods preserve upstream `minContextSlot`, context-wrapped account scans,
+  mint/program-id token filters, data slices, sorting, airdrop blockhashes, and the closed `RpcAccountData`
+  union: legacy binary, tagged base58/base64, parsed JSON with its unknown-program base64 fallback, and
+  `base64+zstd`. Raw transaction/block encoding, detail, and rewards choices remain explicit without
+  weakening the convenient defaults.
 - Account-state decoders — `Mint` and `TokenAccount` (SPL Token state, via `GetMintAsync` /
   `GetTokenAccountAsync`), `NonceAccount` (via `GetNonceAccountAsync`), `AddressLookupTable`, and the
   Token-2022 extension section (`TokenExtensionSet` — TLV walking plus typed views for transfer fees,
@@ -143,18 +188,26 @@ bool ok = PublicKey.TryParse(input, out var key);
   metadata — transaction version/index, pre/post SOL and token balances, inner (CPI) instructions, loaded
   lookup-table addresses, logs, compute/cost units, program return data, and rewards. Failures decode to a
   typed `TransactionError` (including parameterized runtime errors and the program's `Custom` code) on
-  `TransactionMeta`, `SignatureStatus`, and `SimulateTransactionResult`. The default read stays at legacy/v0;
-  `GetTransactionWithMaxVersionAsync` can opt into opaque newer transaction bytes without claiming local parser
-  support for them.
+  `TransactionMeta`, `SignatureStatus`, and `SimulateTransactionResult`. The compatibility-preserving default
+  read advertises legacy/v0; `GetTransactionWithMaxVersionAsync(..., 1)` opts into V1 bytes, which
+  `Transaction.Deserialize` understands locally.
 - `GetParsedTransactionAsync` / `GetParsedBlockAsync` / `GetParsedAccountInfoAsync` return the node's
   `jsonParsed` decoding — typed instructions, token balances, account state, and logs without local Borsh
-  work — each instruction keeping both its parsed form and its raw program id / accounts / data.
+  work. Recognized instructions carry the node's parsed action; unrecognized instructions retain their raw
+  program id, account list, and base58 data, matching the upstream tagged response union. Explicit
+  `*WithMaxVersionAsync` variants opt parsed transaction/block reads into V1 and preserve its inline
+  `transactionConfig`.
 - WebSocket streaming multiplexed over one connection: `SubscribeSlotsAsync`, `SubscribeRootsAsync`,
   `SubscribeSlotsUpdatesAsync` (slot lifecycle with per-stage stats), and `SubscribeVotesAsync` (gossip
   votes) as `IAsyncEnumerable`; `SubscribeLogsAsync`, `SubscribeAccountAsync`, `SubscribeParsedAccountAsync`,
   `SubscribeProgramAsync`, `SubscribeSignatureAsync`, `SubscribeBlocksAsync`, and `SubscribeParsedBlocksAsync`
   (`ChannelReader`) — with automatic reconnect and resubscribe across dropped connections, and a bounded
-  transport (message-size cap, per-subscription buffers, opt-in receive timeout).
+  transport (message-size cap, per-subscription buffers, opt-in receive timeout). The source-safe
+  `SubscribeAccountWithOptionsAsync` and `SubscribeProgramWithOptionsAsync` paths expose the effective
+  encoding/commitment fields (plus program filters) and return the same exact `RpcAccountData` union as HTTP.
+  Agave-accepted subscription fields that its encoder ignores are deliberately not advertised. Block
+  subscriptions also provide explicit `*WithMaxVersionAsync` V1 opt-ins; full methods cover logs/block filter
+  unions, parsed program streams, and the optional early `receivedSignature` event before final processing.
 - DI registration with a built-in resilience pipeline (retry on transient errors and HTTP 429), plus
   `AddSolanaWs` for a container-managed streaming client.
 - JSON-RPC batching — `CreateBatch()` queues reads (and sends) and submits them in one HTTP round-trip.
@@ -185,7 +238,18 @@ await foreach (var slot in ws.SubscribeSlotsAsync())
 `SolSharp.Wallet`:
 
 - `Keypair` — generate a key, or load one with `Parse` (auto-detecting a base58 export, a `solana-keygen`
-  JSON array, hex, or base64); signs messages and zeroes its secret on dispose (or finalization).
+  JSON array, hex, or base64); export the Rust/wallet 64-byte, base58, or `id.json` forms deliberately;
+  signs messages and zeroes its stored seed on dispose (or finalization).
+- `Signature` — a typed 64-byte base58 value with strict verification; `Presigner` validates externally
+  produced signatures against the requested message, while `NullSigner` represents an absent offline cosigner.
+- `BlsKeypair`, `BlsPublicKey`, `BlsSignature`, and `BlsProofOfPossession` — the pinned minimal-public-key-size
+  BLS12-381 proof-of-possession scheme used by current Vote v2/v4 contracts, with subgroup/infinity validation,
+  Rust-compatible binary/zeroable UTF-8 JSON key files, strict fixed-size base64 text, and vote-account-bound
+  proofs that typed Vote builders verify locally before serialization. Signature verification is available only
+  through a derived keypair or `BlsPopVerifiedPublicKey`; `BlsAggregatePublicKey` likewise admits only PoP-verified
+  keys for safe same-message aggregation.
+- `OffchainMessage` — the pinned SDK's version-0, domain-separated signed-message format with canonical
+  ASCII/UTF-8 selection, strict parsing, typed hashes, signing, and verification.
 - Mnemonic import — `FromMnemonic` (the `solana-keygen` scheme) and `FromMnemonicAtPath` (the
   Phantom / Solflare SLIP-0010 scheme), built on the public `Bip39` and `Slip10` helpers and validated
   against the official test vectors.
@@ -204,25 +268,33 @@ bool ok = keypair.PublicKey.Verify(message, signature);
 
 `SolSharp.Programs`:
 
-- Instruction builders: `SystemProgram` (transfer, create / allocate / assign — plus `CreateAccountWithSeed`,
-  `AllocateWithSeed`, `AssignWithSeed`, `TransferWithSeed` — and the durable-nonce set, including the
-  `CreateNonceAccount` pair and `UpgradeNonceAccount`), `ComputeBudgetProgram` (compute-unit limit,
-  priority fee, `RequestHeapFrame`,
-  `SetLoadedAccountsDataSizeLimit`), `TokenProgram` (transfer, mint, burn, approve — checked variants
-  included — revoke, `SetAuthority` via `AuthorityType` (incl. the Token-2022 extension authorities),
-  additive SPL Multisig-authority overloads,
-  freeze / thaw, initialize mint / account, close, sync-native — each with a `tokenProgram` override for
-  Token-2022), `AssociatedTokenAccount` (create and `CreateIdempotent`), `AddressLookupTableProgram`
-  (create / extend / freeze / deactivate / close), and `MemoProgram`.
-- `ProgramDerivedAddress` (`FindProgramAddress` / `TryCreateProgramAddress`) and `PublicKey.IsOnCurve()`.
-- `Message` (legacy) and `MessageV0` (versioned, loading extra accounts from address lookup tables),
-  `Transaction`, and `TransactionBuilder` (`Build` / `BuildV0`, `BuildMessage` / `BuildMessageV0` for the
+- Native instruction clients: the current System and durable-nonce helpers; Stake and Vote (including
+  compact/tower and V2/BLS forms); legacy, upgradeable, and V4 loaders; Compute Budget; Address Lookup
+  Tables; Feature Gate; Memo; and self-contained/cross-instruction Ed25519, Secp256k1, and Secp256r1 verification.
+- SPL clients: the pinned classic Token family (checked, multisig, batch, and newer interface helpers),
+  ATA create/idempotent/recover-nested, and Token-2022 base plus transfer-fee, default-state, memo/CPI,
+  pointer, interest/scaled, pausable, permissioned-burn, metadata, token-group, transfer-hook,
+  confidential-transfer/fee/mint-burn, native proof-program, and ElGamal registry contracts.
+- Typed, bounds-checked decoders cover native/SPL account state and Token/Token-2022 instruction
+  discriminators, including nonce, stake, versioned vote, loader, ALT, Instructions sysvar, Token-2022 TLV, metadata,
+  token-group, transfer-hook metadata, and ElGamal registry data. Confidential builders consume exact
+  caller-generated POD/ciphertext/proof bytes;
+  SolSharp does not pretend to generate or verify zero-knowledge proofs off chain.
+- `ProgramDerivedAddress` (`FindProgramAddress` / `TryCreateProgramAddress` / System `CreateWithSeed`) and
+  `PublicKey.IsOnCurve()`.
+- `Message` (legacy), `MessageV0` (loading extra accounts from address lookup tables), and SIMD-0385
+  `MessageV1` (inline execution configuration and fixed-width instruction framing), plus `Transaction` and
+  `TransactionBuilder` (`Build` / `BuildV0` / `BuildV1`, and matching `BuildMessage*` methods for the
   unsigned message, durable-nonce anchoring via `SetDurableNonce`) — compilation, wire serialization (allocation-free via `Transaction.TrySerialize` and
   the span `Serialize` overloads, with
   `Transaction.Deserialize` to parse one back — enforcing Solana's sanitize rules on malformed input — and
   `DecompileInstructions` to resolve a parsed message's
-  instructions to program ids and account keys, loading v0 lookup-table accounts), signing, and base64
-  output. Every encoding is checked byte-for-byte against the Rust `solana-sdk` (via solders) and `solana-py`.
+  instructions to program ids and account keys, loading v0 lookup-table accounts), version-aware signing, and base64
+  output. Offline coordination is explicit through typed `Signatures` / `RequiredSignerKeys`, `PartialSign`,
+  verified `AddSignature`, `SignAll`, per-slot verification, and `IsFullySigned`. `TransactionMessageHash`
+  exposes the Rust SDK's domain-separated BLAKE3 message identifier.
+  Money-critical encodings are checked byte-for-byte against pinned Rust or independently generated
+  compatible vectors, not only against local round trips.
 
 ```csharp
 using SolSharp.Programs;
@@ -242,7 +314,11 @@ var signature = await rpc.SendTransactionAsync(tx.Serialize());
 
 ## Requirements
 
-- .NET 8 SDK or later.
+- .NET 8 SDK or later. `global.json` selects the lowest available compatible major beginning at
+  .NET 8, so CI proves the minimum while newer local SDKs remain usable.
+- Calling the BLS12-381 API requires one of the native RIDs shipped by `Nethermind.Crypto.Bls` 1.0.5:
+  `linux-x64`, `linux-arm64`, `osx-x64`, `osx-arm64`, or `win-x64`. All non-BLS SolSharp APIs remain
+  managed and do not load that native backend.
 
 ## Build & test
 
@@ -280,10 +356,10 @@ SOLSHARP_RPC_URL=https://your-node SOLSHARP_WS_URL=wss://your-node \
 
 ```
 SolSharp/
-  src/SolSharp.Core/   Encoding/  Primitives/  Converters/  Constants/
+  src/SolSharp.Core/   Encoding/  Primitives/  Converters/  Constants/  SysvarStates/
   src/SolSharp.Rpc/    Protocol/  Models/  Streaming/  + client, options, DI
-  src/SolSharp.Wallet/ Keypair (+ parsing), ISigner, PublicKey.Verify / IsOnCurve
-  src/SolSharp.Programs/ instructions, PDA/ATA, Message/Transaction, TransactionBuilder
+  src/SolSharp.Wallet/ Ed25519/BLS keys, signers, verification, off-chain messages
+  src/SolSharp.Programs/ native/SPL clients and states, PDA/ATA, messages and transactions
   src/SolSharp/        packaging facade — bundles the four assemblies into the single NuGet package
   samples/             SolSharp.AotSmoke — native-compiled smoke sample, published and run in CI
   tests/               NUnit + FluentAssertions, mirroring each project
@@ -292,9 +368,12 @@ SolSharp/
   .github/workflows/   ci.yml (build + offline tests) and release.yml (tag → NuGet trusted publishing)
   assets/              package icon and README logo
   .editorconfig        modern C# style, enforced on build
+  global.json          .NET 8 minimum policy with local roll-forward (CI asserts SDK 8)
   Directory.Build.props
+  THIRD_PARTY_NOTICES.md exact compatibility pins and native BLS attribution
   CLAUDE.md            conventions and decisions for contributors/agents
   docs/USAGE.md        task-oriented usage guide with runnable examples
+  docs/RUST_PARITY.md  pinned Rust/Agave/SPL client-contract coverage matrix
 ```
 
 ## Design notes
@@ -308,9 +387,9 @@ SolSharp/
 ## Security
 
 SolSharp handles private keys and builds transactions that move funds. It has **not** been
-audited — use at your own risk. Never commit secrets or private keys, and never hand a raw
-private key to a dependency you do not control: build with a third-party library if you must,
-but sign with your own signer and simulate before sending.
+audited — use at your own risk. Never commit secrets or private keys, and never export a raw
+private key to an RPC provider, hosted service, or third-party transaction builder. Keep signing
+behind `ISigner`, inspect and simulate externally built transactions, then send only signed bytes.
 
 To report a vulnerability, see the [security policy](SECURITY.md) — please use private reporting
 rather than a public issue.

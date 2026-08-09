@@ -153,14 +153,14 @@ public sealed class SolanaWsClient : IAsyncDisposable
             _connectTask = completion.Task;
         }
 
-        _ = ConnectInitialAsync(endpoint, cancellationToken, completion);
+        _ = ConnectInitialAsync(endpoint, completion, cancellationToken);
         return completion.Task;
     }
 
     private async Task ConnectInitialAsync(
         Uri endpoint,
-        CancellationToken cancellationToken,
-        TaskCompletionSource completion)
+        TaskCompletionSource completion,
+        CancellationToken cancellationToken)
     {
         ConnectionEpoch? epoch = null;
         try
@@ -168,8 +168,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
             epoch = CreateConnectionEpoch();
             lock (_stateGate)
             {
-                if (_phase != ClientPhase.Connecting)
-                    throw new ObjectDisposedException(nameof(SolanaWsClient));
+                ObjectDisposedException.ThrowIf(_phase != ClientPhase.Connecting, this);
 
                 _connecting = epoch;
             }
@@ -180,13 +179,14 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
             lock (_stateGate)
             {
-                if (_phase != ClientPhase.Connecting || !ReferenceEquals(_connecting, epoch))
-                    throw new ObjectDisposedException(nameof(SolanaWsClient));
+                ObjectDisposedException.ThrowIf(
+                    _phase != ClientPhase.Connecting || !ReferenceEquals(_connecting, epoch),
+                    this);
 
                 _connecting = null;
                 _connection = epoch;
                 _phase = ClientPhase.Connected;
-                _runLoop = Task.Run(() => RunAsync(epoch, _lifetimeCts.Token));
+                _runLoop = Task.Run(() => RunAsync(epoch, _lifetimeCts.Token), CancellationToken.None);
             }
 
             completion.TrySetResult();
@@ -288,6 +288,37 @@ public sealed class SolanaWsClient : IAsyncDisposable
     }
 
     /// <summary>
+    /// Subscribes to logs using the full upstream <c>all</c>, <c>allWithVotes</c>, or single-address
+    /// <c>mentions</c> filter union.
+    /// </summary>
+    /// <param name="filter">The log subscription filter.</param>
+    /// <param name="commitment">The commitment level at which logs are delivered.</param>
+    /// <param name="cancellationToken">Unsubscribes and completes the channel when cancelled.</param>
+    /// <returns>A channel reader of context-wrapped log notifications.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="filter"/> is <c>null</c>.</exception>
+    /// <exception cref="InvalidOperationException">The node rejected the subscription, or the connection closed.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled before acknowledgement.</exception>
+    public async Task<ChannelReader<RpcContextValue<LogInfo>>> SubscribeLogsWithFilterAsync(
+        LogsSubscriptionFilter filter,
+        Commitment commitment = Commitment.Confirmed,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        object filterPayload = filter.Kind switch
+        {
+            LogsSubscriptionFilterKind.All => "all",
+            LogsSubscriptionFilterKind.AllWithVotes => "allWithVotes",
+            LogsSubscriptionFilterKind.Mentions => new LogsFilter { Mentions = [filter.Mention!.Value] },
+            _ => throw new ArgumentOutOfRangeException(nameof(filter), "Unknown log subscription filter kind.")
+        };
+
+        var sink = CreateSubscriptionSink<RpcContextValue<LogInfo>>();
+        object[] parameters = [filterPayload, new CommitmentConfig { Commitment = commitment }];
+        await RegisterAsync("logsSubscribe", parameters, "logsUnsubscribe", sink, cancellationToken);
+        return sink.Reader;
+    }
+
+    /// <summary>
     /// Subscribes to changes to <paramref name="account"/>, delivered through a channel. Account data is
     /// requested as base64 and exposed decoded on <see cref="AccountInfo.Data"/>. Cancelling
     /// <paramref name="cancellationToken"/> unsubscribes and completes the channel.
@@ -306,6 +337,38 @@ public sealed class SolanaWsClient : IAsyncDisposable
     {
         var sink = CreateSubscriptionSink<RpcContextValue<AccountInfo>>();
         object[] parameters = [account, new AccountInfoConfig { Encoding = "base64", Commitment = commitment }];
+        await RegisterAsync("accountSubscribe", parameters, "accountUnsubscribe", sink, cancellationToken);
+        return sink.Reader;
+    }
+
+    /// <summary>
+    /// Subscribes to an account with the complete set of configuration fields that pinned Agave actually
+    /// applies. The returned account-data union preserves binary, base58, base64, jsonParsed (including its
+    /// binary fallback), and base64+zstd responses without guessing a branch.
+    /// </summary>
+    /// <param name="account">The account to watch.</param>
+    /// <param name="options">The effective account-subscription configuration.</param>
+    /// <param name="cancellationToken">Unsubscribes and completes the channel when cancelled.</param>
+    /// <returns>A channel reader of context-wrapped accounts with exact upstream data branches.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="InvalidOperationException">The node rejected the subscription, or the connection closed.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled before acknowledgement.</exception>
+    public async Task<ChannelReader<RpcContextValue<RpcAccountInfo>>> SubscribeAccountWithOptionsAsync(
+        PublicKey account,
+        AccountSubscriptionOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var sink = CreateSubscriptionSink<RpcContextValue<RpcAccountInfo>>();
+        object[] parameters =
+        [
+            account,
+            new AccountInfoConfig
+            {
+                Encoding = options.Encoding is { } encoding ? RpcWireNames.AccountEncoding(encoding) : null,
+                Commitment = options.Commitment
+            }
+        ];
         await RegisterAsync("accountSubscribe", parameters, "accountUnsubscribe", sink, cancellationToken);
         return sink.Reader;
     }
@@ -368,6 +431,67 @@ public sealed class SolanaWsClient : IAsyncDisposable
     }
 
     /// <summary>
+    /// Subscribes to a program with the complete set of configuration fields that pinned Agave actually
+    /// applies. The returned account-data union preserves every supported encoding branch exactly.
+    /// </summary>
+    /// <param name="program">The owning program to watch.</param>
+    /// <param name="options">The effective program-subscription configuration.</param>
+    /// <param name="cancellationToken">Unsubscribes and completes the channel when cancelled.</param>
+    /// <returns>A channel reader of context-wrapped program accounts with exact upstream data branches.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="InvalidOperationException">The node rejected the subscription, or the connection closed.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled before acknowledgement.</exception>
+    public async Task<ChannelReader<RpcContextValue<RpcProgramAccount>>> SubscribeProgramWithOptionsAsync(
+        PublicKey program,
+        ProgramSubscriptionOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var sink = CreateSubscriptionSink<RpcContextValue<RpcProgramAccount>>();
+        object[] parameters =
+        [
+            program,
+            new ProgramAccountsConfig
+            {
+                Encoding = options.Encoding is { } encoding ? RpcWireNames.AccountEncoding(encoding) : null,
+                Commitment = options.Commitment,
+                Filters = options.Filters?.Select(filter => filter.Payload).ToArray()
+            }
+        ];
+        await RegisterAsync("programSubscribe", parameters, "programUnsubscribe", sink, cancellationToken);
+        return sink.Reader;
+    }
+
+    /// <summary>Subscribes to program-account changes decoded by the node with <c>jsonParsed</c> encoding.</summary>
+    /// <param name="program">The owning program to watch.</param>
+    /// <param name="commitment">The commitment level at which changes are delivered.</param>
+    /// <param name="filters">Filters every delivered account must satisfy; none when <c>null</c>.</param>
+    /// <param name="cancellationToken">Unsubscribes and completes the channel when cancelled.</param>
+    /// <returns>A channel reader of context-wrapped parsed program accounts.</returns>
+    /// <exception cref="InvalidOperationException">The node rejected the subscription, or the connection closed.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled before acknowledgement.</exception>
+    public async Task<ChannelReader<RpcContextValue<ParsedProgramAccount>>> SubscribeParsedProgramAsync(
+        PublicKey program,
+        Commitment commitment = Commitment.Confirmed,
+        IReadOnlyList<AccountFilter>? filters = null,
+        CancellationToken cancellationToken = default)
+    {
+        var sink = CreateSubscriptionSink<RpcContextValue<ParsedProgramAccount>>();
+        object[] parameters =
+        [
+            program,
+            new ProgramAccountsConfig
+            {
+                Encoding = "jsonParsed",
+                Commitment = commitment,
+                Filters = filters?.Select(filter => filter.Payload).ToArray()
+            }
+        ];
+        await RegisterAsync("programSubscribe", parameters, "programUnsubscribe", sink, cancellationToken);
+        return sink.Reader;
+    }
+
+    /// <summary>
     /// Subscribes to every new block, delivered through a channel. The node must be started with block
     /// subscriptions enabled (<c>--rpc-pubsub-enable-block-subscription</c>); many providers disable them.
     /// Cancelling <paramref name="cancellationToken"/> unsubscribes and completes the channel. See
@@ -381,7 +505,24 @@ public sealed class SolanaWsClient : IAsyncDisposable
     public Task<ChannelReader<RpcContextValue<BlockNotification>>> SubscribeBlocksAsync(
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
-        => SubscribeBlocksCoreAsync("all", commitment, cancellationToken);
+        => SubscribeBlocksCoreAsync("all", commitment, 0, cancellationToken);
+
+    /// <summary>
+    /// Subscribes to every new signatures-only block while explicitly opting into a newer numeric transaction
+    /// version. The node must have block subscriptions enabled. Cancelling
+    /// <paramref name="cancellationToken"/> unsubscribes and completes the channel.
+    /// </summary>
+    /// <param name="maxSupportedTransactionVersion">The highest numeric transaction version the caller accepts.</param>
+    /// <param name="commitment">The commitment level to query at.</param>
+    /// <param name="cancellationToken">Unsubscribes and completes the channel when cancelled.</param>
+    /// <returns>A channel reader of block notifications, each carrying its slot context and the produced block.</returns>
+    /// <exception cref="InvalidOperationException">The node rejected the subscription, or the connection closed.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled before the subscription was confirmed.</exception>
+    public Task<ChannelReader<RpcContextValue<BlockNotification>>> SubscribeBlocksWithMaxVersionAsync(
+        byte maxSupportedTransactionVersion,
+        Commitment commitment = Commitment.Confirmed,
+        CancellationToken cancellationToken = default)
+        => SubscribeBlocksCoreAsync("all", commitment, maxSupportedTransactionVersion, cancellationToken);
 
     /// <summary>
     /// Subscribes to new blocks that mention <paramref name="mentionsAccountOrProgram"/>, delivered through a
@@ -401,11 +542,35 @@ public sealed class SolanaWsClient : IAsyncDisposable
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
         => SubscribeBlocksCoreAsync(
-            new BlockSubscribeFilter { MentionsAccountOrProgram = mentionsAccountOrProgram }, commitment, cancellationToken);
+            new BlockSubscribeFilter { MentionsAccountOrProgram = mentionsAccountOrProgram }, commitment, 0, cancellationToken);
+
+    /// <summary>
+    /// Subscribes to signatures-only blocks that mention an account or program while explicitly opting into a
+    /// newer numeric transaction version. Cancelling <paramref name="cancellationToken"/> unsubscribes and
+    /// completes the channel.
+    /// </summary>
+    /// <param name="mentionsAccountOrProgram">The account or program a block must mention to be delivered.</param>
+    /// <param name="maxSupportedTransactionVersion">The highest numeric transaction version the caller accepts.</param>
+    /// <param name="commitment">The commitment level to query at.</param>
+    /// <param name="cancellationToken">Unsubscribes and completes the channel when cancelled.</param>
+    /// <returns>A channel reader of block notifications, each carrying its slot context and the produced block.</returns>
+    /// <exception cref="InvalidOperationException">The node rejected the subscription, or the connection closed.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled before the subscription was confirmed.</exception>
+    public Task<ChannelReader<RpcContextValue<BlockNotification>>> SubscribeBlocksWithMaxVersionAsync(
+        PublicKey mentionsAccountOrProgram,
+        byte maxSupportedTransactionVersion,
+        Commitment commitment = Commitment.Confirmed,
+        CancellationToken cancellationToken = default)
+        => SubscribeBlocksCoreAsync(
+            new BlockSubscribeFilter { MentionsAccountOrProgram = mentionsAccountOrProgram },
+            commitment,
+            maxSupportedTransactionVersion,
+            cancellationToken);
 
     private async Task<ChannelReader<RpcContextValue<BlockNotification>>> SubscribeBlocksCoreAsync(
         object filter,
         Commitment commitment,
+        byte maxSupportedTransactionVersion,
         CancellationToken cancellationToken)
     {
         var sink = CreateSubscriptionSink<RpcContextValue<BlockNotification>>();
@@ -418,7 +583,51 @@ public sealed class SolanaWsClient : IAsyncDisposable
                 Encoding = "json",
                 TransactionDetails = "signatures",
                 ShowRewards = false,
-                MaxSupportedTransactionVersion = 0
+                MaxSupportedTransactionVersion = maxSupportedTransactionVersion
+            }
+        ];
+        await RegisterAsync("blockSubscribe", parameters, "blockUnsubscribe", sink, cancellationToken);
+        return sink.Reader;
+    }
+
+    /// <summary>
+    /// Subscribes to blocks using the exact upstream filter, encoding, transaction-details, rewards,
+    /// commitment, and transaction-version configuration. The block body remains JSON because those choices
+    /// change its schema.
+    /// </summary>
+    /// <param name="filter">All blocks or blocks mentioning one account or program.</param>
+    /// <param name="options">The exact upstream block subscription configuration.</param>
+    /// <param name="cancellationToken">Unsubscribes and completes the channel when cancelled.</param>
+    /// <returns>A channel reader of context-wrapped configurable block updates.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="filter"/> or <paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="InvalidOperationException">The node rejected the subscription, or the connection closed.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled before acknowledgement.</exception>
+    public async Task<ChannelReader<RpcContextValue<RawBlockNotification>>> SubscribeBlocksWithOptionsAsync(
+        BlockSubscriptionFilter filter,
+        BlockSubscriptionOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        ArgumentNullException.ThrowIfNull(options);
+
+        object filterPayload = filter.Mention is { } mention
+            ? new BlockSubscribeFilter { MentionsAccountOrProgram = mention }
+            : "all";
+        var sink = CreateSubscriptionSink<RpcContextValue<RawBlockNotification>>();
+        object[] parameters =
+        [
+            filterPayload,
+            new BlockSubscribeConfig
+            {
+                Commitment = options.Commitment,
+                Encoding = options.Encoding is { } encoding
+                    ? RpcWireNames.TransactionEncoding(encoding)
+                    : null,
+                TransactionDetails = options.TransactionDetails is { } details
+                    ? RpcWireNames.TransactionDetails(details)
+                    : null,
+                ShowRewards = options.ShowRewards,
+                MaxSupportedTransactionVersion = options.MaxSupportedTransactionVersion
             }
         ];
         await RegisterAsync("blockSubscribe", parameters, "blockUnsubscribe", sink, cancellationToken);
@@ -440,7 +649,25 @@ public sealed class SolanaWsClient : IAsyncDisposable
     public Task<ChannelReader<RpcContextValue<ParsedBlockNotification>>> SubscribeParsedBlocksAsync(
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
-        => SubscribeParsedBlocksCoreAsync("all", commitment, cancellationToken);
+        => SubscribeParsedBlocksCoreAsync("all", commitment, 0, cancellationToken);
+
+    /// <summary>
+    /// Subscribes to every new node-decoded block while explicitly opting into a newer numeric transaction
+    /// version. V1 messages expose their execution settings on
+    /// <see cref="ParsedMessage.TransactionConfig"/>. Cancelling <paramref name="cancellationToken"/>
+    /// unsubscribes and completes the channel.
+    /// </summary>
+    /// <param name="maxSupportedTransactionVersion">The highest numeric transaction version the caller accepts.</param>
+    /// <param name="commitment">The commitment level to query at.</param>
+    /// <param name="cancellationToken">Unsubscribes and completes the channel when cancelled.</param>
+    /// <returns>A channel reader of parsed-block notifications, each carrying its slot context and the produced block.</returns>
+    /// <exception cref="InvalidOperationException">The node rejected the subscription, or the connection closed.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled before the subscription was confirmed.</exception>
+    public Task<ChannelReader<RpcContextValue<ParsedBlockNotification>>> SubscribeParsedBlocksWithMaxVersionAsync(
+        byte maxSupportedTransactionVersion,
+        Commitment commitment = Commitment.Confirmed,
+        CancellationToken cancellationToken = default)
+        => SubscribeParsedBlocksCoreAsync("all", commitment, maxSupportedTransactionVersion, cancellationToken);
 
     /// <summary>
     /// Subscribes to new blocks that mention <paramref name="mentionsAccountOrProgram"/>, with their
@@ -460,11 +687,35 @@ public sealed class SolanaWsClient : IAsyncDisposable
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
         => SubscribeParsedBlocksCoreAsync(
-            new BlockSubscribeFilter { MentionsAccountOrProgram = mentionsAccountOrProgram }, commitment, cancellationToken);
+            new BlockSubscribeFilter { MentionsAccountOrProgram = mentionsAccountOrProgram }, commitment, 0, cancellationToken);
+
+    /// <summary>
+    /// Subscribes to node-decoded blocks that mention an account or program while explicitly opting into a
+    /// newer numeric transaction version. V1 messages expose their execution settings on
+    /// <see cref="ParsedMessage.TransactionConfig"/>.
+    /// </summary>
+    /// <param name="mentionsAccountOrProgram">The account or program a block must mention to be delivered.</param>
+    /// <param name="maxSupportedTransactionVersion">The highest numeric transaction version the caller accepts.</param>
+    /// <param name="commitment">The commitment level to query at.</param>
+    /// <param name="cancellationToken">Unsubscribes and completes the channel when cancelled.</param>
+    /// <returns>A channel reader of parsed-block notifications, each carrying its slot context and the produced block.</returns>
+    /// <exception cref="InvalidOperationException">The node rejected the subscription, or the connection closed.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled before the subscription was confirmed.</exception>
+    public Task<ChannelReader<RpcContextValue<ParsedBlockNotification>>> SubscribeParsedBlocksWithMaxVersionAsync(
+        PublicKey mentionsAccountOrProgram,
+        byte maxSupportedTransactionVersion,
+        Commitment commitment = Commitment.Confirmed,
+        CancellationToken cancellationToken = default)
+        => SubscribeParsedBlocksCoreAsync(
+            new BlockSubscribeFilter { MentionsAccountOrProgram = mentionsAccountOrProgram },
+            commitment,
+            maxSupportedTransactionVersion,
+            cancellationToken);
 
     private async Task<ChannelReader<RpcContextValue<ParsedBlockNotification>>> SubscribeParsedBlocksCoreAsync(
         object filter,
         Commitment commitment,
+        byte maxSupportedTransactionVersion,
         CancellationToken cancellationToken)
     {
         var sink = CreateSubscriptionSink<RpcContextValue<ParsedBlockNotification>>();
@@ -477,7 +728,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
                 Encoding = "jsonParsed",
                 TransactionDetails = "full",
                 ShowRewards = false,
-                MaxSupportedTransactionVersion = 0
+                MaxSupportedTransactionVersion = maxSupportedTransactionVersion
             }
         ];
         await RegisterAsync("blockSubscribe", parameters, "blockUnsubscribe", sink, cancellationToken);
@@ -500,11 +751,61 @@ public sealed class SolanaWsClient : IAsyncDisposable
         string signature,
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
+        => await SubscribeSignatureCoreAsync(
+            signature,
+            commitment,
+            enableReceivedNotification: null,
+            cancellationToken);
+
+    /// <summary>
+    /// Subscribes to a signature with optional early receipt notification. When enabled, the channel first
+    /// receives <see cref="SignatureNotificationKind.Received"/> and remains active until the final
+    /// <see cref="SignatureNotificationKind.Processed"/> result.
+    /// </summary>
+    /// <param name="signature">The transaction signature (base58) to watch.</param>
+    /// <param name="options">Commitment and early-notification options.</param>
+    /// <param name="cancellationToken">Unsubscribes and completes the channel when cancelled.</param>
+    /// <returns>A channel reader that yields the received event when requested and then the final result.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="InvalidOperationException">The node rejected the subscription, or the connection closed.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled before acknowledgement.</exception>
+    public Task<ChannelReader<RpcContextValue<SignatureNotification>>> SubscribeSignatureWithOptionsAsync(
+        string signature,
+        SignatureSubscriptionOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return SubscribeSignatureCoreAsync(
+            signature,
+            options.Commitment,
+            options.EnableReceivedNotification,
+            cancellationToken);
+    }
+
+    private async Task<ChannelReader<RpcContextValue<SignatureNotification>>> SubscribeSignatureCoreAsync(
+        string signature,
+        Commitment? commitment,
+        bool? enableReceivedNotification,
+        CancellationToken cancellationToken)
     {
         var sink = CreateSubscriptionSink<RpcContextValue<SignatureNotification>>();
-        object[] parameters = [signature, new CommitmentConfig { Commitment = commitment }];
+        object[] parameters =
+        [
+            signature,
+            new SignatureSubscribeConfig
+            {
+                Commitment = commitment,
+                EnableReceivedNotification = enableReceivedNotification
+            }
+        ];
         await RegisterAsync(
-            "signatureSubscribe", parameters, "signatureUnsubscribe", sink, cancellationToken, oneShot: true);
+            "signatureSubscribe",
+            parameters,
+            "signatureUnsubscribe",
+            sink,
+            cancellationToken,
+            OneShotBehavior.SignatureFinal,
+            allowReceivedNotification: enableReceivedNotification is true);
         return sink.Reader;
     }
 
@@ -609,20 +910,26 @@ public sealed class SolanaWsClient : IAsyncDisposable
         string unsubscribeMethod,
         SubscriptionSink<T> sink,
         CancellationToken cancellationToken,
-        bool oneShot = false)
+        OneShotBehavior oneShotBehavior = OneShotBehavior.None,
+        bool allowReceivedNotification = false)
     {
         Subscription subscription;
         ConnectionEpoch epoch;
         lock (_stateGate)
         {
-            if (_phase is ClientPhase.Disposing or ClientPhase.Disposed)
-                throw new ObjectDisposedException(nameof(SolanaWsClient));
+            ObjectDisposedException.ThrowIf(_phase is ClientPhase.Disposing or ClientPhase.Disposed, this);
             if (_phase != ClientPhase.Connected || _connection is null)
                 throw new InvalidOperationException("The client is not connected.");
 
             var localId = ++_nextLocalId;
             subscription = new Subscription(
-                localId, subscribeMethod, subscribeParams, unsubscribeMethod, sink, oneShot);
+                localId,
+                subscribeMethod,
+                subscribeParams,
+                unsubscribeMethod,
+                sink,
+                oneShotBehavior,
+                allowReceivedNotification);
             _active.Add(localId, subscription);
             epoch = _connection;
         }
@@ -885,11 +1192,14 @@ public sealed class SolanaWsClient : IAsyncDisposable
         }
         catch (Exception exception)
         {
-            _logger.LogDebug(
-                exception,
-                "Solana WS unsubscribe '{Method}' (id {SubscriptionId}) failed",
-                method,
-                binding.ServerId);
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug(
+                    exception,
+                    "Solana WS unsubscribe '{Method}' (id {SubscriptionId}) failed",
+                    method,
+                    binding.ServerId);
+            }
         }
     }
 
@@ -1034,7 +1344,8 @@ public sealed class SolanaWsClient : IAsyncDisposable
             int activeCount;
             lock (_stateGate)
                 activeCount = _active.Count;
-            _logger.LogDebug("Solana WS reconnected; replaying {Count} subscription(s)", activeCount);
+            if (_logger.IsEnabled(LogLevel.Debug))
+                _logger.LogDebug("Solana WS reconnected; replaying {Count} subscription(s)", activeCount);
 
             // Receive and replay must run concurrently so acknowledgements can be routed. The replay task
             // remains owned by this generation and is joined before another generation can be published.
@@ -1097,8 +1408,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
                 candidate = CreateConnectionEpoch();
                 lock (_stateGate)
                 {
-                    if (_phase != ClientPhase.Reconnecting)
-                        throw new ObjectDisposedException(nameof(SolanaWsClient));
+                    ObjectDisposedException.ThrowIf(_phase != ClientPhase.Reconnecting, this);
                     _connecting = candidate;
                 }
 
@@ -1107,8 +1417,9 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
                 lock (_stateGate)
                 {
-                    if (_phase != ClientPhase.Reconnecting || !ReferenceEquals(_connecting, candidate))
-                        throw new ObjectDisposedException(nameof(SolanaWsClient));
+                    ObjectDisposedException.ThrowIf(
+                        _phase != ClientPhase.Reconnecting || !ReferenceEquals(_connecting, candidate),
+                        this);
 
                     _connecting = null;
                     _connection = candidate;
@@ -1118,6 +1429,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
                 return candidate;
             }
             catch (OperationCanceledException)
+                when (token.IsCancellationRequested || candidate?.Token.IsCancellationRequested is true)
             {
                 ClearConnecting(candidate);
                 if (candidate is not null)
@@ -1132,11 +1444,15 @@ public sealed class SolanaWsClient : IAsyncDisposable
                 if (token.IsCancellationRequested)
                     return null;
 
-                _logger.LogDebug(
-                    exception,
-                    "Solana WS reconnect attempt {Attempt} failed; retrying in {Delay}",
-                    attempt + 1,
-                    delay);
+                if (_logger.IsEnabled(LogLevel.Debug))
+                {
+                    _logger.LogDebug(
+                        exception,
+                        "Solana WS reconnect attempt {Attempt} failed; retrying in {Delay}",
+                        attempt + 1,
+                        delay);
+                }
+
                 delay = NextDelay(delay);
             }
         }
@@ -1158,6 +1474,13 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
     private TimeSpan NextDelay(TimeSpan current)
     {
+        if (current == TimeSpan.Zero)
+        {
+            return TimeSpan.FromTicks(Math.Min(
+                TimeSpan.FromMilliseconds(1).Ticks,
+                _options.ReconnectMaxDelay.Ticks));
+        }
+
         if (current.Ticks >= _options.ReconnectMaxDelay.Ticks / 2)
             return _options.ReconnectMaxDelay;
 
@@ -1270,17 +1593,44 @@ public sealed class SolanaWsClient : IAsyncDisposable
         using var document = JsonDocument.Parse(message);
         var root = document.RootElement;
 
-        if (root.TryGetProperty("id", out var idElement) && idElement.TryGetInt32(out var requestId))
+        if (!root.TryGetProperty("jsonrpc", out var jsonRpcElement) ||
+            jsonRpcElement.ValueKind != JsonValueKind.String ||
+            !string.Equals(jsonRpcElement.GetString(), "2.0", StringComparison.Ordinal))
         {
-            if (root.TryGetProperty("error", out var errorElement) &&
-                errorElement.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined))
+            throw new InvalidDataException("The node sent a WebSocket message without JSON-RPC version 2.0.");
+        }
+
+        if (root.TryGetProperty("id", out var idElement))
+        {
+            if (idElement.ValueKind != JsonValueKind.Number || !idElement.TryGetInt32(out var requestId))
+                throw new InvalidDataException("A WebSocket JSON-RPC response carried a non-integer request id.");
+
+            var hasResult = root.TryGetProperty("result", out var resultElement);
+            var hasError = root.TryGetProperty("error", out var errorElement) &&
+                           errorElement.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined);
+            if (hasResult == hasError)
             {
+                throw new InvalidDataException(
+                    "A WebSocket JSON-RPC response must carry exactly one of result or a non-null error.");
+            }
+
+            if (hasError)
+            {
+                if (errorElement.ValueKind != JsonValueKind.Object ||
+                    !errorElement.TryGetProperty("code", out var codeElement) ||
+                    codeElement.ValueKind != JsonValueKind.Number ||
+                    !codeElement.TryGetInt64(out _) ||
+                    !errorElement.TryGetProperty("message", out var messageElement) ||
+                    messageElement.ValueKind != JsonValueKind.String)
+                {
+                    throw new InvalidDataException("A WebSocket JSON-RPC response carried a malformed error object.");
+                }
+
                 CompletePendingError(requestId, epoch, errorElement);
                 return;
             }
 
-            if (root.TryGetProperty("result", out var resultElement))
-                await CompletePendingResultAsync(requestId, epoch, resultElement);
+            await CompletePendingResultAsync(requestId, epoch, resultElement);
             return;
         }
 
@@ -1305,7 +1655,19 @@ public sealed class SolanaWsClient : IAsyncDisposable
                 return;
             }
 
-            if (subscription.IsOneShot)
+            if (!root.TryGetProperty("method", out var methodElement) ||
+                methodElement.ValueKind != JsonValueKind.String ||
+                !string.Equals(
+                    methodElement.GetString(),
+                    subscription.NotificationMethod,
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidDataException(
+                    $"The node routed subscription id {notified} as an unexpected notification method; " +
+                    $"expected '{subscription.NotificationMethod}'.");
+            }
+
+            if (subscription.ShouldTerminateAfter(notification))
                 oneShotWork = TryTerminateLocked(subscription, exception: null, unsubscribe: false);
         }
 
@@ -1313,6 +1675,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         {
             try
             {
+                subscription.ValidateNotification(notification);
                 subscription.Sink.Deliver(notification);
                 subscription.Sink.Complete(exception: null);
             }
@@ -1328,6 +1691,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
         try
         {
+            subscription.ValidateNotification(notification);
             subscription.Sink.Deliver(notification);
         }
         catch (Exception exception)
@@ -1689,7 +2053,8 @@ public sealed class SolanaWsClient : IAsyncDisposable
         object[] parameters,
         string unsubscribeMethod,
         ISubscriptionSink sink,
-        bool isOneShot)
+        OneShotBehavior oneShotBehavior,
+        bool allowReceivedNotification)
     {
         public long LocalId { get; } = localId;
 
@@ -1699,9 +2064,46 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
         public string UnsubscribeMethod { get; } = unsubscribeMethod;
 
+        public string NotificationMethod { get; } = subscribeMethod.EndsWith("Subscribe", StringComparison.Ordinal)
+            ? subscribeMethod[..^"Subscribe".Length] + "Notification"
+            : throw new ArgumentException("A subscription method must end with 'Subscribe'.", nameof(subscribeMethod));
+
         public ISubscriptionSink Sink { get; } = sink;
 
-        public bool IsOneShot { get; } = isOneShot;
+        public OneShotBehavior OneShotBehavior { get; } = oneShotBehavior;
+
+        public bool AllowReceivedNotification { get; } = allowReceivedNotification;
+
+        public void ValidateNotification(JsonElement notification)
+        {
+            if (SubscribeMethod is "accountSubscribe" or "logsSubscribe" or "programSubscribe" or "blockSubscribe" or "signatureSubscribe")
+            {
+                if (notification.ValueKind != JsonValueKind.Object ||
+                    !notification.TryGetProperty("value", out var value) ||
+                    value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+                {
+                    throw new JsonException($"A '{NotificationMethod}' payload must carry a non-null value.");
+                }
+
+                if (SubscribeMethod == "signatureSubscribe" &&
+                    value.ValueKind == JsonValueKind.String &&
+                    !AllowReceivedNotification)
+                {
+                    throw new JsonException(
+                        "The node sent receivedSignature although the subscription did not request early notifications.");
+                }
+            }
+        }
+
+        public bool ShouldTerminateAfter(JsonElement notification) => OneShotBehavior switch
+        {
+            OneShotBehavior.None => false,
+            OneShotBehavior.SignatureFinal =>
+                notification.ValueKind == JsonValueKind.Object &&
+                notification.TryGetProperty("value", out var value) &&
+                value.ValueKind == JsonValueKind.Object,
+            _ => false
+        };
 
         public SubscriptionPhase Phase { get; set; } = SubscriptionPhase.Establishing;
 
@@ -1730,6 +2132,12 @@ public sealed class SolanaWsClient : IAsyncDisposable
         Establishing,
         Active,
         Terminal
+    }
+
+    private enum OneShotBehavior
+    {
+        None,
+        SignatureFinal
     }
 
     private enum PendingState
@@ -1783,8 +2191,10 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
         public void Deliver(JsonElement result)
         {
-            var value = result.Deserialize(_typeInfo);
-            if (value is null || _channel.Writer.TryWrite(value))
+            var value = result.Deserialize(_typeInfo)
+                        ?? throw new JsonException("A WebSocket notification result decoded to null.");
+
+            if (_channel.Writer.TryWrite(value))
                 return;
 
             // TryWrite also fails on a channel that was already completed - a notification racing the

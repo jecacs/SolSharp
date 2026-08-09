@@ -10,5 +10,6 @@ namespace SolSharp.Rpc.Models;
 internal sealed record NodeIdentity
 {
     [JsonPropertyName("identity")]
+    [JsonRequired]
     public PublicKey Identity { get; init; }
 }

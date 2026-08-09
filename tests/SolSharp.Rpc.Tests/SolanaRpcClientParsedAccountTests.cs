@@ -85,6 +85,69 @@ public static class SolanaRpcClientParsedAccountTests
 
             await act.Should().ThrowAsync<JsonException>();
         }
+
+        [TestCase("\"oops\"")]
+        [TestCase("true")]
+        [TestCase("{}")]
+        [TestCase("-1")]
+        [TestCase("18446744073709551616")]
+        public async Task RawFallbackPresentSpaceOutsideOptionalU64_ThrowsJsonException(string space)
+        {
+            // Arrange
+            var response =
+                """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"lamports":1,"owner":"11111111111111111111111111111111","executable":false,"rentEpoch":0,"space":__SPACE__,"data":["AQID","base64"]}},"id":1}"""
+                    .Replace("__SPACE__", space, StringComparison.Ordinal);
+            var (client, _) = Make(response);
+
+            // Act
+            var act = async () => await client.GetParsedAccountInfoAsync(PublicKey.Parse(Owner));
+
+            // Assert
+            await act.Should().ThrowAsync<JsonException>();
+        }
+
+        [TestCase("{}")]
+        [TestCase("{\"program\":null,\"parsed\":{},\"space\":165}")]
+        [TestCase("{\"program\":\"spl-token\",\"space\":165}")]
+        [TestCase("{\"program\":\"spl-token\",\"parsed\":{},\"space\":null}")]
+        [TestCase("{\"program\":\"spl-token\",\"parsed\":{},\"space\":-1}")]
+        public async Task ParsedBranchRequiresCanonicalMembers(string data)
+        {
+            // Arrange
+            var response =
+                """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"lamports":1,"owner":"11111111111111111111111111111111","executable":false,"rentEpoch":0,"data":__DATA__}},"id":1}"""
+                    .Replace("__DATA__", data, StringComparison.Ordinal);
+            var (client, _) = Make(response);
+
+            // Act
+            var act = async () => await client.GetParsedAccountInfoAsync(PublicKey.Parse(Owner));
+
+            // Assert
+            await act.Should().ThrowAsync<JsonException>();
+        }
+
+        [TestCase("null")]
+        [TestCase("\"memo\"")]
+        [TestCase("[1,2]")]
+        public async Task ParsedBranchPreservesAnyPresentJsonValue(string parsedValue)
+        {
+            // Arrange
+            var response =
+                """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"lamports":1,"owner":"11111111111111111111111111111111","executable":false,"rentEpoch":0,"data":{"program":"custom","parsed":__PARSED__,"space":3}}},"id":1}"""
+                    .Replace("__PARSED__", parsedValue, StringComparison.Ordinal);
+            var (client, _) = Make(response);
+
+            // Act
+            var account = await client.GetParsedAccountInfoAsync(PublicKey.Parse(Owner));
+
+            // Assert
+            account.Should().NotBeNull();
+            account!.Program.Should().Be("custom");
+            if (parsedValue == "null")
+                account.Parsed.Should().BeNull();
+            else
+                account.Parsed!.Info.GetRawText().Should().Be(parsedValue);
+        }
     }
 
     private const string TokenAccountJson =

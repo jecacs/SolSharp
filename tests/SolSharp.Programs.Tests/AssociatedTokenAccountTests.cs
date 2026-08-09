@@ -85,4 +85,35 @@ public static class AssociatedTokenAccountTests
             idempotent.Accounts.Should().Equal(create.Accounts);
         }
     }
+
+    [TestFixture]
+    public sealed class RecoverNested
+    {
+        [Test]
+        public void MatchesPinnedAssociatedTokenAccountInterface()
+        {
+            // Arrange
+            var wallet = Key(1);
+            var ownerMint = Key(2);
+            var nestedMint = Key(3);
+            var ownerAssociatedAccount = AssociatedTokenAccount.GetAddress(wallet, ownerMint);
+            var destinationAssociatedAccount = AssociatedTokenAccount.GetAddress(wallet, nestedMint);
+            var nestedAssociatedAccount = AssociatedTokenAccount.GetAddress(ownerAssociatedAccount, nestedMint);
+
+            // Act
+            var instruction = AssociatedTokenAccount.RecoverNested(wallet, ownerMint, nestedMint);
+
+            // Assert
+            instruction.ProgramId.Should().Be(AssociatedTokenAccount.ProgramId);
+            instruction.Data.Should().Equal((byte)2);
+            instruction.Accounts.Select(account => (account.PublicKey, account.IsSigner, account.IsWritable)).Should().Equal(
+                (nestedAssociatedAccount, false, true),
+                (nestedMint, false, false),
+                (destinationAssociatedAccount, false, true),
+                (ownerAssociatedAccount, false, false),
+                (ownerMint, false, false),
+                (wallet, true, true),
+                (TokenProgram.ProgramId, false, false));
+        }
+    }
 }

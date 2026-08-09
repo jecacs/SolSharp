@@ -170,6 +170,27 @@ public static class TransactionBuilderTests
     }
 
     [TestFixture]
+    public sealed class SetRecentBlockhash
+    {
+        [Test]
+        public void TypedHash_BuildsWithSameWireValue()
+        {
+            // Arrange
+            using var payer = Keypair.FromSeed(Fill(1));
+
+            // Act
+            var message = new TransactionBuilder()
+                .SetFeePayer(payer.PublicKey)
+                .SetRecentBlockhash(new Hash(Blockhash))
+                .AddInstruction(SystemProgram.Transfer(payer.PublicKey, new PublicKey(Fill(2)), 1))
+                .BuildMessage();
+
+            // Assert
+            message.RecentBlockhash.Should().Be(Blockhash);
+        }
+    }
+
+    [TestFixture]
     public sealed class InputValidation
     {
         [Test]
@@ -233,6 +254,23 @@ public static class TransactionBuilderTests
     [TestFixture]
     public sealed class SetDurableNonce
     {
+        [Test]
+        public void TypedNonce_BuildsWithSameWireValue()
+        {
+            // Arrange
+            using var payer = Keypair.FromSeed(Fill(1));
+            var nonceAccount = new PublicKey(Fill(5));
+
+            // Act
+            var message = new TransactionBuilder()
+                .SetFeePayer(payer.PublicKey)
+                .SetDurableNonce(nonceAccount, payer.PublicKey, new Hash(Blockhash))
+                .BuildMessage();
+
+            // Assert
+            message.RecentBlockhash.Should().Be(Blockhash);
+        }
+
         [Test]
         public void WithoutOtherInstructions_BuildsNonceAdvanceOnlyMessage()
         {

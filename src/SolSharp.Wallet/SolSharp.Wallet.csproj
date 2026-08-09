@@ -3,11 +3,12 @@
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <IsAotCompatible>true</IsAotCompatible>
-    <Description>Ed25519 keys and signing for Solana on .NET: keypair generation, key parsing, message signing and verification, built on a vetted Ed25519 implementation.</Description>
+    <Description>Strict Ed25519 and BLS12-381 keys/signatures for Solana on .NET: secure import/export, local/external/offline signers, signed off-chain messages, BIP-39/SLIP-0010 derivation, Vote proofs of possession, and PoP-gated same-message aggregation over vetted crypto backends.</Description>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2" />
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.7.0" />
+    <PackageReference Include="Nethermind.Crypto.Bls" Version="1.0.5" />
   </ItemGroup>
 
   <ItemGroup>
