@@ -91,7 +91,10 @@ jobs:
           cat "${COVERAGE_ROOT}/report/SummaryGithub.md" >> "${GITHUB_STEP_SUMMARY}"
           line_rate="$(sed -n 's/.*<coverage line-rate="\([^"]*\)".*/\1/p' \
             "${COVERAGE_ROOT}/report/Cobertura.xml" | head -1)"
-          line_percent="$(awk -v rate="${line_rate}" 'BEGIN { printf "%.1f", rate * 100 }')"
+          # Keep the README figure conservative and stable when a single environment-dependent hit
+          # moves the exact rate across a nearest-tenth rounding boundary.
+          line_percent="$(awk -v rate="${line_rate}" \
+            'BEGIN { printf "%.1f", int(rate * 1000) / 10 }')"
           echo "Merged line coverage: ${line_percent}%"
           if ! awk -v rate="${line_rate}" 'BEGIN { exit !(rate >= 0.90) }'; then
             echo "Line coverage ${line_percent}% is below the required 90.0%."
