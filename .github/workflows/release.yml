@@ -118,30 +118,55 @@ jobs:
             esac
           done
 
-      # Unlike ordinary local runs, release integration is strict: transport failures, rate limits, and
-      # every inconclusive/skipped result fail the job. The required private endpoints keep that gate stable.
-      - name: Test (full suite, including live integration)
-        run: dotnet test --no-build --configuration Release --logger trx
+      # Unit tests plus live read/streaming integration form the blocking release gate. Unlike ordinary local
+      # runs, this pass is strict: transport failures and every inconclusive/skipped result fail the job.
+      - name: Test (strict suite and live reads)
+        run: >-
+          dotnet test
+          --no-build
+          --configuration Release
+          --filter "TestCategory!=DevnetWrite"
+          --logger "console;verbosity=normal"
+          --logger trx
+          --results-directory "${{ runner.temp }}/solsharp-strict-test-results"
         env:
           SOLSHARP_RPC_URL: ${{ secrets.SOLSHARP_RPC_URL }}
           SOLSHARP_WS_URL: ${{ secrets.SOLSHARP_WS_URL }}
-          SOLSHARP_DEVNET_RPC_URL: ${{ secrets.SOLSHARP_DEVNET_RPC_URL }}
           SOLSHARP_INTEGRATION_STRICT: 'true'
 
-      - name: Reject inconclusive or skipped tests
+      - name: Reject inconclusive or skipped strict tests
         shell: bash
+        env:
+          STRICT_RESULTS_DIR: ${{ runner.temp }}/solsharp-strict-test-results
         run: |
-          mapfile -t result_files < <(find . -type f -path '*/TestResults/*.trx')
+          mapfile -t result_files < <(find "${STRICT_RESULTS_DIR}" -type f -name '*.trx')
           if (( ${#result_files[@]} == 0 )); then
-            echo "No TRX test results were produced."
+            echo "No strict-suite TRX test results were produced."
             exit 1
           fi
 
           if grep --with-filename --extended-regexp \
             'outcome="(NotExecuted|Skipped|Inconclusive|NotRunnable|Warning)"' "${result_files[@]}"; then
-            echo "Release tests contained an inconclusive or skipped result."
+            echo "Strict release tests contained an inconclusive or skipped result."
             exit 1
           fi
+
+      # requestAirdrop is deliberately not retried because it is not idempotent, and the shared devnet faucet
+      # can return 429/-32603 even through a healthy private RPC provider. Attempt the real write paths on every
+      # release, but let only classified faucet/transport failures become inconclusive; deterministic client,
+      # wire, assertion, or cluster-safety failures still fail this step.
+      - name: Probe devnet writes (faucet-limited)
+        run: >-
+          dotnet test tests/SolSharp.IntegrationTests/SolSharp.IntegrationTests.csproj
+          --no-build
+          --configuration Release
+          --filter "TestCategory=DevnetWrite"
+          --logger "console;verbosity=normal"
+          --logger trx
+          --results-directory "${{ runner.temp }}/solsharp-devnet-write-results"
+        env:
+          SOLSHARP_DEVNET_RPC_URL: ${{ secrets.SOLSHARP_DEVNET_RPC_URL }}
+          SOLSHARP_INTEGRATION_STRICT: 'false'
 
       # No --no-build: packing rebuilds so the facade's bundling target (which folds the four
       # assemblies into the single SolSharp package) runs against fully resolved references.
