@@ -1619,7 +1619,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
                 if (errorElement.ValueKind != JsonValueKind.Object ||
                     !errorElement.TryGetProperty("code", out var codeElement) ||
                     codeElement.ValueKind != JsonValueKind.Number ||
-                    !codeElement.TryGetInt64(out _) ||
+                    !codeElement.TryGetInt32(out _) ||
                     !errorElement.TryGetProperty("message", out var messageElement) ||
                     messageElement.ValueKind != JsonValueKind.String)
                 {
@@ -1779,16 +1779,11 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
     private void CompletePendingError(int requestId, ConnectionEpoch epoch, JsonElement errorElement)
     {
-        var detail = errorElement.ValueKind == JsonValueKind.Object &&
-                     errorElement.TryGetProperty("message", out var errorMessage) &&
-                     errorMessage.ValueKind == JsonValueKind.String
-            ? errorMessage.GetString()
-            : errorElement.GetRawText();
-        var code = errorElement.ValueKind == JsonValueKind.Object &&
-                   errorElement.TryGetProperty("code", out var codeElement) &&
-                   codeElement.TryGetInt64(out var codeValue)
-            ? codeValue
-            : 0;
+        var detail = errorElement.GetProperty("message").GetString()!;
+        var code = errorElement.GetProperty("code").GetInt32();
+        JsonElement? data = errorElement.TryGetProperty("data", out var dataElement)
+            ? dataElement
+            : null;
 
         string method;
         lock (_stateGate)
@@ -1810,7 +1805,8 @@ public sealed class SolanaWsClient : IAsyncDisposable
             {
                 pending.Acked.TrySetException(
                     new InvalidOperationException(
-                        $"The node rejected '{method}' (code {code}): {detail}"));
+                        $"The node rejected '{method}' (code {code}): {detail}",
+                        new RpcException(code, detail, data)));
             }
         }
 

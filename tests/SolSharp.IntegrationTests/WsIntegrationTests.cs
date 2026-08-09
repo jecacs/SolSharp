@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FluentAssertions;
 using NUnit.Framework;
 using SolSharp.Core.Constants;
@@ -14,6 +15,11 @@ namespace SolSharp.IntegrationTests;
 /// </summary>
 public static class WsIntegrationTests
 {
+    private static readonly TimeSpan MinimumProbeStartInterval = TimeSpan.FromMilliseconds(500);
+    private static readonly SemaphoreSlim ProbeGate = new(1, 1);
+    private static readonly Stopwatch ProbeClock = Stopwatch.StartNew();
+    private static TimeSpan _nextProbeStart;
+
     // Subjects picked for constant on-chain churn, so a healthy node delivers the first notification within
     // seconds: the SPL Token program sees near-continuous traffic, and the Clock sysvar changes every slot.
     private static readonly PublicKey TokenProgram = PublicKey.Parse(SolanaProgramIds.TokenProgram);
@@ -21,6 +27,7 @@ public static class WsIntegrationTests
 
     [TestFixture]
     [Category("Integration")]
+    [NonParallelizable]
     public sealed class SubscribeSlots
     {
         [Test]
@@ -36,6 +43,7 @@ public static class WsIntegrationTests
 
     [TestFixture]
     [Category("Integration")]
+    [NonParallelizable]
     public sealed class SubscribeRoots
     {
         [Test]
@@ -51,6 +59,7 @@ public static class WsIntegrationTests
 
     [TestFixture]
     [Category("Integration")]
+    [NonParallelizable]
     public sealed class SubscribeLogs
     {
         [Test]
@@ -65,6 +74,7 @@ public static class WsIntegrationTests
 
     [TestFixture]
     [Category("Integration")]
+    [NonParallelizable]
     public sealed class SubscribeAccount
     {
         [Test]
@@ -80,6 +90,7 @@ public static class WsIntegrationTests
 
     [TestFixture]
     [Category("Integration")]
+    [NonParallelizable]
     public sealed class SubscribeParsedAccount
     {
         [Test]
@@ -94,22 +105,37 @@ public static class WsIntegrationTests
         });
     }
 
-    // Connects a fresh client, runs the probe under a 30s deadline, and applies the shared integration-mode
-    // policy. Ordinary runs turn transport flakiness into an inconclusive result; strict release runs fail.
-    // A real assertion failure is never classified as transient, so it always fails the test.
+    // Serializes live probes and spaces their starts so independently scheduled fixtures cannot burst a
+    // provider's WebSocket request limit. The gate covers the complete subscription lifetime, including
+    // unsubscribe, while each probe's 30s deadline starts only after it owns the gate.
     private static async Task ProbeAsync(Func<SolanaWsClient, CancellationToken, Task> probe)
     {
+        await ProbeGate.WaitAsync();
+
         try
         {
-            await using var client = new SolanaWsClient();
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var delay = _nextProbeStart - ProbeClock.Elapsed;
+            if (delay > TimeSpan.Zero)
+                await Task.Delay(delay);
 
-            await client.ConnectAsync(new Uri(IntegrationEnvironment.WsEndpoint), timeout.Token);
-            await probe(client, timeout.Token);
+            _nextProbeStart = ProbeClock.Elapsed + MinimumProbeStartInterval;
+
+            try
+            {
+                await using var client = new SolanaWsClient();
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+                await client.ConnectAsync(new Uri(IntegrationEnvironment.WsEndpoint), timeout.Token);
+                await probe(client, timeout.Token);
+            }
+            catch (Exception exception)
+            {
+                IntegrationEnvironment.RethrowOrInconclusive(exception);
+            }
         }
-        catch (Exception exception)
+        finally
         {
-            IntegrationEnvironment.RethrowOrInconclusive(exception);
+            ProbeGate.Release();
         }
     }
 }
