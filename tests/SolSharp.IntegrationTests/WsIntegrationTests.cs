@@ -94,9 +94,9 @@ public static class WsIntegrationTests
         });
     }
 
-    // Connects a fresh client, runs the probe under a 30s deadline, and turns transport flakiness (rate
-    // limits, timeouts, dropped sockets) into an inconclusive rather than a failure. A real assertion failure
-    // is not transient, so it still fails the test.
+    // Connects a fresh client, runs the probe under a 30s deadline, and applies the shared integration-mode
+    // policy. Ordinary runs turn transport flakiness into an inconclusive result; strict release runs fail.
+    // A real assertion failure is never classified as transient, so it always fails the test.
     private static async Task ProbeAsync(Func<SolanaWsClient, CancellationToken, Task> probe)
     {
         try
@@ -107,9 +107,9 @@ public static class WsIntegrationTests
             await client.ConnectAsync(new Uri(IntegrationEnvironment.WsEndpoint), timeout.Token);
             await probe(client, timeout.Token);
         }
-        catch (Exception exception) when (IntegrationEnvironment.IsTransient(exception))
+        catch (Exception exception)
         {
-            Assert.Inconclusive($"Skipped: the WebSocket endpoint was unavailable ({exception.GetType().Name}).");
+            IntegrationEnvironment.RethrowOrInconclusive(exception);
         }
     }
 }

@@ -60,10 +60,13 @@ version (on the earlier 0.x releases, minor versions could carry them).
 - Added a forward-compatible local `global.json`; after `setup-dotnet` installs 8.x, every CI/release job
   that invokes .NET asserts the SDK resolver's actual selected version, so preinstalled newer SDKs cannot
   invalidate the minimum-SDK gate. Release publishing now fails unless the pushed tag exactly matches the
-  package version, requires private live-cluster endpoints with zero skipped or inconclusive integration
-  paths, verifies the canonical devnet genesis hash before any write, and Native-AOT publishes and runs the
-  exact packed artifact from an isolated package cache before pushing it. A duplicate immutable NuGet version
-  succeeds only when the repository-signed NuGet copy proves it contains the exact pre-staged canonical
+  package version, requires private live-cluster endpoints, and admits no skipped or inconclusive unit,
+  read, or streaming paths. Faucet-dependent devnet writes run serially through a one-request-per-second
+  limiter as a separate probe: deterministic failures still block publication, while classified faucet/rate-
+  limit failures are reported as inconclusive instead of making release availability depend on the shared
+  faucet. The probe verifies the canonical devnet genesis hash before any write, and Native-AOT publishes and
+  runs the exact packed artifact from an isolated package cache before pushing it. A duplicate immutable NuGet
+  version succeeds only when the repository-signed NuGet copy proves it contains the exact pre-staged canonical
   package; mismatched or unverifiable duplicates fail visibly.
 - Added centrally configured StyleCop analysis to every project. Rider, Roslyn, and StyleCop now share an
   explicit modifier order, while repository-conflicting documentation and legacy-layout rules are suppressed

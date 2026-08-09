@@ -28,7 +28,7 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection to add to.</param>
     /// <param name="configure">Configures the <see cref="SolanaRpcOptions"/>.</param>
-    /// <param name="configureResilience">Optionally tunes the resilience pipeline (retries, timeouts, circuit breaker).</param>
+    /// <param name="configureResilience">Optionally tunes the resilience pipeline (rate limiting, retries, timeouts, circuit breaker).</param>
     /// <returns>The <see cref="IHttpClientBuilder"/>, so the caller can keep configuring the client (headers, timeout, handlers).</returns>
     public static IHttpClientBuilder AddSolanaRpc(
         this IServiceCollection services,
