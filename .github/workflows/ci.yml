@@ -46,7 +46,7 @@ jobs:
 
       # The four unit-test projects produce overlapping reports because higher layers reference
       # lower assemblies. ReportGenerator merges those hits before enforcing the repository-wide
-      # line threshold, while source-generated obj/** files remain outside the metric.
+      # line threshold, while compiler/source-generated files remain outside the metric.
       - name: Test and collect coverage
         shell: bash
         env:
@@ -85,32 +85,43 @@ jobs:
             "-targetdir:${COVERAGE_ROOT}/report" \
             "-reporttypes:Cobertura;MarkdownSummaryGithub" \
             "-assemblyfilters:+SolSharp.Core;+SolSharp.Rpc;+SolSharp.Wallet;+SolSharp.Programs" \
-            "-filefilters:-*/obj/*" \
+            "-filefilters:-*/obj/*;-*.g.cs" \
             "-verbosity:Warning"
 
           cat "${COVERAGE_ROOT}/report/SummaryGithub.md" >> "${GITHUB_STEP_SUMMARY}"
           line_rate="$(sed -n 's/.*<coverage line-rate="\([^"]*\)".*/\1/p' \
             "${COVERAGE_ROOT}/report/Cobertura.xml" | head -1)"
-          # Keep the README figure conservative and stable when a single environment-dependent hit
-          # moves the exact rate across a nearest-tenth rounding boundary.
-          line_percent="$(awk -v rate="${line_rate}" \
-            'BEGIN { printf "%.1f", int(rate * 1000) / 10 }')"
-          echo "Merged line coverage: ${line_percent}%"
+          if [[ ! "${line_rate}" =~ ^(0(\.[0-9]+)?|1(\.0+)?)$ ]]; then
+            echo "ReportGenerator returned an invalid line rate: '${line_rate}'."
+            exit 1
+          fi
+
+          line_percent_exact="$(awk -v rate="${line_rate}" 'BEGIN { printf "%.4f", rate * 100 }')"
+          advertised_percent="93.7"
+          echo "Merged line coverage: ${line_percent_exact}% (README baseline: ${advertised_percent}%)"
           if ! awk -v rate="${line_rate}" 'BEGIN { exit !(rate >= 0.90) }'; then
-            echo "Line coverage ${line_percent}% is below the required 90.0%."
+            echo "Line coverage ${line_percent_exact}% is below the required 90.0%."
+            exit 1
+          fi
+
+          # Exact hit counts can vary by a few environment-dependent lines. Keep the documented
+          # measurement conservative: it may trail the current result, but it must never overstate it.
+          if ! awk -v rate="${line_rate}" -v advertised="${advertised_percent}" \
+            'BEGIN { exit !(rate * 100 >= advertised) }'; then
+            echo "Line coverage ${line_percent_exact}% is below the documented ${advertised_percent}%."
             exit 1
           fi
 
           for readme in README.md README.nuget.md; do
-            if ! grep -Fq "unit_test_coverage-${line_percent}%25_line" "${readme}"; then
-              echo "${readme} does not advertise the measured ${line_percent}% line coverage."
+            if ! grep -Fq "unit_test_coverage-${advertised_percent}%25_line" "${readme}"; then
+              echo "${readme} does not advertise the ${advertised_percent}% coverage baseline."
               exit 1
             fi
           done
 
-          if ! grep -Fq "**${line_percent}% of lines**" README.md || \
-             ! grep -Fq "covers ${line_percent}% of hand-written production lines" README.nuget.md; then
-            echo "README coverage prose does not match the measured ${line_percent}%."
+          if ! grep -Fq "**${advertised_percent}% of lines**" README.md || \
+             ! grep -Fq "covers ${advertised_percent}% of hand-written production lines" README.nuget.md; then
+            echo "README coverage prose does not match the ${advertised_percent}% baseline."
             exit 1
           fi
 

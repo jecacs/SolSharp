@@ -37,9 +37,10 @@ and control, this is aimed at you.
   is independently written and is not an official Anza/Solana product.
 - **Purposeful dependencies.** A dependency-light Core, allocation-free hot paths and span-based APIs;
   the RPC resilience pipeline and vetted Ed25519/BLS backends are included deliberately.
-- **Measured quality.** The unit suite covers 93.7% of hand-written production lines across the four
-  functional assemblies. CI merges overlapping reports, excludes generated sources, publishes line and
-  branch details, enforces a 90% repository-wide line floor, and rejects a stale documented percentage.
+- **Measured quality.** Across the four functional assemblies, the reproducible .NET 8 Linux
+  unit-coverage baseline covers 93.7% of hand-written production lines. CI merges overlapping reports,
+  excludes generated sources, publishes line and branch details, enforces a 90% repository-wide line
+  floor, and rejects documentation that overstates the current result.
 - **Automated security gates.** Pull requests and weekly scans audit direct and transitive NuGet
   advisories, review dependency changes, run CodeQL's extended C# security queries, and run OpenSSF
   supply-chain checks; release packages receive GitHub build-provenance attestations.

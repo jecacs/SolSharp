@@ -382,12 +382,12 @@ SolSharp/
 
 ## Quality gates
 
-The four unit-test suites' merged Linux CI coverage across `SolSharp.Core`, `SolSharp.Rpc`,
-`SolSharp.Wallet`, and `SolSharp.Programs` is
-**93.7% of lines**. Source-generated files under `obj/**` are excluded; overlapping lower-layer hits
-are merged rather than counted twice. CI publishes the merged line/branch Cobertura and Markdown
-reports, fails if repository-wide line coverage drops below 90%, and requires the documented percentage
-to match the measured result.
+The four unit-test suites' reproducible .NET 8 Linux coverage baseline across `SolSharp.Core`,
+`SolSharp.Rpc`, `SolSharp.Wallet`, and `SolSharp.Programs` is
+**93.7% of lines**. Build outputs under `obj/**` and generated `*.g.cs` pseudo-sources are excluded;
+overlapping lower-layer hits are merged rather than counted twice. CI publishes the merged Cobertura
+line/branch and Markdown reports, fails if repository-wide line coverage drops below 90%, and rejects a
+documented percentage that exceeds the current measured result.
 
 Every pull request also receives a direct-and-transitive NuGet advisory audit and a dependency-diff
 review. CodeQL runs the `security-extended` C# query suite, the dependency audit runs weekly even without
