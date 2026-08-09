@@ -6,19 +6,12 @@ namespace SolSharp.Wallet.Tests;
 
 public static class OffchainMessageTests
 {
-    private static readonly byte[] UpstreamAsciiWire =
-    [
-        255, 115, 111, 108, 97, 110, 97, 32, 111, 102, 102, 99, 104, 97, 105, 110, 0, 0, 12, 0,
-        84, 101, 115, 116, 32, 77, 101, 115, 115, 97, 103, 101
-    ];
+    private static readonly byte[] UpstreamAsciiWire = Convert.FromHexString(
+        "FF736F6C616E61206F6666636861696E00000C0054657374204D657373616765");
 
-    private static readonly byte[] UpstreamUtf8Wire =
-    [
-        255, 115, 111, 108, 97, 110, 97, 32, 111, 102, 102, 99, 104, 97, 105, 110, 0, 1, 35, 0,
-        208, 162, 208, 181, 209, 129, 209, 130, 208, 190, 208, 178, 208, 190, 208, 181, 32,
-        209, 129, 208, 190, 208, 190, 208, 177, 209, 137, 208, 181, 208, 189, 208, 184, 208,
-        181
-    ];
+    private static readonly byte[] UpstreamUtf8Wire = Convert.FromHexString(
+        "FF736F6C616E61206F6666636861696E00012300D0A2D0B5D181D182D0BED0B2"
+        + "D0BED0B520D181D0BED0BED0B1D189D0B5D0BDD0B8D0B5");
 
     private const string UpstreamAsciiHash = "HG5JydBGjtjTfD3sSn21ys5NTWPpXzmqifiGC2BVUjkD";
     private const string UpstreamUtf8Hash = "6GXTveatZQLexkX4WeTpJ3E7uk1UojRXpKp43c4ArSun";
