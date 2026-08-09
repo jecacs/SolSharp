@@ -9,18 +9,11 @@ namespace SolSharp.Core.Encoding;
 /// fixed and length-prefixed byte sequences, UTF-8 strings, and Option / Vec prefixes. Every read is
 /// bounds-checked and advances the cursor.
 /// </summary>
-public ref struct BorshReader
+/// <param name="data">The Borsh-encoded bytes.</param>
+public ref struct BorshReader(ReadOnlySpan<byte> data)
 {
     private static readonly System.Text.Encoding StrictUtf8 = new System.Text.UTF8Encoding(false, true);
-    private readonly ReadOnlySpan<byte> _data;
-
-    /// <summary>Creates a reader positioned at the start of <paramref name="data"/>.</summary>
-    /// <param name="data">The Borsh-encoded bytes.</param>
-    public BorshReader(ReadOnlySpan<byte> data)
-    {
-        _data = data;
-        Position = 0;
-    }
+    private readonly ReadOnlySpan<byte> _data = data;
 
     /// <summary>The number of bytes consumed so far.</summary>
     public int Position { get; private set; }
