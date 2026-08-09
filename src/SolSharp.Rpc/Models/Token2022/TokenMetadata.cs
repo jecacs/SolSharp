@@ -40,6 +40,13 @@ public sealed record TokenMetadata
         var uri = reader.ReadString();
 
         var count = reader.ReadLength();
+        // Every key/value pair needs at least two four-byte Borsh string length prefixes. Validate the
+        // attacker-controlled count before using it as List capacity; otherwise a tiny malformed TLV can
+        // request a multi-gigabyte allocation before the reader gets a chance to reject truncated data.
+        if (count > reader.Remaining / (sizeof(uint) * 2))
+            throw new FormatException(
+                $"Token metadata declares {count} additional entries but only {reader.Remaining} byte(s) remain.");
+
         var additional = new List<KeyValuePair<string, string>>(count);
         for (var i = 0; i < count; i++)
             additional.Add(new KeyValuePair<string, string>(reader.ReadString(), reader.ReadString()));

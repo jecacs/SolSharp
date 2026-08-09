@@ -1,5 +1,5 @@
 # SolSharp - editorconfig
-# Modern C# only. The meaningful modernizers are warnings, not hints, so legacy
+# Modern C# 12. The meaningful modernizers are warnings, not hints, so legacy
 # patterns surface on build (EnforceCodeStyleInBuild is set in Directory.Build.props).
 
 root = true
@@ -128,6 +128,48 @@ csharp_indent_case_contents = true
 csharp_indent_switch_labels = true
 csharp_space_around_binary_operators = before_and_after
 csharp_blank_lines_around_member = 1
+
+# One explicit modifier order for Rider, Roslyn/dotnet format, and StyleCop SA1206.
+# In particular: `static readonly` and `override async`, never the inverse.
+csharp_preferred_modifier_order = public,private,protected,internal,file,static,extern,new,virtual,abstract,sealed,override,readonly,unsafe,required,volatile,async:warning
+dotnet_diagnostic.IDE0036.severity = warning
+
+# StyleCop defaults are build-gated. Disable only rules that conflict with the
+# established repository conventions or impose legacy boilerplate/layout.
+
+# Repository conventions: no `this.` qualification, `_camelCase` private fields,
+# optional braces for single-line statements, and no mandatory file headers.
+dotnet_diagnostic.SA1101.severity = none
+dotnet_diagnostic.SA1309.severity = none
+dotnet_diagnostic.SA1503.severity = none
+dotnet_diagnostic.SA1519.severity = none
+dotnet_diagnostic.SA1520.severity = none
+dotnet_diagnostic.SA1633.severity = none
+
+# CS1591 build-gates the presence of XML documentation on production public API.
+# Completeness is a review policy; StyleCop's fixed wording/internal-element rules
+# conflict with the repository's concise contract style and are disabled explicitly.
+dotnet_diagnostic.SA1600.severity = none
+dotnet_diagnostic.SA1601.severity = none
+dotnet_diagnostic.SA1611.severity = none
+dotnet_diagnostic.SA1615.severity = none
+dotnet_diagnostic.SA1623.severity = none
+dotnet_diagnostic.SA1642.severity = none
+dotnet_diagnostic.SA1643.severity = none
+
+# Preserve the existing compact, domain-oriented file/member layout. These are
+# stylistic preferences rather than correctness or readability diagnostics.
+dotnet_diagnostic.SA1122.severity = none
+dotnet_diagnostic.SA1128.severity = none
+dotnet_diagnostic.SA1201.severity = none
+dotnet_diagnostic.SA1202.severity = none
+dotnet_diagnostic.SA1203.severity = none
+dotnet_diagnostic.SA1204.severity = none
+dotnet_diagnostic.SA1214.severity = none
+dotnet_diagnostic.SA1402.severity = none
+dotnet_diagnostic.SA1413.severity = none
+dotnet_diagnostic.SA1515.severity = none
+dotnet_diagnostic.SA1649.severity = none
 
 # ── Naming ───────────────────────────────────────────────────────────────────
 # Interfaces: IPascalCase

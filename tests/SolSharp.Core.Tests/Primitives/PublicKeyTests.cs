@@ -46,7 +46,7 @@ public static class PublicKeyTests
         [Test]
         public void SystemProgram_IsThirtyTwoZeroBytes() => PublicKey.Parse(SolanaProgramIds.SystemProgram).ToBytes().Should().Equal(new byte[32]);
 
-        [TestCase("0")]   // not in the base58 alphabet
+        [TestCase("0")] // not in the base58 alphabet
         [TestCase("abc")] // valid alphabet, wrong length
         public void Invalid_Throws(string input)
         {
@@ -137,7 +137,7 @@ public static class PublicKeyTests
             var key = PublicKey.Parse(Sample);
 
             // Act
-            Action act = () => key.CopyTo(new byte[PublicKey.Length - 1]);
+            var act = () => key.CopyTo(new byte[PublicKey.Length - 1]);
 
             // Assert
             act.Should().Throw<ArgumentException>();
@@ -159,6 +159,19 @@ public static class PublicKeyTests
         public void Deserialize_Invalid_Throws()
         {
             Action act = () => JsonSerializer.Deserialize<PublicKey>("\"0\"");
+            act.Should().Throw<JsonException>();
+        }
+
+        [TestCase("123")]
+        [TestCase("true")]
+        [TestCase("{}")]
+        [TestCase("[]")]
+        public void Deserialize_NonString_ThrowsJsonException(string json)
+        {
+            // Act
+            Action act = () => JsonSerializer.Deserialize<PublicKey>(json);
+
+            // Assert
             act.Should().Throw<JsonException>();
         }
     }

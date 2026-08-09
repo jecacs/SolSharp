@@ -1,7 +1,10 @@
+using SolSharp.Core.Primitives;
+
 namespace SolSharp.Programs;
 
 /// <summary>
-/// Which authority of a mint or token account <see cref="TokenProgram.SetAuthority"/> changes. The first
+/// Which authority of a mint or token account
+/// <see cref="TokenProgram.SetAuthority(PublicKey, PublicKey, AuthorityType, PublicKey?, PublicKey?)"/> changes. The first
 /// four variants are the classic SPL Token set; the rest are Token-2022 extension authorities, valid only
 /// when the instruction targets the Token-2022 program.
 /// </summary>

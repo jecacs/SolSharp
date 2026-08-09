@@ -6,45 +6,194 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up .NET 8
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 8.0.x
 
+      # setup-dotnet proves installation, while global.json controls selection. Assert the actual
+      # resolver result because hosted runners also have newer SDK majors preinstalled.
+      - name: Verify .NET 8 SDK selection
+        shell: bash
+        run: |
+          selected_version="$(dotnet --version)"
+          if [[ "${selected_version}" != 8.* ]]; then
+            echo "Expected a .NET 8 SDK, but dotnet selected ${selected_version}."
+            dotnet --info
+            exit 1
+          fi
+
       - name: Restore
-        run: dotnet restore
+        run: dotnet restore -p:NuGetAuditMode=all -warnaserror
 
       # Hard gate: the project keeps a zero-warning build, so fail CI on any warning.
       - name: Build
         run: dotnet build --no-restore --configuration Release -warnaserror
 
-      # The SolSharp.IntegrationTests suite hits a live cluster, so it is excluded here to keep CI
-      # deterministic and offline; run it locally with a configured SOLSHARP_RPC_URL.
-      - name: Test
-        run: dotnet test --no-build --configuration Release --filter "TestCategory!=Integration"
+      - name: Verify formatting and analyzer style
+        run: dotnet format --no-restore --verify-no-changes --severity info
 
-  # Proves the Native AOT claim end to end: the sample publishes with PublishAot (trimmed, no JIT,
-  # no reflection-based serialization) and then runs its offline signing / transaction-serialization /
-  # JSON-RPC-pipeline checks as a native binary. A type missing from the source-generated JSON context
-  # or a reflection call sneaking into a hot path fails this job.
+      # The four unit-test projects produce overlapping reports because higher layers reference
+      # lower assemblies. ReportGenerator merges those hits before enforcing the repository-wide
+      # line threshold, while compiler/source-generated files remain outside the metric.
+      - name: Test and collect coverage
+        shell: bash
+        env:
+          COVERAGE_ROOT: ${{ runner.temp }}/solsharp-coverage
+          REPORTGENERATOR_ROOT: ${{ runner.temp }}/solsharp-reportgenerator
+        run: |
+          unit_projects=(
+            tests/SolSharp.Core.Tests/SolSharp.Core.Tests.csproj
+            tests/SolSharp.Rpc.Tests/SolSharp.Rpc.Tests.csproj
+            tests/SolSharp.Wallet.Tests/SolSharp.Wallet.Tests.csproj
+            tests/SolSharp.Programs.Tests/SolSharp.Programs.Tests.csproj
+          )
+
+          for project in "${unit_projects[@]}"; do
+            project_name="$(basename "${project}" .csproj)"
+            dotnet test "${project}" \
+              --no-build \
+              --configuration Release \
+              --collect:"XPlat Code Coverage" \
+              --settings coverage.runsettings \
+              --results-directory "${COVERAGE_ROOT}/${project_name}"
+          done
+
+          # Keep the deterministic, non-live integration fixtures in ordinary CI as well.
+          dotnet test tests/SolSharp.IntegrationTests/SolSharp.IntegrationTests.csproj \
+            --no-build \
+            --configuration Release \
+            --filter "TestCategory!=Integration"
+
+          dotnet tool install dotnet-reportgenerator-globaltool \
+            --tool-path "${REPORTGENERATOR_ROOT}" \
+            --version 5.5.11
+
+          "${REPORTGENERATOR_ROOT}/reportgenerator" \
+            "-reports:${COVERAGE_ROOT}/**/coverage.cobertura.xml" \
+            "-targetdir:${COVERAGE_ROOT}/report" \
+            "-reporttypes:Cobertura;MarkdownSummaryGithub" \
+            "-assemblyfilters:+SolSharp.Core;+SolSharp.Rpc;+SolSharp.Wallet;+SolSharp.Programs" \
+            "-filefilters:-*/obj/*;-*.g.cs" \
+            "-verbosity:Warning"
+
+          cat "${COVERAGE_ROOT}/report/SummaryGithub.md" >> "${GITHUB_STEP_SUMMARY}"
+          line_rate="$(sed -n 's/.*<coverage line-rate="\([^"]*\)".*/\1/p' \
+            "${COVERAGE_ROOT}/report/Cobertura.xml" | head -1)"
+          if [[ ! "${line_rate}" =~ ^(0(\.[0-9]+)?|1(\.0+)?)$ ]]; then
+            echo "ReportGenerator returned an invalid line rate: '${line_rate}'."
+            exit 1
+          fi
+
+          line_percent_exact="$(awk -v rate="${line_rate}" 'BEGIN { printf "%.4f", rate * 100 }')"
+          advertised_percent="93.7"
+          echo "Merged line coverage: ${line_percent_exact}% (README baseline: ${advertised_percent}%)"
+          if ! awk -v rate="${line_rate}" 'BEGIN { exit !(rate >= 0.90) }'; then
+            echo "Line coverage ${line_percent_exact}% is below the required 90.0%."
+            exit 1
+          fi
+
+          # Exact hit counts can vary by a few environment-dependent lines. Keep the documented
+          # measurement conservative: it may trail the current result, but it must never overstate it.
+          if ! awk -v rate="${line_rate}" -v advertised="${advertised_percent}" \
+            'BEGIN { exit !(rate * 100 >= advertised) }'; then
+            echo "Line coverage ${line_percent_exact}% is below the documented ${advertised_percent}%."
+            exit 1
+          fi
+
+          for readme in README.md README.nuget.md; do
+            if ! grep -Fq "unit_test_coverage-${advertised_percent}%25_line" "${readme}"; then
+              echo "${readme} does not advertise the ${advertised_percent}% coverage baseline."
+              exit 1
+            fi
+          done
+
+          if ! grep -Fq "**${advertised_percent}% of lines**" README.md || \
+             ! grep -Fq "covers ${advertised_percent}% of hand-written production lines" README.nuget.md; then
+            echo "README coverage prose does not match the ${advertised_percent}% baseline."
+            exit 1
+          fi
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-report
+          path: ${{ runner.temp }}/solsharp-coverage/report
+          if-no-files-found: warn
+          retention-days: 14
+
+  # Proves the shipped package's Native AOT claim end to end: pack first (which also validates the
+  # public API against the previous stable package), then consume that nupkg from the AOT sample.
   aot-smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up .NET 8
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 8.0.x
 
-      - name: Publish sample (Native AOT)
-        run: dotnet publish samples/SolSharp.AotSmoke -c Release -r linux-x64
+      - name: Verify .NET 8 SDK selection
+        shell: bash
+        run: |
+          selected_version="$(dotnet --version)"
+          if [[ "${selected_version}" != 8.* ]]; then
+            echo "Expected a .NET 8 SDK, but dotnet selected ${selected_version}."
+            dotnet --info
+            exit 1
+          fi
+
+      - name: Restore and audit dependencies
+        run: dotnet restore -p:NuGetAuditMode=all -warnaserror
+
+      - name: Pack and validate public API
+        run: dotnet pack src/SolSharp/SolSharp.csproj -c Release -o artifacts -p:Version=999.0.0-ci --no-restore -warnaserror
+
+      - name: Publish packed package consumer (Native AOT)
+        shell: bash
+        env:
+          NUGET_PACKAGES: ${{ runner.temp }}/solsharp-ci-packages
+        run: |
+          package_version="999.0.0-ci"
+          dotnet restore samples/SolSharp.AotSmoke \
+            --runtime linux-x64 \
+            -p:UsePackedSolSharp=true \
+            -p:SolSharpPackageVersion="${package_version}" \
+            --source artifacts \
+            --source https://api.nuget.org/v3/index.json \
+            -p:NuGetAuditMode=all \
+            -warnaserror
+
+          artifact_path="$(find artifacts -maxdepth 1 -iname "solsharp.${package_version}.nupkg" -print -quit)"
+          restored_path="${NUGET_PACKAGES}/solsharp/${package_version}/solsharp.${package_version}.nupkg"
+          if [[ -z "${artifact_path}" || ! -f "${restored_path}" ]] || ! cmp --silent "${artifact_path}" "${restored_path}"; then
+            echo "The AOT consumer did not restore the exact package artifact produced by this job."
+            sha256sum "${artifact_path}" "${restored_path}" 2>/dev/null || true
+            exit 1
+          fi
+
+          dotnet publish samples/SolSharp.AotSmoke \
+            --configuration Release \
+            --runtime linux-x64 \
+            --no-restore \
+            -warnaserror \
+            -p:UsePackedSolSharp=true \
+            -p:SolSharpPackageVersion="${package_version}"
 
       - name: Run sample
         run: samples/SolSharp.AotSmoke/bin/Release/net8.0/linux-x64/publish/SolSharp.AotSmoke

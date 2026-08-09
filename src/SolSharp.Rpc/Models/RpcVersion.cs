@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace SolSharp.Rpc.Models;
@@ -6,11 +7,18 @@ namespace SolSharp.Rpc.Models;
 /// <seealso href="https://solana.com/docs/rpc/http/getversion">getVersion</seealso>
 public sealed record RpcVersion
 {
+    private string? _solanaCore;
+
     /// <summary>The solana-core software version string (for example <c>"1.18.0"</c>).</summary>
     [JsonPropertyName("solana-core")]
-    public string SolanaCore { get; init; } = string.Empty;
+    [JsonRequired]
+    public string SolanaCore
+    {
+        get => _solanaCore ?? throw new InvalidOperationException("The node version has not been initialized.");
+        init => _solanaCore = value ?? throw new JsonException("A version response must carry solana-core.");
+    }
 
     /// <summary>The numeric feature set the node has enabled, if reported.</summary>
     [JsonPropertyName("feature-set")]
-    public long? FeatureSet { get; init; }
+    public uint? FeatureSet { get; init; }
 }

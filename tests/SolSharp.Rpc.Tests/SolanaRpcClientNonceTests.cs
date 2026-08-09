@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using FluentAssertions;
 using NUnit.Framework;
+using SolSharp.Core.Constants;
 using SolSharp.Core.Primitives;
 using SolSharp.Rpc.Models;
 
@@ -59,6 +60,17 @@ public static class SolanaRpcClientNonceTests
         [Test]
         public void TooShort_ReturnsNull()
             => NonceAccount.Decode(NonceData().AsSpan(0, NonceAccount.Length - 1)).Should().BeNull();
+
+        [Test]
+        public void TrailingDataOrUnknownVersion_ReturnsNull()
+        {
+            byte[] oversized = [.. NonceData(), 0];
+            var unknownVersion = NonceData();
+            BinaryPrimitives.WriteUInt32LittleEndian(unknownVersion, 2);
+
+            NonceAccount.Decode(oversized).Should().BeNull();
+            NonceAccount.Decode(unknownVersion).Should().BeNull();
+        }
     }
 
     [TestFixture]
@@ -94,6 +106,19 @@ public static class SolanaRpcClientNonceTests
             var client = new SolanaRpcClient(http);
 
             // Act & Assert
+            (await client.GetNonceAccountAsync(Pk(2))).Should().BeNull();
+        }
+
+        [Test]
+        public async Task WrongOwner_ReturnsNull()
+        {
+            var envelope =
+                """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"data":["__DATA__","base64"],"executable":false,"lamports":1,"owner":"__OWNER__","rentEpoch":0,"space":80}},"id":1}"""
+                    .Replace("__DATA__", Convert.ToBase64String(NonceData()))
+                    .Replace("__OWNER__", SolanaProgramIds.TokenProgram);
+            var http = new HttpClient(new FakeHttpMessageHandler(envelope)) { BaseAddress = new Uri("http://localhost") };
+            var client = new SolanaRpcClient(http);
+
             (await client.GetNonceAccountAsync(Pk(2))).Should().BeNull();
         }
     }

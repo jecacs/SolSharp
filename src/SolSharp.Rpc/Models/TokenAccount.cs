@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using SolSharp.Core.Primitives;
+using SolSharp.Rpc.Models.Token2022;
 
 namespace SolSharp.Rpc.Models;
 
@@ -55,10 +56,16 @@ public sealed record TokenAccount
 
     /// <summary>Decodes a token account from its raw account data (the bytes <c>getAccountInfo</c> returns).</summary>
     /// <param name="data">The account's raw data.</param>
-    /// <returns>The decoded token account, or <c>null</c> if the data is too short to be a token account.</returns>
+    /// <returns>The decoded account, or <c>null</c> if the data is not a canonical Token or Token-2022 account layout.</returns>
     public static TokenAccount? Decode(ReadOnlySpan<byte> data)
     {
-        if (data.Length < Length)
+        if (data.Length != Length && TokenExtensionSet.DecodeAccount(data) is null)
+            return null;
+
+        if (!SplLayout.TryReadCOptionPublicKey(data, 72, out var delegateAuthority)
+            || data[108] > (byte)TokenAccountState.Frozen
+            || !SplLayout.TryReadCOptionU64(data, 109, out var isNative)
+            || !SplLayout.TryReadCOptionPublicKey(data, 129, out var closeAuthority))
             return null;
 
         return new TokenAccount
@@ -66,11 +73,11 @@ public sealed record TokenAccount
             Mint = new PublicKey(data[..PublicKey.Length]),
             Owner = new PublicKey(data.Slice(32, PublicKey.Length)),
             Amount = BinaryPrimitives.ReadUInt64LittleEndian(data[64..]),
-            Delegate = SplLayout.ReadCOptionPublicKey(data, 72),
+            Delegate = delegateAuthority,
             State = (TokenAccountState)data[108],
-            IsNative = SplLayout.ReadCOptionU64(data, 109),
+            IsNative = isNative,
             DelegatedAmount = BinaryPrimitives.ReadUInt64LittleEndian(data[121..]),
-            CloseAuthority = SplLayout.ReadCOptionPublicKey(data, 129)
+            CloseAuthority = closeAuthority
         };
     }
 }

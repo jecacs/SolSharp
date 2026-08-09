@@ -98,6 +98,7 @@ public static class KeypairParsingTests
 
         [TestCase("[300]")]
         [TestCase("[-1]")]
+        [TestCase("[1,2,300]")]
         public void ValueOutOfByteRange_Throws(string json)
         {
             // Act
@@ -291,6 +292,17 @@ public static class KeypairParsingTests
         {
             Action act = () => _ = Keypair.Parse(text);
             act.Should().Throw<ArgumentException>();
+        }
+
+        [TestCase("1111111111")]
+        [TestCase("AQID")]
+        public void ValidEncodingWithWrongDecodedLength_Throws(string text)
+        {
+            // Act
+            Action act = () => _ = Keypair.Parse(text);
+
+            // Assert
+            act.Should().Throw<FormatException>();
         }
     }
 

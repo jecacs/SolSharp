@@ -27,6 +27,9 @@ public static class DevnetWriteIntegrationTests
     /// <summary>Funds a fresh keypair via airdrop and waits for the deposit to confirm.</summary>
     private static async Task<Keypair> FundedPayerAsync(SolanaRpcClient client, ulong lamports)
     {
+        var genesisHash = await client.GetGenesisHashAsync();
+        IntegrationEnvironment.ValidateDevnetGenesisHash(genesisHash);
+
         var payer = Keypair.Generate();
         var signature = await client.RequestAirdropAsync(payer.PublicKey, lamports);
         await client.ConfirmTransactionAsync(signature, timeout: ConfirmTimeout);

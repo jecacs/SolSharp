@@ -8,6 +8,7 @@ public sealed record HighestSnapshotSlot
 {
     /// <summary>The highest slot the node has a full snapshot for.</summary>
     [JsonPropertyName("full")]
+    [JsonRequired]
     public ulong Full { get; init; }
 
     /// <summary>The highest slot with an incremental snapshot based on <see cref="Full"/>, if any.</summary>

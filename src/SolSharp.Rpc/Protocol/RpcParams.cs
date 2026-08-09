@@ -15,6 +15,16 @@ internal sealed record CommitmentConfig
     public Commitment? Commitment { get; init; }
 }
 
+/// <summary>The <c>{ commitment, minContextSlot }</c> configuration used by context-aware read methods.</summary>
+internal sealed record ContextConfig
+{
+    [JsonPropertyName("commitment")]
+    public Commitment? Commitment { get; init; }
+
+    [JsonPropertyName("minContextSlot")]
+    public ulong? MinContextSlot { get; init; }
+}
+
 /// <summary>The <c>sendTransaction</c> configuration object.</summary>
 internal sealed record SendTransactionConfig
 {
@@ -51,6 +61,22 @@ internal sealed record SimulateTransactionConfig
 
     [JsonPropertyName("minContextSlot")]
     public ulong? MinContextSlot { get; init; }
+
+    [JsonPropertyName("accounts")]
+    public SimulateTransactionAccountsConfig? Accounts { get; init; }
+
+    [JsonPropertyName("innerInstructions")]
+    public bool? InnerInstructions { get; init; }
+}
+
+/// <summary>The optional post-simulation accounts requested from <c>simulateTransaction</c>.</summary>
+internal sealed record SimulateTransactionAccountsConfig
+{
+    [JsonPropertyName("encoding")]
+    public required string Encoding { get; init; }
+
+    [JsonPropertyName("addresses")]
+    public required PublicKey[] Addresses { get; init; }
 }
 
 /// <summary>
@@ -61,13 +87,16 @@ internal sealed record SimulateTransactionConfig
 internal sealed record AccountInfoConfig
 {
     [JsonPropertyName("encoding")]
-    public required string Encoding { get; init; }
+    public string? Encoding { get; init; }
 
     [JsonPropertyName("commitment")]
     public Commitment? Commitment { get; init; }
 
     [JsonPropertyName("dataSlice")]
     public DataSlice? DataSlice { get; init; }
+
+    [JsonPropertyName("minContextSlot")]
+    public ulong? MinContextSlot { get; init; }
 }
 
 /// <summary>The <c>getSignaturesForAddress</c> configuration object.</summary>
@@ -91,13 +120,13 @@ internal sealed record SignaturesForAddressConfig
 
 /// <summary>
 /// The <c>getProgramAccounts</c> / <c>programSubscribe</c> configuration object (the subscription leaves
-/// <see cref="MinContextSlot"/> and <see cref="DataSlice"/> unset). Filter entries are the payload records
-/// built by <see cref="AccountFilter"/>.
+/// <see cref="MinContextSlot"/>, <see cref="DataSlice"/>, <see cref="WithContext"/>, and
+/// <see cref="SortResults"/> unset). Filter entries are the payload records built by <see cref="AccountFilter"/>.
 /// </summary>
 internal sealed record ProgramAccountsConfig
 {
     [JsonPropertyName("encoding")]
-    public required string Encoding { get; init; }
+    public string? Encoding { get; init; }
 
     [JsonPropertyName("commitment")]
     public Commitment? Commitment { get; init; }
@@ -110,6 +139,12 @@ internal sealed record ProgramAccountsConfig
 
     [JsonPropertyName("filters")]
     public object[]? Filters { get; init; }
+
+    [JsonPropertyName("withContext")]
+    public bool? WithContext { get; init; }
+
+    [JsonPropertyName("sortResults")]
+    public bool? SortResults { get; init; }
 }
 
 /// <summary>The <c>{ mint }</c> filter of <c>getTokenAccountsByOwner</c>.</summary>
@@ -119,6 +154,23 @@ internal sealed record MintFilter
     public required PublicKey Mint { get; init; }
 }
 
+/// <summary>The <c>{ programId }</c> filter of token-account scan methods.</summary>
+internal sealed record ProgramIdFilter
+{
+    [JsonPropertyName("programId")]
+    public required PublicKey ProgramId { get; init; }
+}
+
+/// <summary>The <c>requestAirdrop</c> configuration object.</summary>
+internal sealed record RequestAirdropConfig
+{
+    [JsonPropertyName("recentBlockhash")]
+    public string? RecentBlockhash { get; init; }
+
+    [JsonPropertyName("commitment")]
+    public Commitment? Commitment { get; init; }
+}
+
 /// <summary>The <c>getTransaction</c> configuration object (base64 or jsonParsed encoding).</summary>
 internal sealed record TransactionConfig
 {
@@ -126,10 +178,10 @@ internal sealed record TransactionConfig
     public Commitment? Commitment { get; init; }
 
     [JsonPropertyName("maxSupportedTransactionVersion")]
-    public required int MaxSupportedTransactionVersion { get; init; }
+    public int? MaxSupportedTransactionVersion { get; init; }
 
     [JsonPropertyName("encoding")]
-    public required string Encoding { get; init; }
+    public string? Encoding { get; init; }
 }
 
 /// <summary>The <c>getBlock</c> configuration object (<see cref="Encoding"/> is unset for the signatures-only read).</summary>
@@ -139,16 +191,16 @@ internal sealed record BlockConfig
     public Commitment? Commitment { get; init; }
 
     [JsonPropertyName("maxSupportedTransactionVersion")]
-    public required int MaxSupportedTransactionVersion { get; init; }
+    public int? MaxSupportedTransactionVersion { get; init; }
 
     [JsonPropertyName("encoding")]
     public string? Encoding { get; init; }
 
     [JsonPropertyName("transactionDetails")]
-    public required string TransactionDetails { get; init; }
+    public string? TransactionDetails { get; init; }
 
     [JsonPropertyName("rewards")]
-    public required bool Rewards { get; init; }
+    public bool? Rewards { get; init; }
 }
 
 /// <summary>The <c>getSupply</c> configuration object.</summary>
@@ -176,6 +228,9 @@ internal sealed record InflationRewardConfig
 
     [JsonPropertyName("epoch")]
     public ulong? Epoch { get; init; }
+
+    [JsonPropertyName("minContextSlot")]
+    public ulong? MinContextSlot { get; init; }
 }
 
 /// <summary>The <c>{ mentions }</c> filter of <c>logsSubscribe</c>.</summary>
@@ -183,6 +238,16 @@ internal sealed record LogsFilter
 {
     [JsonPropertyName("mentions")]
     public required PublicKey[] Mentions { get; init; }
+}
+
+/// <summary>The <c>signatureSubscribe</c> configuration object.</summary>
+internal sealed record SignatureSubscribeConfig
+{
+    [JsonPropertyName("commitment")]
+    public Commitment? Commitment { get; init; }
+
+    [JsonPropertyName("enableReceivedNotification")]
+    public bool? EnableReceivedNotification { get; init; }
 }
 
 /// <summary>The <c>{ mentionsAccountOrProgram }</c> filter of <c>blockSubscribe</c>.</summary>
@@ -200,6 +265,35 @@ internal sealed record LargestAccountsConfig
 
     [JsonPropertyName("filter")]
     public string? Filter { get; init; }
+
+    [JsonPropertyName("sortResults")]
+    public bool? SortResults { get; init; }
+}
+
+/// <summary>The <c>getVoteAccounts</c> configuration object.</summary>
+internal sealed record VoteAccountsConfig
+{
+    [JsonPropertyName("votePubkey")]
+    public PublicKey? VotePublicKey { get; init; }
+
+    [JsonPropertyName("commitment")]
+    public Commitment? Commitment { get; init; }
+
+    [JsonPropertyName("keepUnstakedDelinquents")]
+    public bool? KeepUnstakedDelinquents { get; init; }
+
+    [JsonPropertyName("delinquentSlotDistance")]
+    public ulong? DelinquentSlotDistance { get; init; }
+}
+
+/// <summary>The trailing configuration object of <c>getLeaderSchedule</c>.</summary>
+internal sealed record LeaderScheduleConfig
+{
+    [JsonPropertyName("identity")]
+    public PublicKey? Identity { get; init; }
+
+    [JsonPropertyName("commitment")]
+    public Commitment? Commitment { get; init; }
 }
 
 /// <summary>The <c>getBlockProduction</c> configuration object.</summary>
@@ -232,14 +326,14 @@ internal sealed record BlockSubscribeConfig
     public Commitment? Commitment { get; init; }
 
     [JsonPropertyName("encoding")]
-    public required string Encoding { get; init; }
+    public string? Encoding { get; init; }
 
     [JsonPropertyName("transactionDetails")]
-    public required string TransactionDetails { get; init; }
+    public string? TransactionDetails { get; init; }
 
     [JsonPropertyName("showRewards")]
-    public required bool ShowRewards { get; init; }
+    public bool? ShowRewards { get; init; }
 
     [JsonPropertyName("maxSupportedTransactionVersion")]
-    public required int MaxSupportedTransactionVersion { get; init; }
+    public int? MaxSupportedTransactionVersion { get; init; }
 }

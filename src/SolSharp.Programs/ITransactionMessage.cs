@@ -3,8 +3,8 @@ using SolSharp.Core.Primitives;
 namespace SolSharp.Programs;
 
 /// <summary>
-/// A compiled transaction message — a legacy <see cref="Message"/> or a versioned <see cref="MessageV0"/> —
-/// that a <see cref="Transaction"/> can sign and serialize.
+/// A compiled transaction message — legacy <see cref="Message"/>, versioned <see cref="MessageV0"/>,
+/// or SIMD-0385 <see cref="MessageV1"/> — that a <see cref="Transaction"/> can sign and serialize.
 /// </summary>
 public interface ITransactionMessage
 {
@@ -35,7 +35,7 @@ public interface ITransactionMessage
     /// <summary>
     /// Resolves the compiled instructions back into <see cref="Instruction"/>s, mapping each account index to
     /// its public key and signer/writable flags. A v0 message additionally loads accounts from the supplied
-    /// address lookup tables (pass every table the message references); a legacy message ignores them.
+    /// address lookup tables (pass every table the message references); legacy and V1 messages ignore them.
     /// </summary>
     /// <param name="lookupTables">The resolved lookup tables the message references.</param>
     /// <returns>The resolved instructions, in order.</returns>

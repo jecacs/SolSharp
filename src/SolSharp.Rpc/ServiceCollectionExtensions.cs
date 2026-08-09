@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Polly;
 using SolSharp.Rpc.Streaming;
 
 namespace SolSharp.Rpc;
@@ -35,8 +36,8 @@ public static class ServiceCollectionExtensions
         Action<HttpStandardResilienceOptions>? configureResilience = null)
     {
         // Validated with an explicit predicate rather than ValidateDataAnnotations: the DataAnnotations
-        // validator reflects over the options type (RequiresUnreferencedCode, not AOT-safe), and this
-        // single check subsumes [Required] and [Url] for the one property anyway.
+        // validator reflects over the options type (RequiresUnreferencedCode, not AOT-safe), so keep the
+        // endpoint and response-limit checks as explicit predicates.
         services
             .AddOptions<SolanaRpcOptions>()
             .Configure(configure)
@@ -44,6 +45,9 @@ public static class ServiceCollectionExtensions
                 options => Uri.TryCreate(options.Endpoint, UriKind.Absolute, out var uri)
                            && uri.Scheme is "http" or "https",
                 "SolanaRpcOptions.Endpoint must be an absolute http(s) URL.")
+            .Validate(
+                options => options.MaximumResponseContentLength > 0,
+                "SolanaRpcOptions.MaximumResponseContentLength must be positive.")
             .ValidateOnStart();
 
         var builder = services.AddHttpClient<SolanaRpcClient>((provider, client) =>
@@ -55,6 +59,17 @@ public static class ServiceCollectionExtensions
         var resilience = builder.AddStandardResilienceHandler();
         if (configureResilience is not null)
             resilience.Configure(configureResilience);
+        resilience.Configure(options =>
+        {
+            var shouldHandle = options.Retry.ShouldHandle;
+            options.Retry.ShouldHandle = arguments =>
+            {
+                var request = arguments.Outcome.Result?.RequestMessage ?? arguments.Context.GetRequestMessage();
+                return request?.Options.TryGetValue(SolanaRpcClient.DisableRetriesKey, out var disabled) == true && disabled
+                    ? new ValueTask<bool>(false)
+                    : shouldHandle(arguments);
+            };
+        });
 
         return builder;
     }

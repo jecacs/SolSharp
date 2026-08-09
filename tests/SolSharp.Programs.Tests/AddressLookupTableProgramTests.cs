@@ -36,7 +36,9 @@ public static class AddressLookupTableProgramTests
             instruction.Accounts[0].IsWritable.Should().BeTrue();
             instruction.Accounts[0].IsSigner.Should().BeFalse();
             instruction.Accounts[1].PublicKey.Should().Be(Pk(1));
-            instruction.Accounts[1].IsSigner.Should().BeTrue();
+            // Since Solana activated relax_authority_signer_check_for_lookup_table_creation on every
+            // cluster, the canonical Rust builder does not require the future authority to sign creation.
+            instruction.Accounts[1].IsSigner.Should().BeFalse();
             instruction.Accounts[1].IsWritable.Should().BeFalse();
             instruction.Accounts[2].PublicKey.Should().Be(Pk(2));
             instruction.Accounts[2].IsSigner.Should().BeTrue();

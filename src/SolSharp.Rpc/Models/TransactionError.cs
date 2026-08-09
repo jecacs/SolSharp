@@ -19,6 +19,20 @@ public sealed record TransactionError
     /// <summary>The instruction-level error, when <see cref="Kind"/> is <c>InstructionError</c>.</summary>
     public InstructionError? InstructionError { get; init; }
 
+    /// <summary>
+    /// The duplicate top-level instruction index, when <see cref="Kind"/> is <c>DuplicateInstruction</c>.
+    /// </summary>
+    public int? DuplicateInstructionIndex { get; init; }
+
+    /// <summary>
+    /// The account index, when <see cref="Kind"/> is <c>InsufficientFundsForRent</c> or
+    /// <c>ProgramExecutionTemporarilyRestricted</c>.
+    /// </summary>
+    public int? AccountIndex { get; init; }
+
+    /// <summary>The raw payload of a parameterized variant, retained for forward compatibility.</summary>
+    public JsonElement? Details { get; init; }
+
     /// <summary>Decodes a node's <c>err</c> value; returns <c>null</c> for a successful transaction (no error).</summary>
     /// <param name="err">The raw <c>err</c> JSON, or <c>null</c>.</param>
     /// <returns>The decoded error, or <c>null</c> when there is none.</returns>
@@ -42,11 +56,39 @@ public sealed record TransactionError
                     {
                         Kind = member.Name,
                         InstructionIndex = member.Value[0].ValueKind == JsonValueKind.Number ? member.Value[0].GetInt32() : null,
-                        InstructionError = global::SolSharp.Rpc.Models.InstructionError.Parse(member.Value[1])
+                        InstructionError = global::SolSharp.Rpc.Models.InstructionError.Parse(member.Value[1]),
+                        Details = member.Value.Clone()
                     };
                 }
 
-                return new TransactionError { Kind = member.Name };
+                if (member.NameEquals("DuplicateInstruction") &&
+                    member.Value.ValueKind == JsonValueKind.Number &&
+                    member.Value.TryGetInt32(out var duplicateInstructionIndex))
+                {
+                    return new TransactionError
+                    {
+                        Kind = member.Name,
+                        DuplicateInstructionIndex = duplicateInstructionIndex,
+                        Details = member.Value.Clone()
+                    };
+                }
+
+                if ((member.NameEquals("InsufficientFundsForRent") ||
+                     member.NameEquals("ProgramExecutionTemporarilyRestricted")) &&
+                    member.Value.ValueKind == JsonValueKind.Object &&
+                    member.Value.TryGetProperty("account_index", out var accountIndex) &&
+                    accountIndex.ValueKind == JsonValueKind.Number &&
+                    accountIndex.TryGetInt32(out var accountIndexValue))
+                {
+                    return new TransactionError
+                    {
+                        Kind = member.Name,
+                        AccountIndex = accountIndexValue,
+                        Details = member.Value.Clone()
+                    };
+                }
+
+                return new TransactionError { Kind = member.Name, Details = member.Value.Clone() };
             }
         }
 
@@ -57,7 +99,11 @@ public sealed record TransactionError
     public override string ToString()
         => InstructionError is { } inner
             ? $"InstructionError at instruction {InstructionIndex}: {inner}"
-            : Kind;
+            : DuplicateInstructionIndex is { } duplicateInstructionIndex
+                ? $"DuplicateInstruction at instruction {duplicateInstructionIndex}"
+                : AccountIndex is { } accountIndex
+                    ? $"{Kind} at account {accountIndex}"
+                    : Kind;
 }
 
 /// <summary>An instruction-level error - a named runtime variant, or a program-defined <see cref="CustomCode"/>.</summary>

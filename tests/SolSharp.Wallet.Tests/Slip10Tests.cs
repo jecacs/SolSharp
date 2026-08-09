@@ -51,6 +51,16 @@ public static class Slip10Tests
             act.Should().Throw<FormatException>();
         }
 
+        [TestCase("m/+1'")]
+        [TestCase("m/ 1'")]
+        [TestCase("m/1 '")]
+        public void NonCanonicalNumericSegment_Throws(string path)
+        {
+            // Act & Assert
+            Action act = () => _ = Slip10.DeriveEd25519(new byte[16], path);
+            act.Should().Throw<FormatException>();
+        }
+
         [Test]
         public void PathNotStartingWithMaster_Throws()
         {

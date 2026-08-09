@@ -10,7 +10,7 @@ public sealed record SendTransactionOptions
 
     /// <summary>
     /// The commitment preflight runs at. Defaults to <see cref="Commitment.Confirmed"/> to match
-    /// <see cref="SolanaRpcClient.GetLatestBlockhashAsync"/>: the node's own default is <c>finalized</c>,
+    /// <see cref="SolanaRpcClient.GetLatestBlockhashAsync(Commitment, CancellationToken)"/>: the node's own default is <c>finalized</c>,
     /// where a blockhash fetched at <c>confirmed</c> may not exist yet, so preflight would report
     /// <c>BlockhashNotFound</c> for a perfectly valid transaction. Set to <c>null</c> for the node default.
     /// </summary>

@@ -2,8 +2,8 @@ using SolSharp.Core.Primitives;
 
 namespace SolSharp.Programs;
 
-// Resolves compiled instructions back into Instructions for both message formats. The combined account index
-// space is: static keys, then loaded-writable, then loaded-readonly (for legacy there is no loaded section).
+// Resolves compiled instructions back into Instructions for every message format. The combined account index
+// space is: static keys, then loaded-writable, then loaded-readonly (legacy and V1 have no loaded section).
 internal static class MessageDecompiler
 {
     public static IReadOnlyList<Instruction> Decompile(
@@ -33,7 +33,7 @@ internal static class MessageDecompiler
             {
                 ProgramId = KeyAt(keys, compiled.ProgramIdIndex),
                 Accounts = accounts,
-                Data = compiled.Data
+                Data = [.. compiled.Data]
             };
         }
 

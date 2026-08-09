@@ -15,13 +15,18 @@ public sealed class CommitmentJsonConverter : JsonConverter<Commitment>
 {
     /// <inheritdoc/>
     public override Commitment Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        => reader.GetString() switch
+    {
+        if (reader.TokenType != JsonTokenType.String)
+            throw new JsonException($"Expected a commitment string, got {reader.TokenType}.");
+
+        return reader.GetString() switch
         {
             "confirmed" => Commitment.Confirmed,
             "finalized" => Commitment.Finalized,
             "processed" => Commitment.Processed,
             var other => throw new JsonException($"Unknown commitment value: '{other}'.")
         };
+    }
 
     /// <inheritdoc/>
     public override void Write(Utf8JsonWriter writer, Commitment value, JsonSerializerOptions options)

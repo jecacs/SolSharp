@@ -8,17 +8,21 @@ public sealed record InflationRate
 {
     /// <summary>The total inflation percentage.</summary>
     [JsonPropertyName("total")]
+    [JsonRequired]
     public double Total { get; init; }
 
     /// <summary>The portion of inflation allocated to validators.</summary>
     [JsonPropertyName("validator")]
+    [JsonRequired]
     public double Validator { get; init; }
 
     /// <summary>The portion of inflation allocated to the foundation.</summary>
     [JsonPropertyName("foundation")]
+    [JsonRequired]
     public double Foundation { get; init; }
 
     /// <summary>The epoch the values are valid for.</summary>
     [JsonPropertyName("epoch")]
+    [JsonRequired]
     public ulong Epoch { get; init; }
 }

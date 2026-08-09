@@ -8,9 +8,11 @@ public sealed record PrioritizationFee
 {
     /// <summary>The slot the fee was observed in.</summary>
     [JsonPropertyName("slot")]
+    [JsonRequired]
     public ulong Slot { get; init; }
 
     /// <summary>The prioritization fee paid, in micro-lamports per compute unit.</summary>
     [JsonPropertyName("prioritizationFee")]
+    [JsonRequired]
     public ulong Fee { get; init; }
 }

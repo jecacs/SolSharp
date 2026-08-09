@@ -9,13 +9,39 @@ namespace SolSharp.Rpc.Models;
 /// </summary>
 internal static class SplLayout
 {
-    public static PublicKey? ReadCOptionPublicKey(ReadOnlySpan<byte> data, int offset)
-        => BinaryPrimitives.ReadUInt32LittleEndian(data[offset..]) == 1
-            ? new PublicKey(data.Slice(offset + sizeof(uint), PublicKey.Length))
-            : null;
+    public static bool TryReadCOptionPublicKey(ReadOnlySpan<byte> data, int offset, out PublicKey? value)
+    {
+        value = null;
+        if (offset < 0 || data.Length - offset < sizeof(uint) + PublicKey.Length)
+            return false;
 
-    public static ulong? ReadCOptionU64(ReadOnlySpan<byte> data, int offset)
-        => BinaryPrimitives.ReadUInt32LittleEndian(data[offset..]) == 1
-            ? BinaryPrimitives.ReadUInt64LittleEndian(data[(offset + sizeof(uint))..])
-            : null;
+        switch (BinaryPrimitives.ReadUInt32LittleEndian(data[offset..]))
+        {
+            case 0:
+                return true;
+            case 1:
+                value = new PublicKey(data.Slice(offset + sizeof(uint), PublicKey.Length));
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    public static bool TryReadCOptionU64(ReadOnlySpan<byte> data, int offset, out ulong? value)
+    {
+        value = null;
+        if (offset < 0 || data.Length - offset < sizeof(uint) + sizeof(ulong))
+            return false;
+
+        switch (BinaryPrimitives.ReadUInt32LittleEndian(data[offset..]))
+        {
+            case 0:
+                return true;
+            case 1:
+                value = BinaryPrimitives.ReadUInt64LittleEndian(data[(offset + sizeof(uint))..]);
+                return true;
+            default:
+                return false;
+        }
+    }
 }

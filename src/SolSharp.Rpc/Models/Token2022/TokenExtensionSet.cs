@@ -16,6 +16,7 @@ public sealed record TokenExtensionSet
     // 165-byte base, and the TLV data follows the account type.
     private const int AccountTypeIndex = 165;
     private const int TlvStartIndex = AccountTypeIndex + 1;
+    private const int MultisigLength = 355;
 
     private const byte MintAccountType = 1;
     private const byte TokenAccountType = 2;
@@ -61,49 +62,53 @@ public sealed record TokenExtensionSet
     /// <summary>The mint's transfer-fee schedule and authorities, or <c>null</c> when the extension is absent.</summary>
     /// <returns>The decoded <see cref="Token2022.TransferFeeConfig"/>, or <c>null</c>.</returns>
     public TransferFeeConfig? GetTransferFeeConfig()
-        => Find(ExtensionType.TransferFeeConfig) is { Length: >= TransferFeeConfig.Length } data
+        => Find(ExtensionType.TransferFeeConfig) is { Length: TransferFeeConfig.Length } data
             ? TransferFeeConfig.Decode(data)
             : null;
 
     /// <summary>The fees withheld on a token account (<see cref="ExtensionType.TransferFeeAmount"/>), or <c>null</c> when absent.</summary>
     /// <returns>The withheld amount in base units, or <c>null</c>.</returns>
     public ulong? GetWithheldTransferFee()
-        => Find(ExtensionType.TransferFeeAmount) is { Length: >= 8 } data
+        => Find(ExtensionType.TransferFeeAmount) is { Length: sizeof(ulong) } data
             ? BinaryPrimitives.ReadUInt64LittleEndian(data)
             : null;
 
     /// <summary>The mint's close authority (<see cref="ExtensionType.MintCloseAuthority"/>), or <c>null</c> when absent or unset.</summary>
     /// <returns>The close authority, or <c>null</c>.</returns>
     public PublicKey? GetMintCloseAuthority()
-        => Find(ExtensionType.MintCloseAuthority) is { Length: >= PublicKey.Length } data
+        => Find(ExtensionType.MintCloseAuthority) is { Length: PublicKey.Length } data
             ? Token2022Layout.ReadOptionalKey(data)
             : null;
 
     /// <summary>The mint's permanent delegate (<see cref="ExtensionType.PermanentDelegate"/>), or <c>null</c> when absent or unset.</summary>
     /// <returns>The permanent delegate, or <c>null</c>.</returns>
     public PublicKey? GetPermanentDelegate()
-        => Find(ExtensionType.PermanentDelegate) is { Length: >= PublicKey.Length } data
+        => Find(ExtensionType.PermanentDelegate) is { Length: PublicKey.Length } data
             ? Token2022Layout.ReadOptionalKey(data)
             : null;
 
-    /// <summary>The default state for new accounts of the mint (<see cref="ExtensionType.DefaultAccountState"/>), or <c>null</c> when absent.</summary>
+    /// <summary>
+    /// The default state for new accounts of the mint (<see cref="ExtensionType.DefaultAccountState"/>),
+    /// or <c>null</c> when absent or malformed.
+    /// </summary>
     /// <returns>The default account state, or <c>null</c>.</returns>
     public TokenAccountState? GetDefaultAccountState()
-        => Find(ExtensionType.DefaultAccountState) is { Length: >= 1 } data
+        => Find(ExtensionType.DefaultAccountState) is { Length: 1 } data &&
+           data[0] <= (byte)TokenAccountState.Frozen
             ? (TokenAccountState)data[0]
             : null;
 
     /// <summary>Whether the account requires inbound transfers to carry a memo (<see cref="ExtensionType.MemoTransfer"/>), or <c>null</c> when absent.</summary>
     /// <returns><c>true</c> / <c>false</c> from the extension, or <c>null</c>.</returns>
     public bool? GetMemoTransferRequired()
-        => Find(ExtensionType.MemoTransfer) is { Length: >= 1 } data
+        => Find(ExtensionType.MemoTransfer) is { Length: 1 } data
             ? data[0] != 0
             : null;
 
     /// <summary>The mint's metadata pointer (<see cref="ExtensionType.MetadataPointer"/>), or <c>null</c> when absent.</summary>
     /// <returns>The decoded <see cref="Token2022.MetadataPointer"/>, or <c>null</c>.</returns>
     public MetadataPointer? GetMetadataPointer()
-        => Find(ExtensionType.MetadataPointer) is { Length: >= MetadataPointer.Length } data
+        => Find(ExtensionType.MetadataPointer) is { Length: MetadataPointer.Length } data
             ? MetadataPointer.Decode(data)
             : null;
 
@@ -128,25 +133,30 @@ public sealed record TokenExtensionSet
 
     private static TokenExtensionSet? Decode(ReadOnlySpan<byte> data, int baseLength, byte expectedAccountType)
     {
-        if (data.Length < baseLength)
+        if (data.Length < baseLength || data.Length == MultisigLength)
             return null;
 
         // A bare (non-extended) account is exactly the base length and has no extension section.
         if (data.Length == baseLength)
             return new TokenExtensionSet { Extensions = [] };
 
-        if (data.Length < TlvStartIndex || data[AccountTypeIndex] != expectedAccountType)
+        if (data.Length < TlvStartIndex
+            || data[AccountTypeIndex] != expectedAccountType
+            || (baseLength == Mint.Length && data[Mint.Length..AccountTypeIndex].IndexOfAnyExcept((byte)0) >= 0))
             return null;
 
         var extensions = new List<TokenExtension>();
         var offset = TlvStartIndex;
-        while (offset + 2 <= data.Length)
+        while (offset < data.Length)
         {
+            if (data.Length - offset < sizeof(ushort))
+                return new TokenExtensionSet { Extensions = extensions };
+
             var type = BinaryPrimitives.ReadUInt16LittleEndian(data[offset..]);
             if (type == (ushort)ExtensionType.Uninitialized)
-                break; // zero padding marks the end of the TLV data
+                return new TokenExtensionSet { Extensions = extensions };
 
-            if (offset + 4 > data.Length)
+            if (data.Length - offset < 4)
                 return null;
 
             var length = BinaryPrimitives.ReadUInt16LittleEndian(data[(offset + 2)..]);

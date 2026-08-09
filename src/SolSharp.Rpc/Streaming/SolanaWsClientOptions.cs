@@ -10,7 +10,10 @@ public sealed record SolanaWsClientOptions
     /// </summary>
     public bool AutoReconnect { get; init; } = true;
 
-    /// <summary>The delay before the first reconnect attempt; it doubles after each failed attempt, up to <see cref="ReconnectMaxDelay"/>.</summary>
+    /// <summary>
+    /// The delay before the first reconnect attempt; it doubles after each failed attempt, up to
+    /// <see cref="ReconnectMaxDelay"/>. When zero and the maximum is positive, subsequent delays start at 1 ms.
+    /// </summary>
     public TimeSpan ReconnectInitialDelay { get; init; } = TimeSpan.FromSeconds(1);
 
     /// <summary>The ceiling for the exponential reconnect backoff.</summary>
@@ -18,6 +21,20 @@ public sealed record SolanaWsClientOptions
 
     /// <summary>The maximum number of reconnect attempts before giving up; <c>0</c> (the default) retries forever.</summary>
     public int MaxReconnectAttempts { get; init; }
+
+    /// <summary>
+    /// The maximum time to wait for a subscribe acknowledgement before failing that subscription. The
+    /// default is 30 seconds. This timeout is always finite so one missing acknowledgement cannot block
+    /// reconnect replay for every subscription behind it.
+    /// </summary>
+    public TimeSpan SubscriptionAckTimeout { get; init; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// The maximum number of subscription requests whose acknowledgements may be outstanding on one
+    /// connection. This includes compact records retained after a local timeout or cancellation so a
+    /// late successful acknowledgement can still be unsubscribed. The default is 1,024.
+    /// </summary>
+    public int MaxPendingSubscriptionRequests { get; init; } = 1024;
 
     /// <summary>
     /// The maximum encoded size of one incoming WebSocket message, in bytes. The default is 64 MiB.

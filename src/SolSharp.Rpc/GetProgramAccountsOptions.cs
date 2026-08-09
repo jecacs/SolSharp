@@ -8,7 +8,7 @@ public sealed record GetProgramAccountsOptions
     /// <summary>The commitment level to query at.</summary>
     public Commitment? Commitment { get; init; }
 
-    /// <summary>Filters every returned account must satisfy (memcmp / data size); none are applied when null.</summary>
+    /// <summary>Filters every returned account must satisfy (memcmp, data size, or token-account state); none are applied when null.</summary>
     public IReadOnlyList<AccountFilter>? Filters { get; init; }
 
     /// <summary>Return only this slice of each account's data; the whole account when null.</summary>
@@ -16,4 +16,14 @@ public sealed record GetProgramAccountsOptions
 
     /// <summary>The minimum slot the request can be evaluated at.</summary>
     public ulong? MinContextSlot { get; init; }
+
+    /// <summary>
+    /// Requests the upstream <c>{ context, value }</c> response shape when <c>true</c>. Use
+    /// <see cref="SolanaRpcClient.GetProgramAccountsWithContextAsync"/> to retain that context; the
+    /// list-only method returns its <c>value</c> component.
+    /// </summary>
+    public bool? WithContext { get; init; }
+
+    /// <summary>Whether the node sorts accounts by public key; use the node default when <c>null</c>.</summary>
+    public bool? SortResults { get; init; }
 }

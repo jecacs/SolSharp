@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using SolSharp.Core.Primitives;
+using SolSharp.Rpc.Models.Token2022;
 
 namespace SolSharp.Rpc.Models;
 
@@ -27,19 +28,24 @@ public sealed record Mint
 
     /// <summary>Decodes a mint from its raw account data (the bytes <c>getAccountInfo</c> returns).</summary>
     /// <param name="data">The account's raw data.</param>
-    /// <returns>The decoded mint, or <c>null</c> if the data is too short to be a mint account.</returns>
+    /// <returns>The decoded mint, or <c>null</c> if the data is not a canonical Token or Token-2022 mint layout.</returns>
     public static Mint? Decode(ReadOnlySpan<byte> data)
     {
-        if (data.Length < Length)
+        if (data.Length != Length && TokenExtensionSet.DecodeMint(data) is null)
+            return null;
+
+        if (!SplLayout.TryReadCOptionPublicKey(data, 0, out var mintAuthority)
+            || data[45] > 1
+            || !SplLayout.TryReadCOptionPublicKey(data, 46, out var freezeAuthority))
             return null;
 
         return new Mint
         {
-            MintAuthority = SplLayout.ReadCOptionPublicKey(data, 0),
+            MintAuthority = mintAuthority,
             Supply = BinaryPrimitives.ReadUInt64LittleEndian(data[36..]),
             Decimals = data[44],
-            IsInitialized = data[45] != 0,
-            FreezeAuthority = SplLayout.ReadCOptionPublicKey(data, 46)
+            IsInitialized = data[45] == 1,
+            FreezeAuthority = freezeAuthority
         };
     }
 }

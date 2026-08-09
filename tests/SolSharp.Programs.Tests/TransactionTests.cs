@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using FluentAssertions;
 using NUnit.Framework;
 using SolSharp.Core.Constants;
@@ -22,6 +23,19 @@ public static class TransactionTests
 
     private static byte[] Fill(byte value) => [.. Enumerable.Repeat(value, PublicKey.Length)];
 
+    private sealed class TestSigner(PublicKey publicKey, byte[]? signature) : ISigner
+    {
+        public PublicKey PublicKey { get; } = publicKey;
+
+        public int CallCount { get; private set; }
+
+        byte[] ISigner.Sign(ReadOnlySpan<byte> message)
+        {
+            CallCount++;
+            return signature!;
+        }
+    }
+
     private static Transaction BuildTransfer(out Keypair payer)
     {
         payer = Keypair.FromSeed(Fill(1));
@@ -36,6 +50,20 @@ public static class TransactionTests
         };
 
         var message = Message.Compile(payer.PublicKey, "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8", [transfer]);
+        return Transaction.Create(message);
+    }
+
+    private static Transaction BuildTwoSignerTransaction(out Keypair payer, out Keypair cosigner)
+    {
+        payer = Keypair.FromSeed(Fill(1));
+        cosigner = Keypair.FromSeed(Fill(2));
+        var instruction = new Instruction
+        {
+            ProgramId = new PublicKey(Fill(9)),
+            Accounts = [AccountMeta.ReadonlySigner(cosigner.PublicKey)],
+            Data = [7]
+        };
+        var message = Message.Compile(payer.PublicKey, new Hash(Fill(8)), [instruction]);
         return Transaction.Create(message);
     }
 
@@ -63,8 +91,9 @@ public static class TransactionTests
         {
             // Arrange
             var transaction = BuildTransfer(out var payer);
-            using var stranger = Keypair.Generate();
+            var stranger = Keypair.Generate();
             using (payer)
+            using (stranger)
             {
                 // Act
                 Action act = () => transaction.Sign(stranger);
@@ -72,6 +101,153 @@ public static class TransactionTests
                 // Assert
                 act.Should().Throw<ArgumentException>();
             }
+        }
+
+        [Test]
+        public void LaterNonRequiredSigner_IsRejectedBeforeAnySignerIsCalled()
+        {
+            // Arrange
+            var transaction = BuildTransfer(out var payer);
+            using (payer)
+            {
+                var firstSigner = new TestSigner(payer.PublicKey, new byte[Transaction.SignatureLength]);
+                var stranger = new TestSigner(new PublicKey(Fill(9)), new byte[Transaction.SignatureLength]);
+
+                // Act
+                Action act = () => transaction.Sign(firstSigner, stranger);
+
+                // Assert
+                act.Should().Throw<ArgumentException>();
+                firstSigner.CallCount.Should().Be(0);
+                stranger.CallCount.Should().Be(0);
+            }
+        }
+
+        [Test]
+        public void NullSignerElement_Throws()
+        {
+            // Arrange
+            var transaction = BuildTransfer(out var payer);
+            using (payer)
+            {
+                ISigner[] signers = [null!];
+
+                // Act
+                Action act = () => transaction.Sign(signers);
+
+                // Assert
+                act.Should().Throw<ArgumentNullException>().WithParameterName(nameof(signers));
+            }
+        }
+
+        [TestCase(63)]
+        [TestCase(65)]
+        public void InvalidSignatureLength_Throws(int length)
+        {
+            // Arrange
+            var transaction = BuildTransfer(out var payer);
+            using (payer)
+            {
+                var signer = new TestSigner(payer.PublicKey, new byte[length]);
+
+                // Act
+                Action act = () => transaction.Sign(signer);
+
+                // Assert
+                act.Should().Throw<ArgumentException>().WithMessage("*64-byte*");
+            }
+        }
+
+        [Test]
+        public void NullSignature_Throws()
+        {
+            // Arrange
+            var transaction = BuildTransfer(out var payer);
+            using (payer)
+            {
+                var signer = new TestSigner(payer.PublicKey, signature: null);
+
+                // Act
+                Action act = () => transaction.Sign(signer);
+
+                // Assert
+                act.Should().Throw<ArgumentException>().WithMessage("*64-byte*");
+            }
+        }
+
+        [Test]
+        public void LaterInvalidSignature_DoesNotCommitEarlierSignature()
+        {
+            // Arrange
+            var payer = new PublicKey(Fill(1));
+            var second = new PublicKey(Fill(2));
+            var instruction = new Instruction
+            {
+                ProgramId = new PublicKey(Fill(9)),
+                Accounts = [AccountMeta.ReadonlySigner(second)],
+                Data = [7]
+            };
+            var message = Message.Compile(payer, new PublicKey(Fill(8)).ToString(), [instruction]);
+            var transaction = Transaction.Create(message);
+            var firstSigner = new TestSigner(payer, [.. Enumerable.Repeat((byte)0xAB, Transaction.SignatureLength)]);
+            var invalidSecondSigner = new TestSigner(second, new byte[Transaction.SignatureLength - 1]);
+
+            // Act
+            Action act = () => transaction.Sign(firstSigner, invalidSecondSigner);
+
+            // Assert
+            act.Should().Throw<ArgumentException>();
+            transaction.Serialize().Skip(1).Take(2 * Transaction.SignatureLength).Should().OnlyContain(value => value == 0);
+        }
+
+        [Test]
+        public void MutatingReturnedSignature_DoesNotMutateTransaction()
+        {
+            // Arrange
+            var transaction = BuildTransfer(out var payer);
+            using (payer)
+            {
+                byte[] signature = [.. Enumerable.Repeat((byte)0xAB, Transaction.SignatureLength)];
+                var signer = new TestSigner(payer.PublicKey, signature);
+                transaction.Sign(signer);
+
+                // Act
+                signature[0] = 0;
+
+                // Assert
+                transaction.Serialize()[1].Should().Be(0xAB);
+            }
+        }
+
+        [Test]
+        public void SignerSlotsRemainBoundToCapturedMessageAfterAccountKeyMutation()
+        {
+            // Arrange
+            var payer = new PublicKey(Fill(1));
+            var second = new PublicKey(Fill(2));
+            var stranger = new PublicKey(Fill(3));
+            var instruction = new Instruction
+            {
+                ProgramId = new PublicKey(Fill(9)),
+                Accounts = [AccountMeta.ReadonlySigner(second)],
+                Data = [7]
+            };
+            var message = Message.Compile(payer, new PublicKey(Fill(8)).ToString(), [instruction]);
+            var transaction = Transaction.Create(message);
+            var signature = new byte[Transaction.SignatureLength];
+            var payerSigner = new TestSigner(payer, signature);
+            var secondSigner = new TestSigner(second, signature);
+            var strangerSigner = new TestSigner(stranger, signature);
+            transaction.Sign(payerSigner);
+
+            // Act
+            ((List<PublicKey>)message.AccountKeys)[1] = stranger;
+            Action strangerAct = () => transaction.Sign(strangerSigner);
+            Action originalSignerAct = () => transaction.Sign(secondSigner);
+
+            // Assert
+            strangerAct.Should().Throw<ArgumentException>();
+            originalSignerAct.Should().NotThrow();
         }
     }
 
@@ -91,6 +267,168 @@ public static class TransactionTests
                 // Assert
                 bytes[0].Should().Be(1); // ShortVec(1): one signature slot
                 bytes.Skip(1).Take(Transaction.SignatureLength).Should().OnlyContain(b => b == 0);
+            }
+        }
+
+        [Test]
+        public void SignedTransaction_IsStableAfterMessageMutation()
+        {
+            // Arrange
+            var transaction = BuildTransfer(out var payer);
+            using (payer)
+            {
+                transaction.Sign(payer);
+                var before = transaction.Serialize();
+
+                // Act
+                transaction.Message.Instructions[0].Data[0] ^= 0xFF;
+
+                // Assert
+                transaction.Serialize().Should().Equal(before);
+                transaction.GetSerializedLength().Should().Be(before.Length);
+            }
+        }
+    }
+
+    [TestFixture]
+    public sealed class VerifySignaturesWithResults
+    {
+        [Test]
+        public void UnsignedTransaction_ExposesOrderedZeroSignatureSlots()
+        {
+            // Arrange
+            var transaction = BuildTwoSignerTransaction(out var payer, out var cosigner);
+            using (payer)
+            using (cosigner)
+            {
+                // Act
+                var results = transaction.VerifySignaturesWithResults();
+                var absent = default(Signature);
+
+                // Assert
+                transaction.RequiredSignerKeys.Should().Equal(payer.PublicKey, cosigner.PublicKey);
+                transaction.Signatures.Should().Equal(absent, absent);
+                transaction.IsFullySigned.Should().BeFalse();
+                results.Should().Equal(false, false);
+                transaction.VerifySignatures().Should().BeFalse();
+            }
+        }
+    }
+
+    [TestFixture]
+    public sealed class PartialSign
+    {
+        [Test]
+        public void PartialSign_FillsOnlyMatchingSlotAndRetainsItForSecondStage()
+        {
+            // Arrange
+            var transaction = BuildTwoSignerTransaction(out var payer, out var cosigner);
+            using (payer)
+            using (cosigner)
+            {
+                var message = transaction.GetMessageBytes();
+
+                // Act
+                transaction.PartialSign(payer);
+
+                // Assert
+                transaction.GetSignature(payer.PublicKey).Should().Be(payer.SignSignature(message));
+                transaction.GetSignature(cosigner.PublicKey).Should().Be(default(Signature));
+                transaction.VerifySignaturesWithResults().Should().Equal(true, false);
+                transaction.IsFullySigned.Should().BeFalse();
+            }
+        }
+    }
+
+    [TestFixture]
+    public sealed class SignAll
+    {
+        [Test]
+        public void SignAll_RequiresEverySlotButPreservesSuccessfulPartialWork()
+        {
+            // Arrange
+            var transaction = BuildTwoSignerTransaction(out var payer, out var cosigner);
+            using (payer)
+            using (cosigner)
+            {
+                // Act
+                Action incomplete = () => transaction.SignAll(payer);
+
+                // Assert
+                incomplete.Should().Throw<InvalidOperationException>().WithMessage("*not fully signed*");
+                transaction.GetSignature(payer.PublicKey).Should().NotBe(default(Signature));
+
+                transaction.SignAll(cosigner);
+                transaction.IsFullySigned.Should().BeTrue();
+                transaction.VerifySignatures().Should().BeTrue();
+            }
+        }
+    }
+
+    [TestFixture]
+    public sealed class AddSignature
+    {
+        [Test]
+        public void AddSignature_VerifiesAndPlacesExternalSignature()
+        {
+            // Arrange
+            var transaction = BuildTwoSignerTransaction(out var payer, out var cosigner);
+            using (payer)
+            using (cosigner)
+            {
+                var message = transaction.GetMessageBytes();
+                var external = cosigner.SignSignature(message);
+
+                // Act
+                transaction.PartialSign(payer).AddSignature(cosigner.PublicKey, external);
+
+                // Assert
+                transaction.GetSignature(cosigner.PublicKey).Should().Be(external);
+                transaction.IsFullySigned.Should().BeTrue();
+                transaction.VerifySignatures().Should().BeTrue();
+            }
+        }
+
+        [Test]
+        public void AddSignature_RejectsSignatureForDifferentMessage()
+        {
+            // Arrange
+            var transaction = BuildTwoSignerTransaction(out var payer, out var cosigner);
+            using (payer)
+            using (cosigner)
+            {
+                var wrongSignature = cosigner.SignSignature("different message"u8);
+
+                // Act
+                Action act = () => transaction.AddSignature(cosigner.PublicKey, wrongSignature);
+
+                // Assert
+                act.Should().Throw<CryptographicException>();
+                transaction.GetSignature(cosigner.PublicKey).Should().Be(default(Signature));
+            }
+        }
+    }
+
+    [TestFixture]
+    public sealed class VerifyAndHashMessage
+    {
+        [Test]
+        public void VerifyAndHashMessage_MatchesStandaloneHash()
+        {
+            // Arrange
+            var transaction = BuildTwoSignerTransaction(out var payer, out var cosigner);
+            using (payer)
+            using (cosigner)
+            {
+                transaction.SignAll(payer, cosigner);
+                var expected = TransactionMessageHash.Compute(transaction.GetMessageBytes());
+
+                // Act
+                var actual = transaction.VerifyAndHashMessage();
+
+                // Assert
+                actual.Should().Be(expected);
+                transaction.GetMessageHash().Should().Be(expected);
             }
         }
     }

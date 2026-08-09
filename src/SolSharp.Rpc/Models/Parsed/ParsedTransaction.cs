@@ -27,4 +27,13 @@ public sealed record ParsedTransaction
 
     /// <summary>The block production time as Unix seconds, when known; otherwise <c>null</c>.</summary>
     public long? BlockTime { get; init; }
+
+    /// <summary>
+    /// The transaction's index within its block. Read from <c>getTransaction</c> when reported and
+    /// derived from ledger order by <c>GetParsedBlockAsync</c>; <c>null</c> in streamed block notifications.
+    /// </summary>
+    public uint? TransactionIndex { get; init; }
+
+    /// <summary>The wire transaction version, or <c>null</c> when the node omitted it.</summary>
+    public RpcTransactionVersion? Version { get; init; }
 }

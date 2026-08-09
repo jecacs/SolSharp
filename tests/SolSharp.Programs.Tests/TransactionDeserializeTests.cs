@@ -34,6 +34,7 @@ public static class TransactionDeserializeTests
             // Assert
             transaction.Serialize().Should().Equal(bytes);
             transaction.Message.Should().BeOfType<Message>();
+            transaction.Version.Should().Be(TransactionVersion.Legacy);
             transaction.Message.RequiredSignatures.Should().Be(1);
             transaction.Message.AccountKeys.Should().HaveCount(3);
         }
@@ -50,10 +51,26 @@ public static class TransactionDeserializeTests
             // Assert
             transaction.Serialize().Should().Equal(bytes);
             transaction.Message.Should().BeOfType<MessageV0>();
+            transaction.Version.Should().Be(TransactionVersion.V0);
 
             var message = (MessageV0)transaction.Message;
             message.AddressTableLookups.Should().ContainSingle();
-            message.AddressTableLookups[0].WritableIndexes.Should().Equal((byte)0);
+            message.AddressTableLookups[0].WritableIndexes.Should().Equal(0);
+        }
+
+        [TestCase(SignedTransferHex)]
+        [TestCase(SignedV0Hex)]
+        public void MessageMutation_DoesNotChangeReserializedBytes(string hex)
+        {
+            // Arrange
+            var bytes = Convert.FromHexString(hex);
+            var transaction = Transaction.Deserialize(bytes);
+
+            // Act
+            transaction.Message.Instructions[0].Data[0] ^= 0xFF;
+
+            // Assert
+            transaction.Serialize().Should().Equal(bytes);
         }
 
         [Test]
@@ -67,6 +84,20 @@ public static class TransactionDeserializeTests
 
             // Assert
             act.Should().Throw<FormatException>();
+        }
+
+        [Test]
+        public void HighBitDiscriminator_IsRejectedBeforeCompactSignatureDecoding()
+        {
+            // Arrange: SIMD-0385 reserves a top-bit discriminator for message-first transactions.
+            // Only 0x81 is V1; 0xFF must not be interpreted as a multi-byte compact signature count.
+            byte[] data = [0xff, 0xff, 0x03];
+
+            // Act
+            Action act = () => Transaction.Deserialize(data);
+
+            // Assert
+            act.Should().Throw<FormatException>().WithMessage("*Invalid transaction discriminator 0xFF*");
         }
 
         [Test]
@@ -133,6 +164,20 @@ public static class TransactionDeserializeTests
             // Assert
             ok.Should().BeFalse();
             written.Should().Be(0);
+        }
+
+        [TestCase(SignedTransferHex)]
+        [TestCase(SignedV0Hex)]
+        public void TrailingByte_ThrowsFormatException(string hex)
+        {
+            // Arrange
+            byte[] bytes = [.. Convert.FromHexString(hex), 0xAA];
+
+            // Act
+            Action act = () => Transaction.Deserialize(bytes);
+
+            // Assert
+            act.Should().Throw<FormatException>().WithMessage("*trailing byte(s)*");
         }
     }
 }

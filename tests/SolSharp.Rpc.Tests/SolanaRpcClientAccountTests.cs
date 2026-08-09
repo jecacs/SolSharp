@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FluentAssertions;
 using NUnit.Framework;
 using SolSharp.Core.Primitives;
@@ -41,6 +42,7 @@ public static class SolanaRpcClientAccountTests
             info.Owner.Should().Be(PublicKey.Parse(OwnerBase58));
             info.Executable.Should().BeFalse();
             info.RentEpoch.Should().Be(ulong.MaxValue);
+            info.Space.Should().Be(3);
             info.Data.Should().Equal(expectedData);
 
             handler.CapturedRequestBody.Should().Contain("\"getAccountInfo\"");
@@ -72,6 +74,42 @@ public static class SolanaRpcClientAccountTests
 
             // Assert
             handler.CapturedRequestBody.Should().Contain("\"dataSlice\":{\"offset\":8,\"length\":32}");
+        }
+
+        [TestCase("[\"AQID\"]")]
+        [TestCase("[\"AQID\",\"base58\"]")]
+        [TestCase("[\"AQID\",\"base64\",\"extra\"]")]
+        [TestCase("{\"bytes\":\"AQID\"}")]
+        public async Task MalformedOrUnsupportedDataTuple_ThrowsJsonException(string data)
+        {
+            var value =
+                """{"data":__DATA__,"executable":false,"lamports":1,"owner":"11111111111111111111111111111111","rentEpoch":0}"""
+                    .Replace("__DATA__", data);
+            var (client, _) = Make(ContextEnvelope(value));
+
+            Func<Task> act = async () => await client.GetAccountInfoAsync(PublicKey.Parse(OwnerBase58));
+
+            await act.Should().ThrowAsync<JsonException>();
+        }
+
+        [TestCase("\"oops\"")]
+        [TestCase("true")]
+        [TestCase("{}")]
+        [TestCase("-1")]
+        [TestCase("18446744073709551616")]
+        public async Task PresentSpaceOutsideOptionalU64_ThrowsJsonException(string space)
+        {
+            // Arrange
+            var value =
+                """{"data":["AQID","base64"],"executable":false,"lamports":1,"owner":"11111111111111111111111111111111","rentEpoch":0,"space":__SPACE__}"""
+                    .Replace("__SPACE__", space, StringComparison.Ordinal);
+            var (client, _) = Make(ContextEnvelope(value));
+
+            // Act
+            var act = async () => await client.GetAccountInfoAsync(PublicKey.Parse(OwnerBase58));
+
+            // Assert
+            await act.Should().ThrowAsync<JsonException>();
         }
     }
 

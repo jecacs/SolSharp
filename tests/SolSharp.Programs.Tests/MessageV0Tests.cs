@@ -13,12 +13,32 @@ public static class MessageV0Tests
         return new PublicKey(bytes);
     }
 
+    private static PublicKey UniqueKey(int value)
+    {
+        var bytes = new byte[PublicKey.Length];
+        bytes[0] = (byte)value;
+        bytes[1] = (byte)(value >> 8);
+        return new PublicKey(bytes);
+    }
+
     // 32 bytes encode to the same base58 whether they represent a key or a blockhash.
     private static string Blockhash(byte value) => Pk(value).ToString();
 
     [TestFixture]
     public sealed class Compile
     {
+        private static Instruction AllSigners(int count, out PublicKey payer)
+        {
+            var keys = Enumerable.Range(0, count).Select(UniqueKey).ToArray();
+            payer = keys[0];
+            return new Instruction
+            {
+                ProgramId = keys[^1],
+                Accounts = [.. keys.Skip(1).Select(AccountMeta.ReadonlySigner)],
+                Data = []
+            };
+        }
+
         // KAT vs solders: MessageV0.try_compile(payer=[1], [ix], [alt], blockhash=[8]) -> to_bytes_versioned.
         // ix(program=[9], data=0102): A[2] writable, B[3] readonly, C[4] writable, D[6] writable signer.
         // alt=[5] holds [A, B, [7]] -> A drains writable (index 0), B drains readonly (index 1).
@@ -75,6 +95,21 @@ public static class MessageV0Tests
         }
 
         [Test]
+        public void TypedBlockhash_MatchesStringOverload()
+        {
+            // Arrange
+            var instruction = new Instruction { ProgramId = Pk(9), Accounts = [], Data = [7] };
+            var blockhash = new Hash(Pk(8).ToBytes());
+
+            // Act
+            var typed = MessageV0.Compile(Pk(1), blockhash, [instruction], []);
+            var text = MessageV0.Compile(Pk(1), blockhash.ToString(), [instruction], []);
+
+            // Assert
+            typed.Serialize().Should().Equal(text.Serialize());
+        }
+
+        [Test]
         public void OversizedLookupTable_Throws()
         {
             // Arrange: 257 addresses cannot be addressed by the single-byte wire indexes.
@@ -95,6 +130,104 @@ public static class MessageV0Tests
 
             // Assert
             act.Should().Throw<ArgumentException>().WithMessage("*at most 256*");
+        }
+
+        [Test]
+        public void TwoHundredFiftyFiveSigners_Compiles()
+        {
+            // Arrange
+            var instruction = AllSigners(byte.MaxValue, out var payer);
+
+            // Act
+            var message = MessageV0.Compile(payer, Blockhash(8), [instruction], []);
+
+            // Assert
+            message.RequiredSignatures.Should().Be(byte.MaxValue);
+        }
+
+        [Test]
+        public void TwoHundredFiftySixSigners_ThrowsInsteadOfWrapping()
+        {
+            // Arrange
+            var instruction = AllSigners(MessageV0.MaxAccounts, out var payer);
+
+            // Act
+            Action act = () => MessageV0.Compile(payer, Blockhash(8), [instruction], []);
+
+            // Assert
+            act.Should().Throw<ArgumentException>().WithMessage("*at most 255 signatures*");
+        }
+
+        [Test]
+        public void DurableNoncePresentInLookup_RemainsStatic()
+        {
+            // Arrange
+            var payer = Pk(1);
+            var nonce = Pk(2);
+            var advance = SystemProgram.AdvanceNonceAccount(nonce, payer);
+            var table = new AddressLookupTableAccount(Pk(5), [nonce]);
+
+            // Act
+            var message = MessageV0.Compile(payer, Blockhash(8), [advance], [table]);
+
+            // Assert
+            message.AccountKeys.Should().Contain(nonce);
+            message.AddressTableLookups.Should().BeEmpty();
+        }
+
+        [Test]
+        public void AdvanceNoncePrefixWithTrailingData_RemainsStatic_MatchingUpstream()
+        {
+            // Arrange
+            var payer = Pk(1);
+            var nonce = Pk(2);
+            var canonicalAdvance = SystemProgram.AdvanceNonceAccount(nonce, payer);
+            var advance = new Instruction
+            {
+                ProgramId = canonicalAdvance.ProgramId,
+                Accounts = canonicalAdvance.Accounts,
+                Data = [.. canonicalAdvance.Data, 0xAA]
+            };
+            var table = new AddressLookupTableAccount(Pk(5), [nonce]);
+
+            // Act
+            var message = MessageV0.Compile(payer, Blockhash(8), [advance], [table]);
+
+            // Assert
+            message.AccountKeys.Should().Contain(nonce);
+            message.AddressTableLookups.Should().BeEmpty();
+        }
+
+        [Test]
+        public void NonFirstAdvanceNonce_DoesNotPinAccountStatic()
+        {
+            // Arrange
+            var payer = Pk(1);
+            var nonce = Pk(2);
+            var first = new Instruction { ProgramId = Pk(9), Accounts = [], Data = [] };
+            var advance = SystemProgram.AdvanceNonceAccount(nonce, payer);
+            var table = new AddressLookupTableAccount(Pk(5), [nonce]);
+
+            // Act
+            var message = MessageV0.Compile(payer, Blockhash(8), [first, advance], [table]);
+
+            // Assert
+            message.AccountKeys.Should().NotContain(nonce);
+            message.AddressTableLookups.Should().ContainSingle();
+        }
+
+        [Test]
+        public void MutatingSourceData_DoesNotMutateCompiledMessage()
+        {
+            // Arrange
+            var instruction = new Instruction { ProgramId = Pk(9), Accounts = [], Data = [7] };
+            var message = MessageV0.Compile(Pk(1), Blockhash(8), [instruction], []);
+
+            // Act
+            instruction.Data[0] = 99;
+
+            // Assert
+            message.Instructions[0].Data.Should().Equal(7);
         }
     }
 
@@ -151,6 +284,19 @@ public static class MessageV0Tests
 
             // Assert
             act.Should().Throw<FormatException>();
+        }
+
+        [Test]
+        public void ImpossibleLookupCount_ThrowsBeforeAllocatingDeclaredArray()
+        {
+            // Arrange: replace the zero lookup count with max compact-u16, without adding lookup data.
+            byte[] data = [.. SerializedV0()[..^1], 0xff, 0xff, 0x03];
+
+            // Act
+            Action act = () => MessageV0.Deserialize(data);
+
+            // Assert
+            act.Should().Throw<FormatException>().WithMessage("*declares 65535 address table lookup(s)*");
         }
 
         [Test]
@@ -354,7 +500,20 @@ public static class MessageV0Tests
             var message = MessageV0.Deserialize(data);
 
             // Assert
-            message.Instructions[0].AccountIndexes.Should().Equal((byte)0, (byte)3);
+            message.Instructions[0].AccountIndexes.Should().Equal(0, 3);
+        }
+
+        [Test]
+        public void TrailingByte_ThrowsFormatException()
+        {
+            // Arrange
+            byte[] data = [.. SerializedV0(), 0xAA];
+
+            // Act
+            Action act = () => MessageV0.Deserialize(data);
+
+            // Assert
+            act.Should().Throw<FormatException>().WithMessage("*1 trailing byte(s)*");
         }
     }
 }
