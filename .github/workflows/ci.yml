@@ -21,6 +21,7 @@ jobs:
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 8.0.x
+          dotnet-quality: ga
 
       # setup-dotnet proves installation, while global.json controls selection. Assert the actual
       # resolver result because hosted runners also have newer SDK majors preinstalled.
@@ -35,7 +36,7 @@ jobs:
           fi
 
       - name: Restore
-        run: dotnet restore -p:NuGetAuditMode=all -warnaserror
+        run: dotnet restore --locked-mode -p:NuGetAuditMode=all -warnaserror
 
       # Hard gate: the project keeps a zero-warning build, so fail CI on any warning.
       - name: Build
@@ -147,6 +148,7 @@ jobs:
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 8.0.x
+          dotnet-quality: ga
 
       - name: Verify .NET 8 SDK selection
         shell: bash
@@ -159,7 +161,7 @@ jobs:
           fi
 
       - name: Restore and audit dependencies
-        run: dotnet restore -p:NuGetAuditMode=all -warnaserror
+        run: dotnet restore --locked-mode -p:NuGetAuditMode=all -warnaserror
 
       - name: Pack and validate public API
         run: dotnet pack src/SolSharp/SolSharp.csproj -c Release -o artifacts -p:Version=999.0.0-ci --no-restore -warnaserror
