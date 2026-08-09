@@ -6,14 +6,19 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up .NET 8
-        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 8.0.x
 
@@ -39,20 +44,93 @@ jobs:
       - name: Verify formatting and analyzer style
         run: dotnet format --no-restore --verify-no-changes --severity info
 
-      # The SolSharp.IntegrationTests suite hits a live cluster, so it is excluded here to keep CI
-      # deterministic and offline; run it locally with a configured SOLSHARP_RPC_URL.
-      - name: Test
-        run: dotnet test --no-build --configuration Release --filter "TestCategory!=Integration"
+      # The four unit-test projects produce overlapping reports because higher layers reference
+      # lower assemblies. ReportGenerator merges those hits before enforcing the repository-wide
+      # line threshold, while source-generated obj/** files remain outside the metric.
+      - name: Test and collect coverage
+        shell: bash
+        env:
+          COVERAGE_ROOT: ${{ runner.temp }}/solsharp-coverage
+          REPORTGENERATOR_ROOT: ${{ runner.temp }}/solsharp-reportgenerator
+        run: |
+          unit_projects=(
+            tests/SolSharp.Core.Tests/SolSharp.Core.Tests.csproj
+            tests/SolSharp.Rpc.Tests/SolSharp.Rpc.Tests.csproj
+            tests/SolSharp.Wallet.Tests/SolSharp.Wallet.Tests.csproj
+            tests/SolSharp.Programs.Tests/SolSharp.Programs.Tests.csproj
+          )
+
+          for project in "${unit_projects[@]}"; do
+            project_name="$(basename "${project}" .csproj)"
+            dotnet test "${project}" \
+              --no-build \
+              --configuration Release \
+              --collect:"XPlat Code Coverage" \
+              --settings coverage.runsettings \
+              --results-directory "${COVERAGE_ROOT}/${project_name}"
+          done
+
+          # Keep the deterministic, non-live integration fixtures in ordinary CI as well.
+          dotnet test tests/SolSharp.IntegrationTests/SolSharp.IntegrationTests.csproj \
+            --no-build \
+            --configuration Release \
+            --filter "TestCategory!=Integration"
+
+          dotnet tool install dotnet-reportgenerator-globaltool \
+            --tool-path "${REPORTGENERATOR_ROOT}" \
+            --version 5.5.11
+
+          "${REPORTGENERATOR_ROOT}/reportgenerator" \
+            "-reports:${COVERAGE_ROOT}/**/coverage.cobertura.xml" \
+            "-targetdir:${COVERAGE_ROOT}/report" \
+            "-reporttypes:Cobertura;MarkdownSummaryGithub" \
+            "-assemblyfilters:+SolSharp.Core;+SolSharp.Rpc;+SolSharp.Wallet;+SolSharp.Programs" \
+            "-filefilters:-*/obj/*" \
+            "-verbosity:Warning"
+
+          cat "${COVERAGE_ROOT}/report/SummaryGithub.md" >> "${GITHUB_STEP_SUMMARY}"
+          line_rate="$(sed -n 's/.*<coverage line-rate="\([^"]*\)".*/\1/p' \
+            "${COVERAGE_ROOT}/report/Cobertura.xml" | head -1)"
+          line_percent="$(awk -v rate="${line_rate}" 'BEGIN { printf "%.1f", rate * 100 }')"
+          echo "Merged line coverage: ${line_percent}%"
+          if ! awk -v rate="${line_rate}" 'BEGIN { exit !(rate >= 0.90) }'; then
+            echo "Line coverage ${line_percent}% is below the required 90.0%."
+            exit 1
+          fi
+
+          for readme in README.md README.nuget.md; do
+            if ! grep -Fq "unit_test_coverage-${line_percent}%25_line" "${readme}"; then
+              echo "${readme} does not advertise the measured ${line_percent}% line coverage."
+              exit 1
+            fi
+          done
+
+          if ! grep -Fq "**${line_percent}% of lines**" README.md || \
+             ! grep -Fq "covers ${line_percent}% of hand-written production lines" README.nuget.md; then
+            echo "README coverage prose does not match the measured ${line_percent}%."
+            exit 1
+          fi
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-report
+          path: ${{ runner.temp }}/solsharp-coverage/report
+          if-no-files-found: warn
+          retention-days: 14
 
   # Proves the shipped package's Native AOT claim end to end: pack first (which also validates the
   # public API against the previous stable package), then consume that nupkg from the AOT sample.
   aot-smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up .NET 8
-        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 8.0.x
 

@@ -1,0 +1,68 @@
+name: security
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-audit:
+    name: dependency-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Verify .NET 8 SDK selection
+        shell: bash
+        run: |
+          selected_version="$(dotnet --version)"
+          if [[ "${selected_version}" != 8.* ]]; then
+            echo "Expected a .NET 8 SDK, but dotnet selected ${selected_version}."
+            dotnet --info
+            exit 1
+          fi
+
+      - name: Audit direct and transitive NuGet dependencies
+        run: >-
+          dotnet restore SolSharp.sln
+          -p:NuGetAudit=true
+          -p:NuGetAuditMode=all
+          -p:NuGetAuditLevel=low
+          -warnaserror
+
+      # Benchmarks are intentionally kept outside SolSharp.sln, so audit their graph explicitly.
+      - name: Audit benchmark dependencies
+        run: >-
+          dotnet restore benchmarks/SolSharp.Benchmarks/SolSharp.Benchmarks.csproj
+          -p:NuGetAudit=true
+          -p:NuGetAuditMode=all
+          -p:NuGetAuditLevel=low
+          -warnaserror
+
+  dependency-review:
+    name: dependency-review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: low

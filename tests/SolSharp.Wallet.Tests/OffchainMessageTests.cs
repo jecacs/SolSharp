@@ -70,7 +70,7 @@ public static class OffchainMessageTests
         public void EmptyOrInvalidUtf8_Throws()
         {
             // Act
-            var empty = () => _ = OffchainMessage.Create([]);
+            var empty = () => _ = OffchainMessage.Create((byte[])[]);
             var invalid = () => _ = OffchainMessage.Create([0xFF]);
 
             // Assert

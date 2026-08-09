@@ -1,5 +1,10 @@
 # SolSharp
 
+[![Security checks](https://github.com/jecacs/SolSharp/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/jecacs/SolSharp/actions/workflows/security.yml?query=branch%3Amain)
+[![CodeQL](https://github.com/jecacs/SolSharp/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/jecacs/SolSharp/actions/workflows/codeql.yml?query=branch%3Amain)
+[![Unit test coverage](https://img.shields.io/badge/unit_test_coverage-93.7%25_line-brightgreen)](https://github.com/jecacs/SolSharp/blob/v2.0.0/README.md#quality-gates)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/jecacs/SolSharp/badge)](https://scorecard.dev/viewer/?uri=github.com/jecacs/SolSharp)
+
 A modern, contract-driven, Native AOT-ready .NET SDK for Solana — keys and signatures,
 program instructions, transaction wire formats, RPC, and WebSocket streaming. SolSharp is
 independently implemented in C# from pinned Anza Solana SDK, Agave, and SPL source contracts.
@@ -32,6 +37,12 @@ and control, this is aimed at you.
   is independently written and is not an official Anza/Solana product.
 - **Purposeful dependencies.** A dependency-light Core, allocation-free hot paths and span-based APIs;
   the RPC resilience pipeline and vetted Ed25519/BLS backends are included deliberately.
+- **Measured quality.** The unit suite covers 93.7% of hand-written production lines across the four
+  functional assemblies. CI merges overlapping reports, excludes generated sources, publishes line and
+  branch details, enforces a 90% repository-wide line floor, and rejects a stale documented percentage.
+- **Automated security gates.** Pull requests and weekly scans audit direct and transitive NuGet
+  advisories, review dependency changes, run CodeQL's extended C# security queries, and run OpenSSF
+  supply-chain checks; release packages receive GitHub build-provenance attestations.
 
 ## Compared with Solnet and the official Rust contracts
 
@@ -107,6 +118,9 @@ var accountChanges = await ws.SubscribeAccountWithOptionsAsync(
 SolSharp handles private keys and builds transactions that move funds. It has **not** been audited —
 use at your own risk. Never export a raw private key to an RPC provider, hosted service, or third-party
 transaction builder: keep signing behind `ISigner`, inspect and simulate, then send only signed bytes.
+
+A green security badge means the automated checks found no known issue at the tested revision. It is not
+a guarantee that the package is vulnerability-free and does not replace an independent security audit.
 
 BLS operations use the packaged native `blst` backend on `linux-x64`, `linux-arm64`, `osx-x64`,
 `osx-arm64`, and `win-x64`. Other RIDs can use the rest of SolSharp, but cannot call its BLS API.

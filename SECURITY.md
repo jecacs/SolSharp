@@ -28,6 +28,19 @@ You can expect an acknowledgment within a few days. Please allow a fix and a pat
 before public disclosure; you will be credited in the advisory and the changelog unless you
 prefer otherwise.
 
+## Automated assurance
+
+- Pull requests and `main` are checked against direct and transitive NuGet advisories; low through
+  critical findings fail the security gate.
+- Dependency Review rejects pull requests that introduce a known vulnerable dependency, and the
+  advisory audit also runs weekly so newly published advisories are detected without a new commit.
+- CodeQL runs the extended C# security query suite. OpenSSF Scorecard reports repository supply-chain
+  posture, and release packages receive GitHub build-provenance attestations after the exact packed
+  artifact passes the Native AOT smoke test.
+
+These checks report known issues in the inputs and databases available at run time. A green badge is
+useful evidence, but it is not proof that SolSharp is vulnerability-free and is not a professional audit.
+
 ## Scope notes
 
 - SolSharp has **not** been professionally audited — treat it accordingly and simulate before

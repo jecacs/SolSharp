@@ -68,6 +68,12 @@ version (on the earlier 0.x releases, minor versions could carry them).
   explicit modifier order, while repository-conflicting documentation and legacy-layout rules are suppressed
   in `.editorconfig` instead of producing misleading IDE warnings. CI and release now require a clean
   solution-wide `dotnet format --severity info` analyzer pass in addition to the warning-free build.
+- Added merged unit-test coverage reporting: 93.7% line coverage across the four
+  hand-written production assemblies, with generated sources excluded, full branch details published, and
+  a 90% line gate. Scheduled direct/transitive NuGet auditing, pull-request dependency review, CodeQL
+  `security-extended`, Dependabot updates, OpenSSF Scorecard reporting, Node 24 action pins, and release-package
+  provenance attestations harden the GitHub supply chain without representing automated results as an
+  independent security audit.
 - SPL Token and Token-2022 authority-bearing instruction builders now have additive multisig overloads:
   the multisig authority remains a non-signer account and the supplied member accounts are appended as
   readonly signers in caller order.

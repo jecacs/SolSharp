@@ -71,7 +71,7 @@ public static class ClientWebSocketConnectionTests
                 PeerCloseStatus = WebSocketCloseStatus.EndpointUnavailable,
                 PeerCloseDescription = "maintenance"
             };
-            socket.Push([], WebSocketMessageType.Close, endOfMessage: true);
+            socket.Push((byte[])[], WebSocketMessageType.Close, endOfMessage: true);
             await using var connection = new ClientWebSocketConnection(socket, 1024, TimeSpan.FromMilliseconds(20));
 
             // Act
@@ -136,7 +136,7 @@ public static class ClientWebSocketConnectionTests
             dispose.IsCompleted.Should().BeFalse();
             socket.CloseAsyncCalled.Should().BeFalse();
 
-            socket.Push([], WebSocketMessageType.Close, endOfMessage: true);
+            socket.Push((byte[])[], WebSocketMessageType.Close, endOfMessage: true);
             (await receive).Should().BeNull();
             await dispose.WaitAsync(TimeSpan.FromSeconds(1));
 

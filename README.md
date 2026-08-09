@@ -7,6 +7,10 @@
 [![NuGet](https://img.shields.io/nuget/v/SolSharp.svg?logo=nuget)](https://www.nuget.org/packages/SolSharp)
 [![Downloads](https://img.shields.io/nuget/dt/SolSharp.svg?logo=nuget)](https://www.nuget.org/packages/SolSharp)
 [![build](https://github.com/jecacs/SolSharp/actions/workflows/ci.yml/badge.svg)](https://github.com/jecacs/SolSharp/actions/workflows/ci.yml)
+[![Security checks](https://github.com/jecacs/SolSharp/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/jecacs/SolSharp/actions/workflows/security.yml?query=branch%3Amain)
+[![CodeQL](https://github.com/jecacs/SolSharp/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/jecacs/SolSharp/actions/workflows/codeql.yml?query=branch%3Amain)
+[![Unit test coverage](https://img.shields.io/badge/unit_test_coverage-93.7%25_line-brightgreen)](#quality-gates)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/jecacs/SolSharp/badge)](https://scorecard.dev/viewer/?uri=github.com/jecacs/SolSharp)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A modern, contract-driven, Native AOT-ready .NET SDK for Solana — keys and signatures,
@@ -365,7 +369,7 @@ SolSharp/
   tests/               NUnit + FluentAssertions, mirroring each project
                        (+ SolSharp.IntegrationTests: live-cluster read/streaming checks)
   benchmarks/          SolSharp.Benchmarks — standalone BenchmarkDotNet micro-benchmark harness
-  .github/workflows/   ci.yml (build + offline tests) and release.yml (tag → NuGet trusted publishing)
+  .github/workflows/   CI, coverage, dependency/security review, Scorecard, and trusted publishing
   assets/              package icon and README logo
   .editorconfig        modern C# style, enforced on build
   global.json          .NET 8 minimum policy with local roll-forward (CI asserts SDK 8)
@@ -375,6 +379,22 @@ SolSharp/
   docs/USAGE.md        task-oriented usage guide with runnable examples
   docs/RUST_PARITY.md  pinned Rust/Agave/SPL client-contract coverage matrix
 ```
+
+## Quality gates
+
+The four unit-test suites' merged Linux CI coverage across `SolSharp.Core`, `SolSharp.Rpc`,
+`SolSharp.Wallet`, and `SolSharp.Programs` is
+**93.7% of lines**. Source-generated files under `obj/**` are excluded; overlapping lower-layer hits
+are merged rather than counted twice. CI publishes the merged line/branch Cobertura and Markdown
+reports, fails if repository-wide line coverage drops below 90%, and requires the documented percentage
+to match the measured result.
+
+Every pull request also receives a direct-and-transitive NuGet advisory audit and a dependency-diff
+review. CodeQL runs the `security-extended` C# query suite, the dependency audit runs weekly even without
+repository changes, OpenSSF Scorecard checks the repository's supply-chain posture, and release packages
+receive GitHub build-provenance attestations. A green security badge means those automated checks found no
+known issue at the tested revision; it is not a claim that the library is vulnerability-free or a substitute
+for an independent audit.
 
 ## Design notes
 
