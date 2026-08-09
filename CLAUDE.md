@@ -29,9 +29,9 @@ Run from the repo root (where `SolSharp.sln` lives):
 - **Target framework is `net8.0`.** Do not use net9-only APIs (e.g. `JsonStringEnumMemberName`,
   `InlineArray`-based span tricks that need newer ref-safety). `global.json` starts at SDK 8.0.100
   with `rollForward: major`, so a development machine with only a newer SDK can still build the
-  repository. Hosted runners also contain newer SDKs; after installing 8.x, every CI/release job asserts
-  the resolver's actual `dotnet --version` is 8.x. Do not remove that check or CI could silently stop
-  proving the minimum if SDK selection or runner contents change.
+  repository. Hosted runners also contain newer SDKs; after installing 8.x, every CI/release job that invokes
+  .NET asserts the resolver's actual `dotnet --version` is 8.x. Do not remove that check or CI could silently
+  stop proving the minimum if SDK selection or runner contents change.
 - **Modern C# 12 only.** File-scoped namespaces, `var`, collection expressions `[]`, primary constructors, switch expressions, pattern matching, `is null` / `is not null`. The full rule set lives in `.editorconfig` + `Directory.Build.props` — follow the analyzers, don't fight them. Do not restate style rules here.
 - **A feature is not done until it is documented.** Every user-facing addition or change lands in the same commit with all four documentation layers: (1) XML docs on the public API (CS1591 enforces presence on production members; full `<param>`, `<returns>`, and `<exception>` content remains a review policy); (2) `docs/USAGE.md` — a runnable example in the matching section (or a new section + `Contents` entry), with every snippet checked against the real signatures and model properties, not written from memory; (3) `README.md` — the wire-method list, feature bullets, and Layout if the shape of the repo changed (`README.nuget.md` only if the pitch/quick-start changes — it carries no method lists by design); (4) `CHANGELOG.md` under the release being prepared. Release-only extras: bump `Version` in `Directory.Build.props`, refresh `PackageReleaseNotes` in `src/SolSharp/SolSharp.csproj` (nuget.org shows only the current version's notes), and update the `Status:` line here.
 
@@ -73,6 +73,9 @@ SolSharp/
 - **One nested fixture per method under test:**
   `public static class XTests { [TestFixture] public sealed class Method { ... } }`.
 - Wire formats and crypto are money-critical: cover them with known vectors (RFC 8032 for signing, canonical compact-u16 / base58 vectors), not just round-trips.
+- Property-based hostile-input tests use FsCheck with an explicit replay seed and bounded case counts/input
+  sizes (`MaxTest`, plus `EndSize` where collections are generated). They complement upstream vectors; they
+  never replace them or introduce nondeterministic CI failures.
 - `IDE1006` is disabled for `tests/**` so `Method_Scenario_Expectation` names are allowed.
 - For constructor-throws-only tests use an explicit discard: `Action act = () => _ = new T(...);`.
 - **Arrange / Act / Assert comments.** Mark the three phases with `// Arrange`, `// Act`, `// Assert`. When the call under test and its check are a single fluent statement (exception delegates, `(await …).Should()…`), use one `// Act & Assert`. Skip the labels on expression-bodied or single-statement `[TestCase]` tests where there is nothing to separate — never restructure a test body just to fit them.
@@ -101,3 +104,10 @@ SolSharp/
 - **SPL Token account state uses the fixed-size `Pack` layout, not Borsh.** `Mint` (82 bytes) and `TokenAccount` (165 bytes) read a `COption` as a 4-byte little-endian tag followed by an *always-present* value (the slot is reserved even when `None`) — unlike Borsh's 1-byte tag with the value present only when `Some`. So `BorshReader` / `BorshWriter` are for Anchor/Borsh data; the SPL decoders are hand-written against the Pack layout and KAT'd against `solders.token.state`. (The Token *instruction* data is different again: a minimal `COption` of a 1-byte tag plus the value only when `Some`.)
 - Money-critical encodings (message/transaction serialization, instruction data, PDA/ATA, on-curve) are checked byte-for-byte against `solana-sdk` (solders) and `solana-py`, not just round-trips.
 - **Ships as one NuGet package.** The source stays four layered projects (so the compiler keeps Core crypto/IO-free, Wallet owns Ed25519, etc.), but only the `src/SolSharp` facade is packable: it references the four with `PrivateAssets="all"` and an MSBuild target (`BundleProjectReferences`) folds their DLLs + XML docs into a single `SolSharp` package, re-declaring the real third-party deps (kept in sync by hand). PDBs are embedded (`DebugType=embedded`) so symbols ride inside the bundled DLLs rather than a near-empty `.snupkg`. Default-`false` `IsPackable` (overridden only for `MSBuildProjectName == SolSharp`) keeps every other project from emitting its own package. Package validation compares the packed public API with the previous stable `PackageValidationBaselineVersion`; update that baseline deliberately when preparing each release.
+- **NuGet graphs are locked per project.** Keep every committed `packages.lock.json` synchronized with its
+  project and use `--locked-mode` in ordinary CI/release restores. The AOT smoke's packed-package graph is
+  intentionally dynamic because the package is built by the current job; its separate lock belongs under
+  `obj`, never in the committed project-reference lock.
+- **SDK 8 package archives are not byte-reproducible.** The release workflow therefore attests and stages the
+  exact `.nupkg` in a durable draft GitHub Release before NuGet publishing. Retries recover those canonical
+  bytes; never replace that ordering with a fresh post-publish `dotnet pack` result.

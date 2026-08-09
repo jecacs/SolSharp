@@ -25,6 +25,7 @@ jobs:
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 8.0.x
+          dotnet-quality: ga
 
       - name: Verify .NET 8 SDK selection
         shell: bash
@@ -39,6 +40,7 @@ jobs:
       - name: Audit direct and transitive NuGet dependencies
         run: >-
           dotnet restore SolSharp.sln
+          --locked-mode
           -p:NuGetAudit=true
           -p:NuGetAuditMode=all
           -p:NuGetAuditLevel=low
@@ -48,6 +50,7 @@ jobs:
       - name: Audit benchmark dependencies
         run: >-
           dotnet restore benchmarks/SolSharp.Benchmarks/SolSharp.Benchmarks.csproj
+          --locked-mode
           -p:NuGetAudit=true
           -p:NuGetAuditMode=all
           -p:NuGetAuditLevel=low

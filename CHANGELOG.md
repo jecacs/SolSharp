@@ -58,12 +58,13 @@ version (on the earlier 0.x releases, minor versions could carry them).
   group, hook, and extension decoders. Cryptographic proof/ciphertext generation remains explicitly
   caller-supplied rather than being replaced by an unverifiable local implementation.
 - Added a forward-compatible local `global.json`; after `setup-dotnet` installs 8.x, every CI/release job
-  asserts the SDK resolver's actual selected version, so preinstalled newer SDKs cannot invalidate the
-  minimum-SDK gate. Release publishing now fails unless the pushed tag exactly matches the
+  that invokes .NET asserts the SDK resolver's actual selected version, so preinstalled newer SDKs cannot
+  invalidate the minimum-SDK gate. Release publishing now fails unless the pushed tag exactly matches the
   package version, requires private live-cluster endpoints with zero skipped or inconclusive integration
   paths, verifies the canonical devnet genesis hash before any write, and Native-AOT publishes and runs the
-  exact packed artifact from an isolated package cache before pushing it. Duplicate immutable NuGet versions
-  fail visibly instead of becoming a green no-op.
+  exact packed artifact from an isolated package cache before pushing it. A duplicate immutable NuGet version
+  succeeds only when the repository-signed NuGet copy proves it contains the exact pre-staged canonical
+  package; mismatched or unverifiable duplicates fail visibly.
 - Added centrally configured StyleCop analysis to every project. Rider, Roslyn, and StyleCop now share an
   explicit modifier order, while repository-conflicting documentation and legacy-layout rules are suppressed
   in `.editorconfig` instead of producing misleading IDE warnings. CI and release now require a clean
@@ -74,6 +75,16 @@ version (on the earlier 0.x releases, minor versions could carry them).
   `security-extended`, Dependabot updates, OpenSSF Scorecard reporting, Node 24 action pins, and release-package
   provenance attestations harden the GitHub supply chain without representing automated results as an
   independent security audit.
+- Added committed per-project NuGet lock files and locked CI/release restores. The dynamic packed-package
+  AOT consumer keeps its job-specific lock under `obj` and separately proves that it restored the exact
+  package produced by the job.
+- Added five deterministic FsCheck properties covering 5,000 bounded arbitrary, truncated, and
+  single-byte-overwrite legacy/v0/V1 transaction cases per run. Accepted bytes must round-trip exactly, and
+  rejected bytes must fail through the documented format boundary.
+- Split release validation from narrowly privileged attestation, draft-staging, NuGet-publishing, and
+  finalization jobs. The contents-only staging job durably records the exact attested package before the
+  OIDC publisher sends those same bytes to NuGet; a separate contents-only finalizer publishes the verified
+  draft with the `.nupkg`, SHA-256 digest, and Sigstore/SLSA provenance bundle.
 - SPL Token and Token-2022 authority-bearing instruction builders now have additive multisig overloads:
   the multisig authority remains a non-signer account and the supplied member accounts are appended as
   readonly signers in caller order.

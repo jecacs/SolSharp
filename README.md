@@ -366,7 +366,7 @@ SolSharp/
   src/SolSharp.Programs/ native/SPL clients and states, PDA/ATA, messages and transactions
   src/SolSharp/        packaging facade — bundles the four assemblies into the single NuGet package
   samples/             SolSharp.AotSmoke — native-compiled smoke sample, published and run in CI
-  tests/               NUnit + FluentAssertions, mirroring each project
+  tests/               NUnit + FluentAssertions + bounded FsCheck properties, mirroring each project
                        (+ SolSharp.IntegrationTests: live-cluster read/streaming checks)
   benchmarks/          SolSharp.Benchmarks — standalone BenchmarkDotNet micro-benchmark harness
   .github/workflows/   CI, coverage, dependency/security review, Scorecard, and trusted publishing
@@ -389,12 +389,19 @@ overlapping lower-layer hits are merged rather than counted twice. CI publishes 
 line/branch and Markdown reports, fails if repository-wide line coverage drops below 90%, and rejects a
 documented percentage that exceeds the current measured result.
 
+Five deterministic FsCheck properties exercise 5,000 generated hostile-input cases on every CI run:
+bounded arbitrary transaction payloads, proper prefixes, and single-byte overwrite cases across legacy,
+v0, and V1. Accepted payloads must reserialize byte-for-byte; rejected payloads must fail with the
+documented format error rather than an unexpected exception.
+
 Every pull request also receives a direct-and-transitive NuGet advisory audit and a dependency-diff
-review. CodeQL runs the `security-extended` C# query suite, the dependency audit runs weekly even without
-repository changes, OpenSSF Scorecard checks the repository's supply-chain posture, and release packages
-receive GitHub build-provenance attestations. A green security badge means those automated checks found no
-known issue at the tested revision; it is not a claim that the library is vulnerability-free or a substitute
-for an independent audit.
+review. All ordinary CI/release restores use committed `packages.lock.json` files in locked mode; the
+dynamic packed-package AOT consumer uses an isolated generated lock and independently verifies the exact
+package artifact. CodeQL runs the `security-extended` C# query suite, the dependency audit runs weekly even
+without repository changes, and OpenSSF Scorecard checks the repository's supply-chain posture. A release
+publishes the verified `.nupkg`, its SHA-256 digest, and Sigstore/SLSA build provenance together on GitHub.
+A green security badge means those automated checks found no known issue at the tested revision; it is not
+a claim that the library is vulnerability-free or a substitute for an independent audit.
 
 ## Design notes
 

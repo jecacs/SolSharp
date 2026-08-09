@@ -34,9 +34,12 @@ prefer otherwise.
   critical findings fail the security gate.
 - Dependency Review rejects pull requests that introduce a known vulnerable dependency, and the
   advisory audit also runs weekly so newly published advisories are detected without a new commit.
+- Ordinary CI/release restores are locked to committed NuGet dependency graphs. Five deterministic
+  property-based tests exercise 5,000 bounded arbitrary, truncated, and single-byte-overwrite transaction
+  cases per CI run.
 - CodeQL runs the extended C# security query suite. OpenSSF Scorecard reports repository supply-chain
-  posture, and release packages receive GitHub build-provenance attestations after the exact packed
-  artifact passes the Native AOT smoke test.
+  posture, and the release workflow attaches the verified package, SHA-256 digest, and Sigstore/SLSA build
+  provenance after the exact packed artifact passes the Native AOT smoke test.
 
 These checks report known issues in the inputs and databases available at run time. A green badge is
 useful evidence, but it is not proof that SolSharp is vulnerability-free and is not a professional audit.
