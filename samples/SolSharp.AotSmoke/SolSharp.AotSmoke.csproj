@@ -8,6 +8,10 @@
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(UsePackedSolSharp)' == 'true'">
+    <NuGetLockFilePath>$(BaseIntermediateOutputPath)packages.packed.lock.json</NuGetLockFilePath>
+  </PropertyGroup>
+
   <ItemGroup Condition="'$(UsePackedSolSharp)' != 'true'">
     <ProjectReference Include="../../src/SolSharp.Core/SolSharp.Core.csproj" />
     <ProjectReference Include="../../src/SolSharp.Wallet/SolSharp.Wallet.csproj" />

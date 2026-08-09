@@ -41,9 +41,11 @@ and control, this is aimed at you.
   unit-coverage baseline covers 93.7% of hand-written production lines. CI merges overlapping reports,
   excludes generated sources, publishes line and branch details, enforces a 90% repository-wide line
   floor, and rejects documentation that overstates the current result.
-- **Automated security gates.** Pull requests and weekly scans audit direct and transitive NuGet
-  advisories, review dependency changes, run CodeQL's extended C# security queries, and run OpenSSF
-  supply-chain checks; release packages receive GitHub build-provenance attestations.
+- **Automated security gates.** Pull requests run direct/transitive NuGet auditing, dependency review,
+  and CodeQL's extended C# queries; scheduled scans rerun the audit and CodeQL and report OpenSSF
+  supply-chain posture. Ordinary CI/release restores are locked to committed dependency graphs, 5,000
+  deterministic property-based hostile-input cases exercise transaction decoding per CI run, and the
+  release workflow attaches the verified package, SHA-256 digest, and Sigstore/SLSA build provenance.
 
 ## Compared with Solnet and the official Rust contracts
 

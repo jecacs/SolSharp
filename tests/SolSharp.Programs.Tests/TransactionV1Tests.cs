@@ -2,6 +2,7 @@ using FluentAssertions;
 using NUnit.Framework;
 using SolSharp.Core.Primitives;
 using SolSharp.Wallet;
+using FsCheckProperty = FsCheck.NUnit.PropertyAttribute;
 
 namespace SolSharp.Programs.Tests;
 
@@ -172,6 +173,51 @@ public static class TransactionV1Tests
     [TestFixture]
     public sealed class Deserialize
     {
+        [FsCheckProperty(
+            MaxTest = 1_000,
+            Replay = "3405691582,3131961357",
+            QuietOnSuccess = true)]
+        public bool SingleByteMutation_EitherRejectsOrRoundTrips(int index, byte replacement)
+        {
+            // Arrange
+            byte[] data = [.. UpstreamMessage(), .. new byte[Transaction.SignatureLength]];
+            var position = (int)((uint)index % (uint)data.Length);
+            data[position] = replacement;
+
+            // Act & Assert
+            try
+            {
+                var transaction = Transaction.Deserialize(data);
+                return transaction.Serialize().AsSpan().SequenceEqual(data);
+            }
+            catch (FormatException)
+            {
+                return true;
+            }
+        }
+
+        [FsCheckProperty(
+            MaxTest = 500,
+            Replay = "232525822,19088743",
+            QuietOnSuccess = true)]
+        public bool ProperPrefix_IsAlwaysRejected(int lengthSelector)
+        {
+            // Arrange
+            byte[] data = [.. UpstreamMessage(), .. new byte[Transaction.SignatureLength]];
+            var length = (int)((uint)lengthSelector % (uint)data.Length);
+
+            // Act & Assert
+            try
+            {
+                _ = Transaction.Deserialize(data.AsSpan(0, length));
+                return false;
+            }
+            catch (FormatException)
+            {
+                return true;
+            }
+        }
+
         [Test]
         public void UnsignedTransaction_RoundTripsWithoutSignatureCountPrefix()
         {

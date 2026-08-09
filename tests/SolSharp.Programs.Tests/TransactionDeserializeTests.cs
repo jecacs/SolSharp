@@ -1,5 +1,6 @@
 using FluentAssertions;
 using NUnit.Framework;
+using FsCheckProperty = FsCheck.NUnit.PropertyAttribute;
 
 namespace SolSharp.Programs.Tests;
 
@@ -22,6 +23,51 @@ public static class TransactionDeserializeTests
     [TestFixture]
     public sealed class Deserialize
     {
+        [FsCheckProperty(
+            MaxTest = 2_000,
+            EndSize = MessageV1.MaxTransactionSize,
+            Replay = "1597463007,12648431",
+            QuietOnSuccess = true)]
+        public bool ArbitraryBoundedPayload_EitherRejectsOrRoundTrips(byte[] data)
+            => RejectsOrRoundTrips(data);
+
+        [FsCheckProperty(
+            MaxTest = 1_000,
+            Replay = "3735928559,195948557",
+            QuietOnSuccess = true)]
+        public bool SingleByteMutation_EitherRejectsOrRoundTrips(bool useV0, int index, byte replacement)
+        {
+            // Arrange
+            var data = Convert.FromHexString(useV0 ? SignedV0Hex : SignedTransferHex);
+            var position = (int)((uint)index % (uint)data.Length);
+            data[position] = replacement;
+
+            // Act & Assert
+            return RejectsOrRoundTrips(data);
+        }
+
+        [FsCheckProperty(
+            MaxTest = 500,
+            Replay = "4277009102,2882400001",
+            QuietOnSuccess = true)]
+        public bool ProperPrefix_IsAlwaysRejected(bool useV0, int lengthSelector)
+        {
+            // Arrange
+            var data = Convert.FromHexString(useV0 ? SignedV0Hex : SignedTransferHex);
+            var length = (int)((uint)lengthSelector % (uint)data.Length);
+
+            // Act & Assert
+            try
+            {
+                _ = Transaction.Deserialize(data.AsSpan(0, length));
+                return false;
+            }
+            catch (FormatException)
+            {
+                return true;
+            }
+        }
+
         [Test]
         public void LegacyTransfer_RoundTripsAndParsesFields()
         {
@@ -178,6 +224,19 @@ public static class TransactionDeserializeTests
 
             // Assert
             act.Should().Throw<FormatException>().WithMessage("*trailing byte(s)*");
+        }
+
+        private static bool RejectsOrRoundTrips(byte[] data)
+        {
+            try
+            {
+                var transaction = Transaction.Deserialize(data);
+                return transaction.Serialize().AsSpan().SequenceEqual(data);
+            }
+            catch (FormatException)
+            {
+                return true;
+            }
         }
     }
 }
