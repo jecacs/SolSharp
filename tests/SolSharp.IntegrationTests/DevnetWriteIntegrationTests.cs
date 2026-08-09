@@ -1,3 +1,4 @@
+using System.Threading.RateLimiting;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
@@ -16,11 +17,23 @@ namespace SolSharp.IntegrationTests;
 public static class DevnetWriteIntegrationTests
 {
     private static readonly TimeSpan ConfirmTimeout = TimeSpan.FromSeconds(60);
+    private static readonly TokenBucketRateLimiter RequestLimiter = new(new TokenBucketRateLimiterOptions
+    {
+        TokenLimit = 1,
+        QueueLimit = 128,
+        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+        ReplenishmentPeriod = TimeSpan.FromSeconds(1),
+        TokensPerPeriod = 1,
+        AutoReplenishment = true,
+    });
 
     private static ServiceProvider CreateProvider()
     {
         var services = new ServiceCollection();
-        services.AddSolanaRpc(IntegrationEnvironment.DevnetHttpEndpoint);
+        services.AddSolanaRpc(
+            options => options.Endpoint = IntegrationEnvironment.DevnetHttpEndpoint,
+            resilience => resilience.RateLimiter.RateLimiter =
+                arguments => RequestLimiter.AcquireAsync(1, arguments.Context.CancellationToken));
         return services.BuildServiceProvider();
     }
 
@@ -38,6 +51,8 @@ public static class DevnetWriteIntegrationTests
 
     [TestFixture]
     [Category("Integration")]
+    [Category("DevnetWrite")]
+    [NonParallelizable]
     public sealed class SendAndConfirmTransactionAsync
     {
         [Test]
@@ -74,6 +89,8 @@ public static class DevnetWriteIntegrationTests
 
     [TestFixture]
     [Category("Integration")]
+    [Category("DevnetWrite")]
+    [NonParallelizable]
     public sealed class DurableNonceLifecycle
     {
         [Test]
