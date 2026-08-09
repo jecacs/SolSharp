@@ -1,3 +1,4 @@
+using System.Threading.RateLimiting;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
@@ -15,6 +16,16 @@ namespace SolSharp.IntegrationTests;
 /// </summary>
 public static class RpcReadIntegrationTests
 {
+    private static readonly TokenBucketRateLimiter RequestLimiter = new(new TokenBucketRateLimiterOptions
+    {
+        TokenLimit = 1,
+        QueueLimit = 128,
+        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+        ReplenishmentPeriod = TimeSpan.FromMilliseconds(500),
+        TokensPerPeriod = 1,
+        AutoReplenishment = true,
+    });
+
     // USDC: a long-lived, heavily used SPL mint with stable, assertable properties (6 decimals).
     private static readonly PublicKey UsdcMint = PublicKey.Parse("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
     private static readonly PublicKey TokenProgram = PublicKey.Parse("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
@@ -25,7 +36,10 @@ public static class RpcReadIntegrationTests
     private static ServiceProvider CreateProvider()
     {
         var services = new ServiceCollection();
-        services.AddSolanaRpc(IntegrationEnvironment.HttpEndpoint);
+        services.AddSolanaRpc(
+            options => options.Endpoint = IntegrationEnvironment.HttpEndpoint,
+            resilience => resilience.RateLimiter.RateLimiter =
+                arguments => RequestLimiter.AcquireAsync(1, arguments.Context.CancellationToken));
         return services.BuildServiceProvider();
     }
 

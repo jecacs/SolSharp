@@ -6,6 +6,7 @@ using FluentAssertions;
 using NUnit.Framework;
 using SolSharp.Core.Constants;
 using SolSharp.Core.Primitives;
+using SolSharp.Rpc.Protocol;
 using SolSharp.Rpc.Streaming;
 
 namespace SolSharp.Rpc.Tests.Streaming;
@@ -531,7 +532,7 @@ public static class SolanaWsClientTests
     public sealed class SubscribeRejection
     {
         [Test]
-        public async Task ErrorResponse_FaultsTheSubscribeCall()
+        public async Task ErrorResponse_PreservesRpcErrorAsInnerException()
         {
             // Arrange
             var fake = new FakeWebSocketConnection();
@@ -545,12 +546,16 @@ public static class SolanaWsClientTests
 
             await WaitUntil(() => fake.Sent.Count > 0);
             fake.PushFromServer(
-                """{"jsonrpc":"2.0","error":{"code":-32602,"message":"Too many subscriptions"},"id":1}""");
+                """{"jsonrpc":"2.0","error":{"code":-32602,"message":"Too many subscriptions","data":{"limit":15}},"id":1}""");
 
             // Assert
             var act = async () => await subscribe;
-            (await act.Should().ThrowAsync<InvalidOperationException>())
-                .Which.Message.Should().Contain("-32602").And.Contain("Too many subscriptions");
+            var exception = (await act.Should().ThrowAsync<InvalidOperationException>()).Which;
+            exception.Message.Should().Contain("-32602").And.Contain("Too many subscriptions");
+            var rpcException = exception.InnerException.Should().BeOfType<RpcException>().Subject;
+            rpcException.Code.Should().Be(-32602);
+            rpcException.ErrorData.Should().NotBeNull();
+            rpcException.ErrorData!.Value.GetProperty("limit").GetInt32().Should().Be(15);
         }
 
         [Test]
@@ -574,7 +579,8 @@ public static class SolanaWsClientTests
             fake.PushFromServer("""{"jsonrpc":"2.0","error":{"code":-32000,"message":"nope"},"id":2}""");
 
             var act = async () => await second;
-            await act.Should().ThrowAsync<InvalidOperationException>();
+            var exception = (await act.Should().ThrowAsync<InvalidOperationException>()).Which;
+            exception.InnerException.Should().BeOfType<RpcException>();
 
             // Assert: the first subscription still delivers.
             fake.PushFromServer(
@@ -586,6 +592,7 @@ public static class SolanaWsClientTests
 
         [TestCase("{\"jsonrpc\":\"2.0\",\"error\":{},\"id\":1}")]
         [TestCase("{\"jsonrpc\":\"2.0\",\"error\":\"nope\",\"id\":1}")]
+        [TestCase("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":2147483648,\"message\":\"nope\"},\"id\":1}")]
         [TestCase("{\"jsonrpc\":\"2.0\",\"result\":7,\"error\":{\"code\":-1,\"message\":\"nope\"},\"id\":1}")]
         [TestCase("{\"jsonrpc\":\"2.0\",\"id\":1}")]
         [TestCase("{\"jsonrpc\":\"2.0\",\"result\":7,\"id\":\"1\"}")]

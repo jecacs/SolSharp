@@ -337,9 +337,9 @@ live cluster, plus a write suite (airdrop, transfer, durable nonce) that always 
 default to the public mainnet endpoint (`SOLSHARP_RPC_URL` / `SOLSHARP_WS_URL` override); the write suite uses
 the public devnet endpoint (`SOLSHARP_DEVNET_RPC_URL` override); no credentials are committed. These tests hit
 the network, so they tolerate rate limits by reporting inconclusive rather than failing, and are tagged
-`Integration`. The devnet write harness is serialized and throttled to one RPC request per second, but the
-shared faucet can still reject `requestAirdrop` independently of RPC traffic. For a fast, offline-only run,
-exclude them:
+`Integration`. Live HTTP reads and devnet writes use two-request-per-second test-only limiters; WebSocket
+probes run serially with starts spaced by 500 ms. The shared faucet can still reject `requestAirdrop`
+independently of RPC traffic. For a fast, offline-only run, exclude them:
 
 ```bash
 dotnet test --filter "TestCategory!=Integration"

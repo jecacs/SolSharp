@@ -61,13 +61,15 @@ version (on the earlier 0.x releases, minor versions could carry them).
   that invokes .NET asserts the SDK resolver's actual selected version, so preinstalled newer SDKs cannot
   invalidate the minimum-SDK gate. Release publishing now fails unless the pushed tag exactly matches the
   package version, requires private live-cluster endpoints, and admits no skipped or inconclusive unit,
-  read, or streaming paths. Faucet-dependent devnet writes run serially through a one-request-per-second
-  limiter as a separate probe: deterministic failures still block publication, while classified faucet/rate-
-  limit failures are reported as inconclusive instead of making release availability depend on the shared
-  faucet. The probe verifies the canonical devnet genesis hash before any write, and Native-AOT publishes and
-  runs the exact packed artifact from an isolated package cache before pushing it. A duplicate immutable NuGet
-  version succeeds only when the repository-signed NuGet copy proves it contains the exact pre-staged canonical
-  package; mismatched or unverifiable duplicates fail visibly.
+  read, or streaming paths. Live HTTP reads and devnet writes use test-only two-request-per-second limiters,
+  while WebSocket probes run serially with paced starts so low-tier provider quotas do not turn a sequential
+  suite into a burst. Faucet-dependent devnet writes remain a separate probe: deterministic failures still
+  block publication, while classified faucet/rate-limit failures are reported as inconclusive instead of
+  making release availability depend on the shared faucet. The probe verifies the canonical devnet genesis
+  hash before any write, and Native-AOT publishes and runs the exact packed artifact from an isolated package
+  cache before pushing it. A duplicate immutable NuGet version succeeds only when the repository-signed NuGet
+  copy proves it contains the exact pre-staged canonical package; mismatched or unverifiable duplicates fail
+  visibly.
 - Added centrally configured StyleCop analysis to every project. Rider, Roslyn, and StyleCop now share an
   explicit modifier order, while repository-conflicting documentation and legacy-layout rules are suppressed
   in `.editorconfig` instead of producing misleading IDE warnings. CI and release now require a clean

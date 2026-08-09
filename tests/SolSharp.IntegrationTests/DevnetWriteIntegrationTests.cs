@@ -22,7 +22,7 @@ public static class DevnetWriteIntegrationTests
         TokenLimit = 1,
         QueueLimit = 128,
         QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-        ReplenishmentPeriod = TimeSpan.FromSeconds(1),
+        ReplenishmentPeriod = TimeSpan.FromMilliseconds(500),
         TokensPerPeriod = 1,
         AutoReplenishment = true,
     });
