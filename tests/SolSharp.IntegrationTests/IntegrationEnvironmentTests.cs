@@ -37,6 +37,20 @@ internal static class IntegrationEnvironmentTests
             // Assert
             result.Should().BeTrue();
         }
+
+        [TestCase(-32007, true)]
+        [TestCase(-32602, false)]
+        public void WrappedRpcFailure_UsesInnerRpcClassification(int code, bool expected)
+        {
+            // Arrange
+            var exception = new InvalidOperationException("WebSocket subscription rejected", new RpcException(code, "RPC"));
+
+            // Act
+            var result = IntegrationEnvironment.IsTransient(exception);
+
+            // Assert
+            result.Should().Be(expected);
+        }
     }
 
     [TestFixture]
