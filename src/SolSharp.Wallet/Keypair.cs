@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using Org.BouncyCastle.Math.EC.Rfc8032;
+using SolSharp.Core.Encoding;
 using SolSharp.Core.Primitives;
 
 namespace SolSharp.Wallet;
@@ -17,6 +18,7 @@ public sealed partial class Keypair : ISigner, IDisposable
     /// <summary>Length in bytes of a Solana secret key: the 32-byte seed followed by the 32-byte public key.</summary>
     public const int SecretKeyLength = 64;
 
+    private readonly object _secretGate = new();
     private readonly byte[] _seed;
     private bool _disposed;
 
@@ -67,7 +69,7 @@ public sealed partial class Keypair : ISigner, IDisposable
 
         Span<byte> derived = stackalloc byte[PublicKey.Length];
         keypair.PublicKey.CopyTo(derived);
-        if (!secretKey[SeedLength..].SequenceEqual(derived))
+        if (!CryptographicOperations.FixedTimeEquals(secretKey[SeedLength..], derived))
         {
             keypair.Dispose();
             throw new ArgumentException("Secret key's public-key half does not match its seed.", nameof(secretKey));
@@ -82,22 +84,94 @@ public sealed partial class Keypair : ISigner, IDisposable
     /// <exception cref="ObjectDisposedException">The keypair has already been disposed.</exception>
     public byte[] Sign(ReadOnlySpan<byte> message)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        lock (_secretGate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
 
-        // The span overload signs without copying the message - the only allocation is the signature.
-        var signature = new byte[Ed25519.SignatureSize];
-        Ed25519.Sign(_seed, message, signature);
-        return signature;
+            // The span overload signs without copying the message - the only allocation is the signature.
+            var signature = new byte[Ed25519.SignatureSize];
+            Ed25519.Sign(_seed, message, signature);
+            return signature;
+        }
+    }
+
+    /// <summary>Signs <paramref name="message"/> and returns the signature as a typed Solana value.</summary>
+    /// <param name="message">The bytes to sign; for a transaction, the serialized message.</param>
+    /// <returns>The strict Ed25519 signature.</returns>
+    /// <exception cref="ObjectDisposedException">The keypair has already been disposed.</exception>
+    public Signature SignSignature(ReadOnlySpan<byte> message)
+    {
+        lock (_secretGate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
+            Span<byte> signature = stackalloc byte[Signature.Length];
+            Ed25519.Sign(_seed, message, signature);
+            return new Signature(signature);
+        }
+    }
+
+    /// <summary>
+    /// Exports the Solana 64-byte secret-key representation: the 32-byte Ed25519 seed followed by
+    /// the derived 32-byte public key. The returned array contains secret material; the caller owns
+    /// it and should clear it with <see cref="CryptographicOperations.ZeroMemory(Span{byte})"/> as
+    /// soon as it is no longer needed.
+    /// </summary>
+    /// <returns>A new 64-byte secret-key array.</returns>
+    /// <exception cref="ObjectDisposedException">The keypair has already been disposed.</exception>
+    public byte[] ToBytes()
+    {
+        lock (_secretGate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
+            var bytes = new byte[SecretKeyLength];
+            _seed.CopyTo(bytes, 0);
+            PublicKey.CopyTo(bytes.AsSpan(SeedLength));
+            return bytes;
+        }
+    }
+
+    /// <summary>
+    /// Exports a copy of the 32-byte Ed25519 seed. The returned array contains secret material; the
+    /// caller owns it and should clear it with <see cref="CryptographicOperations.ZeroMemory(Span{byte})"/>
+    /// as soon as it is no longer needed.
+    /// </summary>
+    /// <returns>A new 32-byte seed array.</returns>
+    /// <exception cref="ObjectDisposedException">The keypair has already been disposed.</exception>
+    public byte[] ToSeedBytes()
+    {
+        lock (_secretGate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            return [.. _seed];
+        }
+    }
+
+    /// <summary>
+    /// Exports the Solana 64-byte secret key as base58, matching wallet exports and the Rust SDK's
+    /// <c>to_base58_string</c>. The returned immutable string contains secret material and cannot be
+    /// zeroed; prefer <see cref="ToBytes"/> when the receiving API accepts bytes.
+    /// </summary>
+    /// <returns>The base58-encoded 64-byte secret key.</returns>
+    /// <exception cref="ObjectDisposedException">The keypair has already been disposed.</exception>
+    public string ToBase58String()
+    {
+        var bytes = ToBytes();
+        try
+        {
+            return Base58.Encode(bytes);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(bytes);
+        }
     }
 
     /// <summary>Zeroes the in-memory secret seed. Signing after disposal throws.</summary>
     public void Dispose()
     {
-        if (_disposed)
-            return;
-
-        CryptographicOperations.ZeroMemory(_seed);
-        _disposed = true;
+        ClearSecret();
         GC.SuppressFinalize(this);
     }
 
@@ -107,7 +181,18 @@ public sealed partial class Keypair : ISigner, IDisposable
     /// </summary>
     ~Keypair()
     {
-        if (!_disposed)
+        ClearSecret();
+    }
+
+    private void ClearSecret()
+    {
+        lock (_secretGate)
+        {
+            if (_disposed)
+                return;
+
             CryptographicOperations.ZeroMemory(_seed);
+            _disposed = true;
+        }
     }
 }

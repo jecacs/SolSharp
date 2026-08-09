@@ -11,9 +11,29 @@ public static class MessageTests
 
     private static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
 
+    private static PublicKey UniqueKey(int value)
+    {
+        var bytes = new byte[PublicKey.Length];
+        bytes[0] = (byte)value;
+        bytes[1] = (byte)(value >> 8);
+        return new PublicKey(bytes);
+    }
+
     [TestFixture]
     public sealed class Compile
     {
+        private static Instruction AllSigners(int count, out PublicKey payer)
+        {
+            var keys = Enumerable.Range(0, count).Select(UniqueKey).ToArray();
+            payer = keys[0];
+            return new Instruction
+            {
+                ProgramId = keys[^1],
+                Accounts = [.. keys.Skip(1).Select(AccountMeta.ReadonlySigner)],
+                Data = [7]
+            };
+        }
+
         // Reference bytes generated with solders (the Rust solana-sdk): a System transfer of 1_000_000
         // lamports from a fixed payer to a fixed recipient.
         [Test]
@@ -46,6 +66,22 @@ public static class MessageTests
                 "0000000000000000000000000000000000000000000000000000000000000000" +
                 "0303030303030303030303030303030303030303030303030303030303030303" +
                 "01020200010c0200000040420f0000000000"));
+        }
+
+        [Test]
+        public void TypedBlockhash_MatchesStringOverload()
+        {
+            // Arrange
+            var payer = Key(1);
+            var instruction = new Instruction { ProgramId = Key(9), Accounts = [], Data = [7] };
+            var blockhash = new Hash(Key(8).ToBytes());
+
+            // Act
+            var typed = Message.Compile(payer, blockhash, [instruction]);
+            var text = Message.Compile(payer, blockhash.ToString(), [instruction]);
+
+            // Assert
+            typed.Serialize().Should().Equal(text.Serialize());
         }
 
         // Reference bytes from solders for a case that exercises dedup, flag merging (an account that is
@@ -98,6 +134,46 @@ public static class MessageTests
                 "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b" +
                 "0303030303030303030303030303030303030303030303030303030303030303" +
                 "020504000103040201020602020301aa"));
+        }
+
+        [Test]
+        public void OneHundredTwentySevenSigners_Compiles()
+        {
+            // Arrange
+            var instruction = AllSigners(MessageV0.VersionPrefix - 1, out var payer);
+
+            // Act
+            var message = Message.Compile(payer, Key(8).ToString(), [instruction]);
+
+            // Assert
+            message.RequiredSignatures.Should().Be(MessageV0.VersionPrefix - 1);
+        }
+
+        [Test]
+        public void OneHundredTwentyEightSigners_ThrowsBeforeVersionBitCollision()
+        {
+            // Arrange
+            var instruction = AllSigners(MessageV0.VersionPrefix, out var payer);
+
+            // Act
+            Action act = () => Message.Compile(payer, Key(8).ToString(), [instruction]);
+
+            // Assert
+            act.Should().Throw<ArgumentException>().WithMessage("*at most 127 signatures*");
+        }
+
+        [Test]
+        public void MutatingSourceData_DoesNotMutateCompiledMessage()
+        {
+            // Arrange
+            var instruction = new Instruction { ProgramId = Key(9), Accounts = [], Data = [7] };
+            var message = Message.Compile(Key(1), Key(8).ToString(), [instruction]);
+
+            // Act
+            instruction.Data[0] = 99;
+
+            // Assert
+            message.Instructions[0].Data.Should().Equal(7);
         }
     }
 
@@ -157,6 +233,33 @@ public static class MessageTests
         }
 
         [Test]
+        public void ImpossibleAccountKeyCount_ThrowsBeforeAllocatingDeclaredArray()
+        {
+            // Arrange: max compact-u16 account count with no account bytes following it.
+            byte[] data = [1, 0, 0, 0xff, 0xff, 0x03];
+
+            // Act
+            Action act = () => Message.Deserialize(data);
+
+            // Assert
+            act.Should().Throw<FormatException>().WithMessage("*declares 65535 account key(s)*");
+        }
+
+        [Test]
+        public void ImpossibleInstructionCount_ThrowsBeforeAllocatingDeclaredArray()
+        {
+            // Arrange: one fee-payer key and blockhash followed by max compact-u16 instructions,
+            // but no bytes for even one instruction's minimum representation.
+            byte[] data = [1, 0, 0, 1, .. Key(1).ToBytes(), .. Key(8).ToBytes(), 0xff, 0xff, 0x03];
+
+            // Act
+            Action act = () => Message.Deserialize(data);
+
+            // Assert
+            act.Should().Throw<FormatException>().WithMessage("*declares 65535 instruction(s)*");
+        }
+
+        [Test]
         public void ValidCompiledMessage_RoundTrips()
         {
             // Arrange
@@ -181,6 +284,21 @@ public static class MessageTests
 
             // Assert
             act.Should().Throw<FormatException>().WithMessage("*only 3 account key(s)*");
+        }
+
+        [Test]
+        public void SignerCountWithVersionBit_ThrowsFormatException()
+        {
+            // Arrange: the first high bit distinguishes versioned messages on the wire and is not a
+            // representable signer count in a canonical legacy message.
+            var data = SerializedTransfer();
+            data[0] |= MessageV0.VersionPrefix;
+
+            // Act
+            Action act = () => Message.Deserialize(data);
+
+            // Assert
+            act.Should().Throw<FormatException>().WithMessage("*high bit marks a versioned message*");
         }
 
         // Solana requires readonlySignedAccounts < requiredSignatures so at least one signer - the fee
@@ -241,6 +359,19 @@ public static class MessageTests
 
             // Assert
             act.Should().Throw<FormatException>().WithMessage("*account index 3*");
+        }
+
+        [Test]
+        public void TrailingByte_ThrowsFormatException()
+        {
+            // Arrange
+            byte[] data = [.. SerializedTransfer(), 0xAA];
+
+            // Act
+            Action act = () => Message.Deserialize(data);
+
+            // Assert
+            act.Should().Throw<FormatException>().WithMessage("*1 trailing byte(s)*");
         }
     }
 }

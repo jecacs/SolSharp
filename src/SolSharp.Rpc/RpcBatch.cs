@@ -29,29 +29,33 @@ public sealed class RpcBatch
     /// <param name="commitment">The commitment level to query at.</param>
     /// <returns>The balance in lamports, once the batch executes.</returns>
     public Task<ulong> GetBalanceAsync(PublicKey account, Commitment commitment = Commitment.Confirmed)
-        => Add(RpcRequests.GetBalance(account, commitment),
-            static result => result.Deserialize(RpcJson.TypeInfo<RpcContextValue<ulong>>())!.Value);
+        => Add(
+            RpcRequests.GetBalance(account, commitment),
+            static result => RequireContextValue<ulong>(result));
 
     /// <summary>Queues a <c>getAccountInfo</c> call (base64 account data).</summary>
     /// <param name="account">The account to query.</param>
     /// <param name="commitment">The commitment level to query at.</param>
     /// <returns>The account, or <c>null</c> if it does not exist, once the batch executes.</returns>
     public Task<AccountInfo?> GetAccountInfoAsync(PublicKey account, Commitment commitment = Commitment.Confirmed)
-        => Add(RpcRequests.GetAccountInfo(account, commitment),
-            static result => result.Deserialize(RpcJson.TypeInfo<RpcContextValue<AccountInfo>>())!.Value);
+        => Add(
+            RpcRequests.GetAccountInfo(account, commitment),
+            static result => DeserializeContext<AccountInfo?>(result).Value);
 
     /// <summary>Queues a <c>getLatestBlockhash</c> call.</summary>
     /// <param name="commitment">The commitment level to query at.</param>
     /// <returns>The blockhash and its last valid block height, once the batch executes.</returns>
     public Task<LatestBlockhash> GetLatestBlockhashAsync(Commitment commitment = Commitment.Confirmed)
-        => Add(RpcRequests.GetLatestBlockhash(commitment),
-            static result => result.Deserialize(RpcJson.TypeInfo<RpcContextValue<LatestBlockhash>>())!.Value!);
+        => Add(
+            RpcRequests.GetLatestBlockhash(commitment),
+            static result => RequireContextValue<LatestBlockhash>(result));
 
     /// <summary>Queues a <c>getSlot</c> call.</summary>
     /// <param name="commitment">The commitment level to query at.</param>
     /// <returns>The current slot, once the batch executes.</returns>
     public Task<ulong> GetSlotAsync(Commitment commitment = Commitment.Confirmed)
-        => Add(RpcRequests.GetSlot(commitment),
+        => Add(
+            RpcRequests.GetSlot(commitment),
             static result => result.GetUInt64());
 
     /// <summary>Queues a <c>getTokenAccountBalance</c> call.</summary>
@@ -59,12 +63,13 @@ public sealed class RpcBatch
     /// <param name="commitment">The commitment level to query at.</param>
     /// <returns>The token balance, once the batch executes.</returns>
     public Task<TokenAmount> GetTokenAccountBalanceAsync(PublicKey tokenAccount, Commitment commitment = Commitment.Confirmed)
-        => Add(RpcRequests.GetTokenAccountBalance(tokenAccount, commitment),
-            static result => result.Deserialize(RpcJson.TypeInfo<RpcContextValue<TokenAmount>>())!.Value!);
+        => Add(
+            RpcRequests.GetTokenAccountBalance(tokenAccount, commitment),
+            static result => RequireContextValue<TokenAmount>(result));
 
     /// <summary>Queues a <c>sendTransaction</c> call - e.g. to submit several signed transactions in one round-trip.</summary>
     /// <param name="transaction">The signed transaction's serialized wire bytes.</param>
-    /// <param name="options">Send options; node defaults are used when null.</param>
+    /// <param name="options">Send options; client defaults are used when <c>null</c>.</param>
     /// <returns>The transaction signature (base58), once the batch executes.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="transaction"/> is <c>null</c>.</exception>
     public Task<string> SendTransactionAsync(byte[] transaction, SendTransactionOptions? options = null)
@@ -75,7 +80,9 @@ public sealed class RpcBatch
         var encoded = Convert.ToBase64String(transaction);
         return Add(
             RpcRequests.SendTransaction(encoded, options.SkipPreflight, options.PreflightCommitment, options.MaxRetries, options.MinContextSlot),
-            static result => result.GetString()!);
+            static result => result.ValueKind == JsonValueKind.String
+                ? result.GetString()!
+                : throw new JsonException("sendTransaction returned a non-string result."));
     }
 
     /// <summary>Submits every queued call as one JSON-RPC batch and completes their tasks.</summary>
@@ -94,33 +101,67 @@ public sealed class RpcBatch
 
         _executed = true;
 
-        JsonElement root;
         try
         {
-            root = await _client.SendBatchAsync(_requests, cancellationToken);
+            var root = await _client.SendBatchAsync(_requests, cancellationToken);
 
             if (root.ValueKind != JsonValueKind.Array)
                 throw new RpcException(-1, $"Expected a JSON-RPC batch response array, got {root.ValueKind}.");
+
+            // Responses may arrive in any order. Validate the complete envelope before resolving calls so
+            // malformed, duplicate, or injected ids cannot leave some TaskCompletionSources pending forever.
+            var expectedIds = _pending.Select(static pending => pending.Id).ToHashSet();
+            var responses = new Dictionary<int, JsonElement>(_pending.Count);
+            foreach (var element in root.EnumerateArray())
+            {
+                if (element.ValueKind != JsonValueKind.Object)
+                    throw new RpcException(-1, $"Expected each JSON-RPC batch entry to be an object, got {element.ValueKind}.");
+
+                if (!element.TryGetProperty("jsonrpc", out var version) ||
+                    version.ValueKind != JsonValueKind.String ||
+                    version.GetString() != "2.0")
+                    throw new RpcException(-1, "A batch response entry carried an invalid JSON-RPC version.");
+
+                if (!element.TryGetProperty("id", out var id) ||
+                    id.ValueKind != JsonValueKind.Number ||
+                    !id.TryGetInt32(out var value))
+                    throw new RpcException(-1, "A batch response entry carried no valid integer id.");
+                if (!expectedIds.Contains(value))
+                    throw new RpcException(-1, $"The batch response contained unknown request id {value}.");
+                if (!responses.TryAdd(value, element))
+                    throw new RpcException(-1, $"The batch response contained duplicate request id {value}.");
+
+                var hasResult = element.TryGetProperty("result", out _);
+                var hasError = element.TryGetProperty("error", out var error) &&
+                               error.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined);
+                if (hasResult == hasError)
+                    throw new RpcException(
+                        -1,
+                        $"The batch response entry for request {value} must carry exactly one of result or error.");
+                if (hasError &&
+                    (error.ValueKind != JsonValueKind.Object ||
+                     !error.TryGetProperty("code", out var code) ||
+                     code.ValueKind != JsonValueKind.Number ||
+                     !code.TryGetInt32(out _) ||
+                     !error.TryGetProperty("message", out var message) || message.ValueKind != JsonValueKind.String))
+                    throw new RpcException(
+                        -1,
+                        $"The batch response entry for request {value} carried a malformed error object.");
+            }
+
+            foreach (var pending in _pending)
+            {
+                if (responses.TryGetValue(pending.Id, out var response))
+                    pending.Complete(response);
+                else
+                    pending.Fail(new RpcException(-1, $"The batch response contained no entry for request {pending.Id}."));
+            }
         }
         catch (Exception exception)
         {
             foreach (var pending in _pending)
                 pending.Fail(exception);
             throw;
-        }
-
-        // Responses may arrive in any order; match them to the queued calls by id.
-        var responses = new Dictionary<int, JsonElement>(_pending.Count);
-        foreach (var element in root.EnumerateArray())
-            if (element.TryGetProperty("id", out var id) && id.TryGetInt32(out var value))
-                responses[value] = element;
-
-        foreach (var pending in _pending)
-        {
-            if (responses.TryGetValue(pending.Id, out var response))
-                pending.Complete(response);
-            else
-                pending.Fail(new RpcException(-1, $"The batch response contained no entry for request {pending.Id}."));
         }
     }
 
@@ -133,6 +174,19 @@ public sealed class RpcBatch
         _requests.Add(request with { Id = pending.Id });
         _pending.Add(pending);
         return pending.Source.Task;
+    }
+
+    private static RpcContextValue<T> DeserializeContext<T>(JsonElement result)
+        => result.Deserialize(RpcJson.TypeInfo<RpcContextValue<T>>())
+           ?? throw new JsonException("A batched RPC method returned a null context wrapper.");
+
+    private static T RequireContextValue<T>(JsonElement result)
+    {
+        var context = DeserializeContext<T>(result);
+        if (context.Value is null)
+            throw new JsonException("A batched RPC context wrapper carried null for a non-null value contract.");
+
+        return context.Value;
     }
 
     private interface IPending
@@ -152,25 +206,28 @@ public sealed class RpcBatch
 
         public void Complete(JsonElement response)
         {
-            if (response.TryGetProperty("error", out var error) && error.ValueKind is not JsonValueKind.Null)
-            {
-                var code = error.ValueKind == JsonValueKind.Object &&
-                           error.TryGetProperty("code", out var codeElement) &&
-                           codeElement.TryGetInt32(out var codeValue)
-                    ? codeValue
-                    : -1;
-                var message = error.ValueKind == JsonValueKind.Object &&
-                              error.TryGetProperty("message", out var messageElement) &&
-                              messageElement.ValueKind == JsonValueKind.String
-                    ? messageElement.GetString()!
-                    : error.GetRawText();
-
-                Source.TrySetException(new RpcException(code, message));
-                return;
-            }
-
             try
             {
+                if (response.TryGetProperty("error", out var error) && error.ValueKind is not JsonValueKind.Null)
+                {
+                    var code = error.ValueKind == JsonValueKind.Object &&
+                               error.TryGetProperty("code", out var codeElement) &&
+                               codeElement.TryGetInt32(out var codeValue)
+                        ? codeValue
+                        : -1;
+                    var message = error.ValueKind == JsonValueKind.Object &&
+                                  error.TryGetProperty("message", out var messageElement) &&
+                                  messageElement.ValueKind == JsonValueKind.String
+                        ? messageElement.GetString()!
+                        : error.GetRawText();
+                    var data = error.ValueKind == JsonValueKind.Object && error.TryGetProperty("data", out var dataElement)
+                        ? dataElement
+                        : (JsonElement?)null;
+
+                    Source.TrySetException(new RpcException(code, message, data));
+                    return;
+                }
+
                 if (!response.TryGetProperty("result", out var result))
                     throw new RpcException(-1, $"The batch response entry for request {Id} carried neither a result nor an error.");
 

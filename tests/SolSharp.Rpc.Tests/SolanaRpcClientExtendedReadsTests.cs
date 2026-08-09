@@ -1,6 +1,8 @@
+using System.Text.Json;
 using FluentAssertions;
 using NUnit.Framework;
 using SolSharp.Core.Primitives;
+using SolSharp.Rpc.Models;
 
 namespace SolSharp.Rpc.Tests;
 
@@ -70,7 +72,7 @@ public static class SolanaRpcClientExtendedReadsTests
 
             // Assert
             production.ByIdentity.Should().ContainKey(Node);
-            production.ByIdentity[Node].Should().Equal(86ul, 80ul);
+            production.ByIdentity[Node].Should().Be(new BlockProductionCounts(86ul, 80ul));
             production.Range.FirstSlot.Should().Be(100ul);
             production.Range.LastSlot.Should().Be(200ul);
             handler.CapturedRequestBody.Should().Contain("\"getBlockProduction\"");
@@ -89,6 +91,23 @@ public static class SolanaRpcClientExtendedReadsTests
             // Assert
             handler.CapturedRequestBody.Should().Contain($"\"identity\":\"{Node}\"");
             handler.CapturedRequestBody.Should().Contain("\"range\":{\"firstSlot\":100,\"lastSlot\":200}");
+        }
+
+        [TestCase("{}")]
+        [TestCase("{\"byIdentity\":{},\"range\":{}}")]
+        [TestCase("{\"byIdentity\":{\"7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67\":[]},\"range\":{\"firstSlot\":100,\"lastSlot\":200}}")]
+        [TestCase("{\"byIdentity\":{\"7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67\":[1]},\"range\":{\"firstSlot\":100,\"lastSlot\":200}}")]
+        [TestCase("{\"byIdentity\":{\"7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67\":[1,2,3]},\"range\":{\"firstSlot\":100,\"lastSlot\":200}}")]
+        public async Task MalformedResponse_ThrowsJsonException(string production)
+        {
+            // Arrange
+            var (client, _) = Make(ContextResult(production));
+
+            // Act
+            var act = async () => await client.GetBlockProductionAsync();
+
+            // Assert
+            await act.Should().ThrowAsync<JsonException>();
         }
     }
 
@@ -235,6 +254,19 @@ public static class SolanaRpcClientExtendedReadsTests
             (await client.GetIdentityAsync()).Should().Be(PublicKey.Parse(Node));
             handler.CapturedRequestBody.Should().Contain("\"getIdentity\"");
         }
+
+        [Test]
+        public async Task MissingIdentity_ThrowsJsonException()
+        {
+            // Arrange
+            var (client, _) = Make(Result("{}"));
+
+            // Act
+            var act = async () => await client.GetIdentityAsync();
+
+            // Assert
+            await act.Should().ThrowAsync<JsonException>();
+        }
     }
 
     [TestFixture]
@@ -330,6 +362,19 @@ public static class SolanaRpcClientExtendedReadsTests
             // Assert
             handler.CapturedRequestBody.Should().Contain("\"filter\":\"circulating\"");
         }
+
+        [Test]
+        public async Task NullEntry_ThrowsJsonException()
+        {
+            // Arrange
+            var (client, _) = Make(ContextResult("[null]"));
+
+            // Act
+            var act = async () => await client.GetLargestAccountsAsync();
+
+            // Assert
+            await act.Should().ThrowAsync<JsonException>();
+        }
     }
 
     [TestFixture]
@@ -399,6 +444,19 @@ public static class SolanaRpcClientExtendedReadsTests
 
             // Assert
             handler.CapturedRequestBody.Should().Contain("\"params\":[]");
+        }
+
+        [Test]
+        public async Task NullEntry_ThrowsJsonException()
+        {
+            // Arrange
+            var (client, _) = Make(Result("[null]"));
+
+            // Act
+            var act = async () => await client.GetRecentPerformanceSamplesAsync();
+
+            // Assert
+            await act.Should().ThrowAsync<JsonException>();
         }
     }
 

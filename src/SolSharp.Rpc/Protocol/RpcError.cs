@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace SolSharp.Rpc.Protocol;
@@ -12,4 +13,8 @@ internal sealed record RpcError
     /// <summary>The human-readable error message.</summary>
     [JsonPropertyName("message")]
     public string Message { get; init; } = string.Empty;
+
+    /// <summary>Structured node-specific diagnostics, when supplied.</summary>
+    [JsonPropertyName("data")]
+    public JsonElement? Data { get; init; }
 }

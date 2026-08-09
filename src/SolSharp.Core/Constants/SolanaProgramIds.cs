@@ -21,6 +21,9 @@ public static class SolanaProgramIds
     /// <summary>The Address Lookup Table program.</summary>
     public const string AddressLookupTableProgram = "AddressLookupTab1e1111111111111111111111111";
 
+    /// <summary>The native runtime feature-gate program.</summary>
+    public const string FeatureProgram = "Feature111111111111111111111111111111111111";
+
     /// <summary>The SPL Memo program.</summary>
     public const string MemoProgram = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr";
 

@@ -11,6 +11,6 @@ namespace SolSharp.Rpc;
 /// <param name="Length">The number of bytes to return.</param>
 public sealed record DataSlice(
     [property: JsonPropertyName("offset")]
-    int Offset,
+    ulong Offset,
     [property: JsonPropertyName("length")]
-    int Length);
+    ulong Length);

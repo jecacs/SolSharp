@@ -22,16 +22,16 @@ internal static class Ed25519Curve
         // y is the low 255 bits reduced mod p; the top bit is the sign of x and is ignored here.
         var y = (new BigInteger(encoded, isUnsigned: true, isBigEndian: false) & YMask) % P;
 
-        var y2 = y * y % P;
+        var y2 = (y * y) % P;
         var u = Mod(y2 - 1);
-        var v = Mod(D * y2 + 1);
+        var v = Mod((D * y2) + 1);
         if (v.IsZero)
             return false;
 
         // x^2 = u / v must be a square. For p = 5 (mod 8) the candidate's square is +/- (u/v),
         // so v * x^2 lands on +/- u exactly when u/v is a square.
-        var x = BigInteger.ModPow(u * BigInteger.ModPow(v, P - 2, P) % P, SqrtExponent, P);
-        var check = x * x % P * v % P;
+        var x = BigInteger.ModPow((u * BigInteger.ModPow(v, P - 2, P)) % P, SqrtExponent, P);
+        var check = (((x * x) % P) * v) % P;
         return check == u || check == Mod(-u);
     }
 

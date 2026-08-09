@@ -25,22 +25,39 @@ internal sealed class ParsedAccountInfoJsonConverter : JsonConverter<ParsedAccou
 
         if (data.ValueKind is JsonValueKind.Object)
         {
-            if (data.TryGetProperty("program", out var programElement))
-                program = programElement.GetString();
+            if (!data.TryGetProperty("program", out var programElement) ||
+                programElement.ValueKind is not JsonValueKind.String)
+            {
+                throw new JsonException("Parsed account data must carry its string program.");
+            }
 
-            if (data.TryGetProperty("parsed", out var parsedElement) && parsedElement.ValueKind is not JsonValueKind.Null)
-                parsed = parsedElement.Deserialize(options.GetTypeInfo<ParsedInstructionInfo>());
+            if (!data.TryGetProperty("parsed", out var parsedElement))
+                throw new JsonException("Parsed account data must carry its parsed value.");
 
-            if (data.TryGetProperty("space", out var dataSpace) && dataSpace.ValueKind is JsonValueKind.Number)
-                space = dataSpace.GetUInt64();
+            if (!data.TryGetProperty("space", out var dataSpace) ||
+                dataSpace.ValueKind is not JsonValueKind.Number ||
+                !dataSpace.TryGetUInt64(out var parsedSpace))
+            {
+                throw new JsonException("Parsed account data must carry its space as a u64 value.");
+            }
+
+            program = programElement.GetString();
+            parsed = parsedElement.ValueKind is JsonValueKind.Null
+                ? null
+                : parsedElement.Deserialize(options.GetTypeInfo<ParsedInstructionInfo>());
+            space = parsedSpace;
         }
-        else if (data.ValueKind is JsonValueKind.Array && data.GetArrayLength() > 0)
+        else if (data.ValueKind is JsonValueKind.Array)
         {
-            rawData = Convert.FromBase64String(data[0].GetString() ?? string.Empty);
+            rawData = AccountInfoJsonConverter.DecodeBase64Tuple(data);
+        }
+        else
+        {
+            throw new JsonException("Expected parsed account data as an object or a [data, encoding] array.");
         }
 
-        if (space is null && root.TryGetProperty("space", out var topSpace) && topSpace.ValueKind is JsonValueKind.Number)
-            space = topSpace.GetUInt64();
+        var topLevelSpace = AccountInfoJsonConverter.ReadOptionalSpace(root);
+        space ??= topLevelSpace;
 
         return new ParsedAccountInfo
         {

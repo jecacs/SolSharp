@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using NUnit.Framework;
 using Polly;
+using SolSharp.Core.Primitives;
 using SolSharp.Rpc.Streaming;
 
 namespace SolSharp.Rpc.Tests;
@@ -117,6 +118,22 @@ public static class ServiceCollectionExtensionsTests
             act.Should().NotThrow();
         }
 
+        [Test]
+        public void RejectsNonPositiveResponseLimit()
+        {
+            var services = new ServiceCollection();
+            services.AddSolanaRpc(options =>
+            {
+                options.Endpoint = "https://api.devnet.solana.com";
+                options.MaximumResponseContentLength = 0;
+            });
+            var provider = services.BuildServiceProvider();
+
+            Action act = () => _ = provider.GetRequiredService<IOptions<SolanaRpcOptions>>().Value;
+
+            act.Should().Throw<OptionsValidationException>();
+        }
+
         private static ServiceProvider ProviderFor(string endpoint)
         {
             var services = new ServiceCollection();
@@ -154,6 +171,38 @@ public static class ServiceCollectionExtensionsTests
             // Act & Assert
             (await client.GetSlotAsync()).Should().Be(123);
             handler.CallCount.Should().Be(2);
+        }
+
+        [Test]
+        public async Task DoesNotRetryNonIdempotentAirdrop()
+        {
+            // Arrange
+            var handler = new SequenceHandler(
+                new HttpResponseMessage(HttpStatusCode.ServiceUnavailable),
+                Json("""{"jsonrpc":"2.0","result":"duplicate","id":1}"""));
+
+            var services = new ServiceCollection();
+            services
+                .AddSolanaRpc(
+                    options => options.Endpoint = "https://node.example",
+                    resilience =>
+                    {
+                        resilience.Retry.MaxRetryAttempts = 1;
+                        resilience.Retry.Delay = TimeSpan.Zero;
+                        resilience.Retry.BackoffType = DelayBackoffType.Constant;
+                        resilience.Retry.UseJitter = false;
+                    })
+                .ConfigurePrimaryHttpMessageHandler(() => handler);
+
+            var client = services.BuildServiceProvider().GetRequiredService<SolanaRpcClient>();
+            var account = new PublicKey(new byte[PublicKey.Length]);
+
+            // Act
+            var act = async () => await client.RequestAirdropAsync(account, 1);
+
+            // Assert
+            await act.Should().ThrowAsync<HttpRequestException>();
+            handler.CallCount.Should().Be(1);
         }
 
         private static HttpResponseMessage Json(string body)

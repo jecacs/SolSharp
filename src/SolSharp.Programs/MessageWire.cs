@@ -14,6 +14,7 @@ internal static class MessageWire
     {
         var count = ShortVec.Decode(data[offset..], out var read);
         offset += read;
+        EnsureMinimumBytes(data.Length - offset, count, PublicKey.Length, "account key");
 
         var keys = new PublicKey[count];
         for (var i = 0; i < count; i++)
@@ -30,6 +31,9 @@ internal static class MessageWire
     {
         var count = ShortVec.Decode(data[offset..], out var read);
         offset += read;
+        // Even an instruction with no accounts and no data needs a program-id byte and two
+        // one-byte zero length prefixes. Reject impossible declared counts before allocating.
+        EnsureMinimumBytes(data.Length - offset, count, 3, "instruction");
 
         var instructions = new CompiledInstruction[count];
         for (var i = 0; i < count; i++)
@@ -55,6 +59,14 @@ internal static class MessageWire
         }
 
         return instructions;
+    }
+
+    private static void EnsureMinimumBytes(int remainingBytes, int count, int minimumElementBytes, string elementName)
+    {
+        var minimumBytes = (long)count * minimumElementBytes;
+        if (minimumBytes > remainingBytes)
+            throw new FormatException(
+                $"The wire data declares {count} {elementName}(s), which need at least {minimumBytes} byte(s), but only {remainingBytes} byte(s) remain.");
     }
 
     /// <summary>

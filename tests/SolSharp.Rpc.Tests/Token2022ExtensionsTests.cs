@@ -76,11 +76,11 @@ public static class Token2022ExtensionsTests
 
             // Assert
             extensions.Should().NotBeNull();
-            extensions!.Extensions.Should().HaveCount(4);
+            extensions.Extensions.Should().HaveCount(4);
 
             var fee = extensions.GetTransferFeeConfig();
             fee.Should().NotBeNull();
-            fee!.TransferFeeConfigAuthority.Should().Be(Pk(10));
+            fee.TransferFeeConfigAuthority.Should().Be(Pk(10));
             fee.WithdrawWithheldAuthority.Should().Be(Pk(11));
             fee.WithheldAmount.Should().Be(ulong.MaxValue);
             fee.OlderTransferFee.Should().Be(new TransferFee { Epoch = 1, MaximumFee = 10, BasisPoints = 100 });
@@ -90,7 +90,7 @@ public static class Token2022ExtensionsTests
 
             var metadataPointer = extensions.GetMetadataPointer();
             metadataPointer.Should().NotBeNull();
-            metadataPointer!.Authority.Should().Be(Pk(7));
+            metadataPointer.Authority.Should().Be(Pk(7));
             metadataPointer.MetadataAddress.Should().Be(Pk(8));
 
             extensions.Has(ExtensionType.MintCloseAuthority).Should().BeTrue();
@@ -133,6 +133,68 @@ public static class Token2022ExtensionsTests
         }
 
         [Test]
+        public void SingleTrailingReallocationByte_IsAccepted()
+        {
+            byte[] data = [.. Extended(accountType: 1), 0xAA];
+
+            TokenExtensionSet.DecodeMint(data).Should().NotBeNull();
+        }
+
+        [Test]
+        public void UninitializedType_StopsWithoutInspectingRemainingBytes()
+        {
+            byte[] data = [.. Extended(accountType: 1), 0, 0, 0xAA, 0xBB];
+
+            TokenExtensionSet.DecodeMint(data).Should().NotBeNull();
+        }
+
+        [Test]
+        public void OverlongFixedSizeExtensions_ReturnNullFromTypedViews()
+        {
+            // Arrange: StateWithExtensions returns the TLV bytes, but its typed Pod view requires
+            // each fixed-size extension's declared length to equal size_of::<V>() exactly.
+            var data = Extended(
+                accountType: 1,
+                ((ushort)ExtensionType.TransferFeeConfig, new byte[TransferFeeConfig.Length + 1]),
+                ((ushort)ExtensionType.MintCloseAuthority, new byte[PublicKey.Length + 1]),
+                ((ushort)ExtensionType.PermanentDelegate, new byte[PublicKey.Length + 1]),
+                ((ushort)ExtensionType.DefaultAccountState, new byte[2]),
+                ((ushort)ExtensionType.MetadataPointer, new byte[MetadataPointer.Length + 1]));
+
+            // Act
+            var extensions = TokenExtensionSet.DecodeMint(data)!;
+
+            // Assert
+            extensions.GetTransferFeeConfig().Should().BeNull();
+            extensions.GetMintCloseAuthority().Should().BeNull();
+            extensions.GetPermanentDelegate().Should().BeNull();
+            extensions.GetDefaultAccountState().Should().BeNull();
+            extensions.GetMetadataPointer().Should().BeNull();
+        }
+
+        [TestCase((byte)3)]
+        [TestCase(byte.MaxValue)]
+        public void UndefinedDefaultAccountState_ReturnsNull(byte state)
+        {
+            var extensions = TokenExtensionSet.DecodeMint(
+                Extended(accountType: 1, ((ushort)ExtensionType.DefaultAccountState, [state])));
+
+            extensions.Should().NotBeNull();
+            extensions!.GetDefaultAccountState().Should().BeNull();
+        }
+
+        [Test]
+        public void UnknownFutureExtensionType_IsPreservedAsOpaqueData()
+        {
+            var extensions = TokenExtensionSet.DecodeMint(
+                Extended(accountType: 1, (29, [0xAA, 0xBB])));
+
+            extensions.Should().NotBeNull();
+            extensions!.Extensions.Should().ContainSingle().Which.Should().BeEquivalentTo(
+                new TokenExtension { Type = (ExtensionType)29, Data = [0xAA, 0xBB] });
+        }
+
+        [Test]
         public void TokenMetadata_DecodesBorshContent()
         {
             // Arrange: OptionalNonZeroPubkey (none) + Borsh mint, name, symbol, uri, and one extra pair.
@@ -155,13 +217,36 @@ public static class Token2022ExtensionsTests
 
             // Assert
             metadata.Should().NotBeNull();
-            metadata!.UpdateAuthority.Should().BeNull();
+            metadata.UpdateAuthority.Should().BeNull();
             metadata.Mint.Should().Be(Pk(3));
             metadata.Name.Should().Be("Cool Token");
             metadata.Symbol.Should().Be("COOL");
             metadata.Uri.Should().Be("https://example.org/cool.json");
             metadata.AdditionalMetadata.Should().ContainSingle()
                 .Which.Should().Be(new KeyValuePair<string, string>("kind", "meme"));
+        }
+
+        [Test]
+        public void TokenMetadata_HostileAdditionalMetadataCount_ReturnsNullWithoutAllocatingFromCount()
+        {
+            // Arrange: valid fixed fields followed by an impossible Vec length and no pair data.
+            using var buffer = new MemoryStream();
+            buffer.Write(new byte[32]);
+            buffer.Write(Pk(3).ToBytes());
+            WriteBorshString(buffer, "name");
+            WriteBorshString(buffer, "symbol");
+            WriteBorshString(buffer, "uri");
+            Span<byte> count = stackalloc byte[4];
+            BinaryPrimitives.WriteUInt32LittleEndian(count, int.MaxValue);
+            buffer.Write(count);
+
+            var data = Extended(accountType: 1, ((ushort)ExtensionType.TokenMetadata, buffer.ToArray()));
+
+            // Act
+            var metadata = TokenExtensionSet.DecodeMint(data)!.GetTokenMetadata();
+
+            // Assert
+            metadata.Should().BeNull();
         }
 
         private static void WriteBorshString(MemoryStream buffer, string value)
@@ -195,7 +280,7 @@ public static class Token2022ExtensionsTests
 
             // Assert
             extensions.Should().NotBeNull();
-            extensions!.GetWithheldTransferFee().Should().Be(777ul);
+            extensions.GetWithheldTransferFee().Should().Be(777ul);
             extensions.GetMemoTransferRequired().Should().BeTrue();
             extensions.Has(ExtensionType.ImmutableOwner).Should().BeTrue();
             extensions.Find(ExtensionType.CpiGuard).Should().BeNull();
@@ -208,5 +293,31 @@ public static class Token2022ExtensionsTests
         [Test]
         public void TooShort_ReturnsNull()
             => TokenExtensionSet.DecodeAccount(new byte[10]).Should().BeNull();
+
+        [Test]
+        public void OverlongFixedSizeExtensions_ReturnNullFromTypedViews()
+        {
+            // Arrange
+            var data = Extended(
+                accountType: 2,
+                ((ushort)ExtensionType.TransferFeeAmount, new byte[sizeof(ulong) + 1]),
+                ((ushort)ExtensionType.MemoTransfer, new byte[2]));
+
+            // Act
+            var extensions = TokenExtensionSet.DecodeAccount(data)!;
+
+            // Assert
+            extensions.GetWithheldTransferFee().Should().BeNull();
+            extensions.GetMemoTransferRequired().Should().BeNull();
+        }
+
+        [Test]
+        public void MemoTransferPodBool_NonZeroValueReturnsTrue()
+        {
+            var extensions = TokenExtensionSet.DecodeAccount(
+                Extended(accountType: 2, ((ushort)ExtensionType.MemoTransfer, [byte.MaxValue])));
+
+            extensions!.GetMemoTransferRequired().Should().BeTrue();
+        }
     }
 }

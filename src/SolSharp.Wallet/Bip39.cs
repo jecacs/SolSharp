@@ -26,14 +26,16 @@ public static class Bip39
         ArgumentNullException.ThrowIfNull(passphrase);
 
         var password = Encoding.UTF8.GetBytes(mnemonic.Normalize(NormalizationForm.FormKD));
-        var salt = Encoding.UTF8.GetBytes("mnemonic" + passphrase.Normalize(NormalizationForm.FormKD));
+        byte[] salt = [];
         try
         {
+            salt = Encoding.UTF8.GetBytes("mnemonic" + passphrase.Normalize(NormalizationForm.FormKD));
             return Rfc2898DeriveBytes.Pbkdf2(password, salt, Iterations, HashAlgorithmName.SHA512, SeedLength);
         }
         finally
         {
             CryptographicOperations.ZeroMemory(password);
+            CryptographicOperations.ZeroMemory(salt);
         }
     }
 }

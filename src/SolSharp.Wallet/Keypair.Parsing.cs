@@ -167,22 +167,51 @@ public sealed partial class Keypair
         if (values is null)
             throw new FormatException("Key JSON must be an array, not null.");
 
-        var bytes = new byte[values.Length];
-        for (var i = 0; i < values.Length; i++)
-        {
-            if (values[i] is < 0 or > byte.MaxValue)
-                throw new FormatException($"Key JSON value at index {i} is outside the byte range 0-255: {values[i]}.");
-
-            bytes[i] = (byte)values[i];
-        }
-
+        byte[]? bytes = null;
         try
         {
+            bytes = new byte[values.Length];
+            for (var i = 0; i < values.Length; i++)
+            {
+                if (values[i] is < 0 or > byte.MaxValue)
+                    throw new FormatException($"Key JSON value at index {i} is outside the byte range 0-255: {values[i]}.");
+
+                bytes[i] = (byte)values[i];
+            }
+
             return FromDecoded(bytes, "JSON key array");
         }
         finally
         {
-            CryptographicOperations.ZeroMemory(bytes);
+            if (bytes is not null)
+                CryptographicOperations.ZeroMemory(bytes);
+            Array.Clear(values);
+        }
+    }
+
+    /// <summary>
+    /// Exports the 64-byte secret key as the JSON number array used by <c>solana-keygen id.json</c>.
+    /// The returned immutable string contains secret material and cannot be zeroed; prefer
+    /// <see cref="ToBytes"/> when the receiving API accepts bytes.
+    /// </summary>
+    /// <returns>A JSON array containing the 32-byte seed followed by the 32-byte public key.</returns>
+    /// <exception cref="ObjectDisposedException">The keypair has already been disposed.</exception>
+    public string ToJsonArray()
+    {
+        var values = new int[SecretKeyLength];
+        byte[]? bytes = null;
+        try
+        {
+            bytes = ToBytes();
+            for (var i = 0; i < bytes.Length; i++)
+                values[i] = bytes[i];
+
+            return JsonSerializer.Serialize(values, WalletJsonContext.Default.Int32Array);
+        }
+        finally
+        {
+            if (bytes is not null)
+                CryptographicOperations.ZeroMemory(bytes);
             Array.Clear(values);
         }
     }
@@ -207,14 +236,27 @@ public sealed partial class Keypair
     }
 
     private static byte[]? TryDecodeBase58(string text)
-        => Base58.TryDecode(text, out var bytes) && bytes.Length is SeedLength or SecretKeyLength ? bytes : null;
+    {
+        if (!Base58.TryDecode(text, out var bytes))
+            return null;
+
+        if (bytes.Length is SeedLength or SecretKeyLength)
+            return bytes;
+
+        CryptographicOperations.ZeroMemory(bytes);
+        return null;
+    }
 
     private static byte[]? TryDecodeBase64(string text)
     {
         try
         {
             var bytes = Convert.FromBase64String(text);
-            return bytes.Length is SeedLength or SecretKeyLength ? bytes : null;
+            if (bytes.Length is SeedLength or SecretKeyLength)
+                return bytes;
+
+            CryptographicOperations.ZeroMemory(bytes);
+            return null;
         }
         catch (FormatException)
         {

@@ -23,6 +23,11 @@ public sealed record AccountInfo
     /// </summary>
     public ulong RentEpoch { get; init; }
 
+    /// <summary>
+    /// The account's complete data length before any requested data slice was applied, when reported.
+    /// </summary>
+    public ulong? Space { get; init; }
+
     /// <summary>The account's raw data, decoded from the node's base64 encoding.</summary>
     public byte[] Data { get; init; } = [];
 }

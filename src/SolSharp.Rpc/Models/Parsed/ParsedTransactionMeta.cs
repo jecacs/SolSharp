@@ -8,23 +8,53 @@ namespace SolSharp.Rpc.Models.Parsed;
 /// instructions, and any error. Collections are nullable because the node omits or nulls some of them.
 /// </summary>
 /// <seealso href="https://solana.com/docs/rpc/http/gettransaction">getTransaction</seealso>
-public sealed record ParsedTransactionMeta
+public sealed record ParsedTransactionMeta : IJsonOnDeserialized
 {
+    private JsonElement _status;
+    private IReadOnlyList<ulong>? _preBalances;
+    private IReadOnlyList<ulong>? _postBalances;
+
     /// <summary>The transaction error, or <c>null</c> if it succeeded.</summary>
     [JsonPropertyName("err")]
+    [JsonRequired]
     public JsonElement? Err { get; init; }
+
+    /// <summary>
+    /// The deprecated result-shaped status field retained by the node for compatibility; prefer
+    /// <see cref="Err"/> or <see cref="Error"/> for new code.
+    /// </summary>
+    [JsonPropertyName("status")]
+    [JsonRequired]
+    public JsonElement Status
+    {
+        get => _status;
+        init => _status = value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
+            ? throw new JsonException("Parsed transaction metadata must carry a non-null status.")
+            : value;
+    }
 
     /// <summary>The fee charged, in lamports.</summary>
     [JsonPropertyName("fee")]
+    [JsonRequired]
     public ulong Fee { get; init; }
 
     /// <summary>Account lamport balances before the transaction, indexed by the message's account list.</summary>
     [JsonPropertyName("preBalances")]
-    public IReadOnlyList<ulong>? PreBalances { get; init; }
+    [JsonRequired]
+    public IReadOnlyList<ulong> PreBalances
+    {
+        get => _preBalances!;
+        init => _preBalances = value ?? throw new JsonException("Parsed transaction metadata must carry pre-balances.");
+    }
 
     /// <summary>Account lamport balances after the transaction, indexed by the message's account list.</summary>
     [JsonPropertyName("postBalances")]
-    public IReadOnlyList<ulong>? PostBalances { get; init; }
+    [JsonRequired]
+    public IReadOnlyList<ulong> PostBalances
+    {
+        get => _postBalances!;
+        init => _postBalances = value ?? throw new JsonException("Parsed transaction metadata must carry post-balances.");
+    }
 
     /// <summary>The inner (CPI) instructions invoked, grouped by their top-level instruction; <c>null</c> if the node omitted them.</summary>
     [JsonPropertyName("innerInstructions")]
@@ -46,6 +76,22 @@ public sealed record ParsedTransactionMeta
     [JsonPropertyName("loadedAddresses")]
     public LoadedAddresses? LoadedAddresses { get; init; }
 
+    /// <summary>The compute units the transaction consumed, when reported.</summary>
+    [JsonPropertyName("computeUnitsConsumed")]
+    public ulong? ComputeUnitsConsumed { get; init; }
+
+    /// <summary>The transaction cost units, when reported.</summary>
+    [JsonPropertyName("costUnits")]
+    public ulong? CostUnits { get; init; }
+
+    /// <summary>Data returned by a program, or <c>null</c> when no program set return data.</summary>
+    [JsonPropertyName("returnData")]
+    public TransactionReturnData? ReturnData { get; init; }
+
+    /// <summary>Rewards and debits recorded while processing the transaction, when reported.</summary>
+    [JsonPropertyName("rewards")]
+    public IReadOnlyList<Reward>? Rewards { get; init; }
+
     /// <summary>True when the transaction failed (<see cref="Err"/> is present).</summary>
     [JsonIgnore]
     public bool IsError => Err is { ValueKind: not JsonValueKind.Null };
@@ -53,4 +99,15 @@ public sealed record ParsedTransactionMeta
     /// <summary>The decoded transaction error, or <c>null</c> if it succeeded.</summary>
     [JsonIgnore]
     public TransactionError? Error => TransactionError.Parse(Err);
+
+    /// <inheritdoc/>
+    public void OnDeserialized()
+    {
+        TransactionStatusValidator.Validate(Err, Status);
+        RpcCollectionValidator.ValidateOptional(InnerInstructions, "parsed inner-instruction groups");
+        RpcCollectionValidator.ValidateOptional(LogMessages, "parsed log messages");
+        RpcCollectionValidator.ValidateOptional(PreTokenBalances, "parsed pre-token balances");
+        RpcCollectionValidator.ValidateOptional(PostTokenBalances, "parsed post-token balances");
+        RpcCollectionValidator.ValidateOptional(Rewards, "parsed rewards");
+    }
 }

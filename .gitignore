@@ -33,6 +33,7 @@ lcov.info
 packages/
 
 # Secrets & local config
+id.json
 appsettings.*.local.json
 secrets.json
 *.key

@@ -5,11 +5,11 @@
   <ImplicitUsings>enable</ImplicitUsings>
   <Nullable>enable</Nullable>
   <IsAotCompatible>true</IsAotCompatible>
-  <Description>Core Solana primitives for .NET: PublicKey, base58 and compact-u16 (shortvec) encoding, commitment levels, and well-known program, sysvar, and mint addresses. No I/O, no crypto engine, minimal dependencies.</Description>
+  <Description>Core Solana primitives for .NET: distinct PublicKey and Hash values, base58, compact-u16 and bounded Borsh encoding, commitment levels, source-generated JSON, well-known addresses, and bounded current sysvar-state decoders. No I/O or crypto engine.</Description>
 </PropertyGroup>
 
 <ItemGroup>
-  <PackageReference Include="SimpleBase" Version="5.6.0" />
+  <PackageReference Include="SimpleBase" Version="5.6.4" />
 </ItemGroup>
 
 </Project>

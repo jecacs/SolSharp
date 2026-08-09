@@ -9,9 +9,11 @@ public sealed record LargestAccount
 {
     /// <summary>The account's address.</summary>
     [JsonPropertyName("address")]
+    [JsonRequired]
     public PublicKey Address { get; init; }
 
     /// <summary>The account's balance in lamports.</summary>
     [JsonPropertyName("lamports")]
+    [JsonRequired]
     public ulong Lamports { get; init; }
 }

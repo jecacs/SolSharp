@@ -9,6 +9,7 @@ namespace SolSharp.Rpc.Models.Parsed;
 /// forms always carry <see cref="ProgramId"/>, so no information is lost either way.
 /// </summary>
 /// <seealso href="https://solana.com/docs/rpc/json-structures">Solana RPC JSON structures</seealso>
+[JsonConverter(typeof(ParsedInstructionJsonConverter))]
 public sealed record ParsedInstruction
 {
     /// <summary>The program that runs the instruction.</summary>
@@ -19,7 +20,11 @@ public sealed record ParsedInstruction
     [JsonPropertyName("program")]
     public string? Program { get; init; }
 
-    /// <summary>The node's parsed view of the instruction, or <c>null</c> when the program was not recognized.</summary>
+    /// <summary>
+    /// The node's parsed view of the instruction, or <c>null</c> when the program was not recognized. When the
+    /// wire's parsed value is JSON <c>null</c>, this remains non-null and carries that value in
+    /// <see cref="ParsedInstructionInfo.Info"/> so the parsed branch is not confused with a partially decoded one.
+    /// </summary>
     [JsonPropertyName("parsed")]
     public ParsedInstructionInfo? Parsed { get; init; }
 
@@ -33,5 +38,5 @@ public sealed record ParsedInstruction
 
     /// <summary>The CPI stack height at which the instruction ran, if the node reported it.</summary>
     [JsonPropertyName("stackHeight")]
-    public int? StackHeight { get; init; }
+    public uint? StackHeight { get; init; }
 }

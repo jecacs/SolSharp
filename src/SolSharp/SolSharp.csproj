@@ -2,10 +2,13 @@
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
+    <IsAotCompatible>true</IsAotCompatible>
     <PackageId>SolSharp</PackageId>
     <IsPackable>true</IsPackable>
-    <Description>A lean, Native AOT-ready .NET 8 SDK for Solana — source-generated JSON, no reflection, trimmable, compiles to a native binary. The full JSON-RPC HTTP read surface, send/simulate, and multiplexed WebSocket streaming; Ed25519 keys and signing; SPL Token, PDA, and ATA helpers; and spec-accurate legacy and v0 (versioned) transaction building, signing, and decoding — every wire format checked byte-for-byte against the Rust solana-sdk. Ships as one package bundling the Core, Wallet, Rpc, and Programs assemblies.</Description>
-    <PackageReleaseNotes>1.3.0 — hardens the transport and the send path. WebSocket: bounded message sizes (MaxMessageSizeBytes, 64 MiB default) and per-subscription buffers (SubscriptionBufferCapacity, 1,024 default; a consumer that falls behind is faulted and unsubscribed instead of growing memory without bound), an opt-in ReceiveTimeout that recovers silently half-open connections, a complete close handshake with bounded disposal, and a fix so a subscription cancelled during a reconnect replay is released server-side instead of resurrected. HTTP: the JSON-RPC response envelope is validated in a single parsing pass (version, id echo, result/error presence) and the node's own error always surfaces with its code and message; sendTransaction preflight and simulateTransaction default to confirmed commitment, matching GetLatestBlockhashAsync, so a just-fetched blockhash no longer fails preflight with BlockhashNotFound; malformed base64 transaction tuples are rejected instead of silently mis-decoded. Message.Deserialize and MessageV0.Deserialize enforce Solana's sanitize rules. Packaging: the bundled assemblies' XML documentation now ships in the package (IntelliSense), and Microsoft.Extensions.Http.Resilience 8.10.0 drops the transitive vulnerable System.Text.Json 8.0.0. No breaking API changes. Changelog: https://github.com/jecacs/SolSharp/blob/main/CHANGELOG.md</PackageReleaseNotes>
+    <EnablePackageValidation>true</EnablePackageValidation>
+    <PackageValidationBaselineVersion>1.3.0</PackageValidationBaselineVersion>
+    <Description>A contract-driven, Native AOT-ready .NET 8 SDK for Solana — independently implemented from pinned Anza Solana SDK, Agave, and SPL source contracts. Source-generated JSON with no reflection; typed RPC and multiplexed WebSocket streaming; Ed25519 and BLS12-381 keys/signatures; program instructions and bounded state decoding; and exact legacy/v0/V1 transaction wire formats verified against Rust-compatible vectors. Ships as one package bundling the Core, Wallet, Rpc, and Programs functional assemblies plus a minimal packaging facade.</Description>
+    <PackageReleaseNotes>2.0.0 — the contract-driven client-parity release, independently implemented against pinned Anza Solana SDK, Agave, and SPL sources. It adds exact legacy/v0/SIMD-0385 V1 transaction workflows; typed Ed25519/BLS12-381 values, offline signers, Rust-compatible key import/export, signed off-chain messages, Vote proofs of possession, and PoP-gated same-message BLS aggregation; broad native-program and Token-2022 interfaces with bounded state decoders; the complete pinned non-admin RPC/PubSub method-family surface and effective configuration variants; plus transport, malformed-input, Native AOT, package-validation, and release hardening. Migration: untyped null/default recent-blockhash or durable-nonce arguments need a string/Hash cast; DataSlice now uses ulong; and exact RPC response fields use typed unsigned/union models instead of permissive signed/JsonElement containers. These are deliberate 2.0 source and binary changes, so applications built against 1.x must be recompiled. Exact source revisions, supported contracts, exclusions, native RID requirements, and byte-vector policy are published in the parity matrix and third-party notices. Full details: https://github.com/jecacs/SolSharp/blob/v2.0.0/CHANGELOG.md</PackageReleaseNotes>
     <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);BundleProjectReferences</TargetsForTfmSpecificBuildOutput>
   </PropertyGroup>
 
@@ -17,11 +20,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="SimpleBase" Version="5.6.0"/>
-    <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2"/>
+    <PackageReference Include="SimpleBase" Version="5.6.4"/>
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.7.0"/>
+    <PackageReference Include="Nethermind.Crypto.Bls" Version="1.0.5"/>
     <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.1"/>
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="8.10.0"/>
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2"/>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.3"/>
   </ItemGroup>
 
   <Target Name="BundleProjectReferences" DependsOnTargets="ResolveReferences">

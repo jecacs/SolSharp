@@ -45,5 +45,29 @@ public static class MemoProgramTests
             instruction.Accounts.Should().BeEmpty();
             Convert.ToHexString(instruction.Data).ToLowerInvariant().Should().Be("68656c6c6f");
         }
+
+        [Test]
+        public void LoneSurrogate_ThrowsInsteadOfEncodingReplacementCharacter()
+        {
+            // Act
+            Action act = () => MemoProgram.Memo("\ud800");
+
+            // Assert
+            act.Should().Throw<ArgumentException>()
+                .Which.ParamName.Should().Be("text");
+        }
+
+        [Test]
+        public void RawBytes_PreserveExactRustBuilderPayload()
+        {
+            // Act
+            var instruction = MemoProgram.Memo([0xff, 0x00, 0x80], Pk(6));
+
+            // Assert
+            instruction.Data.Should().Equal(0xff, 0x00, 0x80);
+            instruction.Accounts.Should().ContainSingle();
+            instruction.Accounts[0].Should().Match<AccountMeta>(account =>
+                account.PublicKey == Pk(6) && account.IsSigner && !account.IsWritable);
+        }
     }
 }

@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <IsAotCompatible>true</IsAotCompatible>
-    <Description>Solana transaction building for .NET: instructions, legacy message compilation and wire serialization, transaction signing, and System / Compute Budget / SPL Token instruction builders.</Description>
+    <Description>Solana client programs and transaction wire formats for .NET: bounded legacy/v0/V1 compilation, signing, serialization and decoding; current native-program, SPL Token, Token-2022, ATA and ALT instruction builders and state decoders.</Description>
   </PropertyGroup>
 
   <ItemGroup>

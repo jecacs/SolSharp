@@ -1,6 +1,7 @@
 using FluentAssertions;
 using NUnit.Framework;
 using SolSharp.Core.Primitives;
+using SolSharp.Rpc.Models;
 
 namespace SolSharp.Rpc.Tests;
 
@@ -43,6 +44,7 @@ public static class SolanaRpcClientParsedTransactionTests
             tx.Should().NotBeNull();
             tx!.Slot.Should().Be(250000000);
             tx.BlockTime.Should().Be(1700000000);
+            tx.Version.Should().Be(RpcTransactionVersion.Legacy);
             tx.Signatures.Should().ContainSingle().Which.Should().Be("sig1aaaa");
             tx.Message.RecentBlockhash.Should().Be("RBh1transfer1111111111111111111111111111111");
 
@@ -118,10 +120,35 @@ public static class SolanaRpcClientParsedTransactionTests
 
             // Assert
             tx.Should().NotBeNull();
-            tx!.Meta!.LoadedAddresses.Should().NotBeNull();
+            tx!.Version.Should().Be(RpcTransactionVersion.FromNumber(0));
+            tx.Meta!.LoadedAddresses.Should().NotBeNull();
             tx.Meta.LoadedAddresses!.Writable.Should().ContainSingle().Which.Should().Be(Key(V0Writable));
             tx.Meta.LoadedAddresses.Readonly.Should().ContainSingle().Which.Should().Be(Key(V0Readonly));
             tx.Message.AccountKeys.Should().Contain(account => account.Source == "lookupTable");
+        }
+
+        [Test]
+        public async Task ParsesCurrentMetadataAndMessageLookupReferences()
+        {
+            // Arrange
+            var (client, _) = Make(
+                """{"jsonrpc":"2.0","result":{"slot":8,"blockTime":9,"transactionIndex":3,"transaction":{"signatures":["sig-current"],"message":{"accountKeys":[],"instructions":[],"recentBlockhash":"CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8","addressTableLookups":[{"accountKey":"11111111111111111111111111111111","writableIndexes":[1,2],"readonlyIndexes":[3]}]}},"meta":{"err":null,"status":{"Ok":null},"fee":5000,"preBalances":[],"postBalances":[],"computeUnitsConsumed":50,"costUnits":60,"returnData":{"programId":"11111111111111111111111111111111","data":["AQID","base64"]},"rewards":[{"pubkey":"11111111111111111111111111111111","lamports":-1,"postBalance":99,"rewardType":"Rent","commission":null}]},"version":0},"id":1}""");
+
+            // Act
+            var transaction = await client.GetParsedTransactionAsync("sig-current");
+
+            // Assert
+            transaction!.TransactionIndex.Should().Be(3);
+            transaction.Version.Should().Be(RpcTransactionVersion.FromNumber(0));
+            var lookup = transaction.Message.AddressTableLookups.Should().ContainSingle().Subject;
+            lookup.AccountKey.Should().Be(Key(SystemId));
+            lookup.WritableIndexes.Should().Equal(1, 2);
+            lookup.ReadonlyIndexes.Should().Equal(3);
+            transaction.Meta!.ComputeUnitsConsumed.Should().Be(50);
+            transaction.Meta.Status.GetProperty("Ok").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+            transaction.Meta.CostUnits.Should().Be(60);
+            transaction.Meta.ReturnData!.Data.Should().Equal(1, 2, 3);
+            transaction.Meta.Rewards.Should().ContainSingle().Which.Lamports.Should().Be(-1);
         }
 
         [Test]
@@ -145,11 +172,25 @@ public static class SolanaRpcClientParsedTransactionTests
 
             // Assert
             tx.Should().NotBeNull();
-            tx!.Slot.Should().BeNull();
+            tx!.Slot.Should().Be(0);
             tx.BlockTime.Should().BeNull();
             tx.Meta.Should().BeNull();
             tx.Message.Instructions.Should().BeEmpty();
             tx.Message.AccountKeys.Should().ContainSingle().Which.Source.Should().BeNull();
+        }
+
+        [Test]
+        public async Task MissingTopLevelSlotAndBlockTime_ThrowsJsonException()
+        {
+            // Arrange
+            var (client, _) = Make(
+                """{"jsonrpc":"2.0","result":{"transaction":{"signatures":[],"message":{"accountKeys":[],"instructions":[],"recentBlockhash":""}},"meta":null},"id":1}""");
+
+            // Act
+            var act = async () => await client.GetParsedTransactionAsync("sig-missing-context");
+
+            // Assert
+            await act.Should().ThrowAsync<System.Text.Json.JsonException>().WithMessage("*slot*block-time*");
         }
 
         [Test]
@@ -206,6 +247,34 @@ public static class SolanaRpcClientParsedTransactionTests
     }
 
     [TestFixture]
+    public sealed class GetParsedTransactionWithMaxVersionAsync
+    {
+        [Test]
+        public async Task ParsesV1TransactionConfigAndSendsExplicitOptIn()
+        {
+            // Arrange
+            var (client, handler) = Make(
+                """{"jsonrpc":"2.0","result":{"slot":10,"blockTime":null,"transaction":{"signatures":["sig-v1"],"message":{"accountKeys":[],"instructions":[],"recentBlockhash":"CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8","transactionConfig":{"priorityFee":9000,"computeUnitLimit":200000,"loadedAccountsDataSizeLimit":65536,"heapSize":32768}}},"meta":null,"version":1},"id":1}""");
+
+            // Act
+            var transaction = await client.GetParsedTransactionWithMaxVersionAsync(
+                "sig-v1", maxSupportedTransactionVersion: 1);
+
+            // Assert
+            transaction!.Version.Should().Be(RpcTransactionVersion.FromNumber(1));
+            transaction.Message.AddressTableLookups.Should().BeNull();
+            transaction.Message.TransactionConfig.Should().NotBeNull();
+            var config = transaction.Message.TransactionConfig!;
+            config.PriorityFee.Should().Be(9000);
+            config.ComputeUnitLimit.Should().Be(200000);
+            config.LoadedAccountsDataSizeLimit.Should().Be(65536);
+            config.HeapSize.Should().Be(32768);
+            handler.CapturedRequestBody.Should().Contain("\"encoding\":\"jsonParsed\"");
+            handler.CapturedRequestBody.Should().Contain("\"maxSupportedTransactionVersion\":1");
+        }
+    }
+
+    [TestFixture]
     public sealed class GetParsedBlockAsync
     {
         [Test]
@@ -223,13 +292,16 @@ public static class SolanaRpcClientParsedTransactionTests
             block.ParentSlot.Should().Be(249999999);
             block.BlockHeight.Should().Be(123456);
             block.BlockTime.Should().Be(1700000005);
+            block.NumRewardPartitions.Should().Be(4);
             block.Transactions.Should().HaveCount(2);
 
             var first = block.Transactions[0];
             first.Slot.Should().Be(250000000);       // patched from the requested slot
             first.BlockTime.Should().Be(1700000005);  // patched from the block
+            first.TransactionIndex.Should().Be(0);    // derived from ledger order
             first.Message.Instructions[0].Parsed!.Type.Should().Be("transfer");
 
+            block.Transactions[1].TransactionIndex.Should().Be(1);
             block.Transactions[1].Meta.Should().BeNull();
 
             handler.CapturedRequestBody.Should().Contain("getBlock");
@@ -238,29 +310,49 @@ public static class SolanaRpcClientParsedTransactionTests
         }
     }
 
+    [TestFixture]
+    public sealed class GetParsedBlockWithMaxVersionAsync
+    {
+        [Test]
+        public async Task ExplicitVersionOptIn_SendsVersionOne()
+        {
+            // Arrange
+            var (client, handler) = Make(BlockJson);
+
+            // Act
+            var block = await client.GetParsedBlockWithMaxVersionAsync(
+                250000000, maxSupportedTransactionVersion: 1);
+
+            // Assert
+            block.Should().NotBeNull();
+            handler.CapturedRequestBody.Should().Contain("\"encoding\":\"jsonParsed\"");
+            handler.CapturedRequestBody.Should().Contain("\"maxSupportedTransactionVersion\":1");
+        }
+    }
+
     private const string Transfer =
-        """{"jsonrpc":"2.0","result":{"slot":250000000,"blockTime":1700000000,"transaction":{"signatures":["sig1aaaa"],"message":{"accountKeys":[{"pubkey":"3x9az88Dkbxa6tkKByxqEn7jBTJCJCD4dVvou49L24ET","signer":true,"writable":true,"source":"transaction"},{"pubkey":"9jLkNAaW9E47LQMHvjohy2uAAyr1331bAxgJKFRU7wF6","signer":false,"writable":true,"source":"transaction"},{"pubkey":"11111111111111111111111111111111","signer":false,"writable":false,"source":"transaction"}],"instructions":[{"program":"system","programId":"11111111111111111111111111111111","parsed":{"type":"transfer","info":{"source":"3x9az88Dkbxa6tkKByxqEn7jBTJCJCD4dVvou49L24ET","destination":"9jLkNAaW9E47LQMHvjohy2uAAyr1331bAxgJKFRU7wF6","lamports":1000000}},"stackHeight":null}],"recentBlockhash":"RBh1transfer1111111111111111111111111111111"}},"meta":{"err":null,"fee":5000,"preBalances":[100000000,0,1],"postBalances":[98995000,1000000,1],"innerInstructions":[],"logMessages":["Program 11111111111111111111111111111111 invoke [1]","Program 11111111111111111111111111111111 success"],"preTokenBalances":[],"postTokenBalances":[],"loadedAddresses":{"writable":[],"readonly":[]}},"version":"legacy"},"id":1}""";
+        """{"jsonrpc":"2.0","result":{"slot":250000000,"blockTime":1700000000,"transaction":{"signatures":["sig1aaaa"],"message":{"accountKeys":[{"pubkey":"3x9az88Dkbxa6tkKByxqEn7jBTJCJCD4dVvou49L24ET","signer":true,"writable":true,"source":"transaction"},{"pubkey":"9jLkNAaW9E47LQMHvjohy2uAAyr1331bAxgJKFRU7wF6","signer":false,"writable":true,"source":"transaction"},{"pubkey":"11111111111111111111111111111111","signer":false,"writable":false,"source":"transaction"}],"instructions":[{"program":"system","programId":"11111111111111111111111111111111","parsed":{"type":"transfer","info":{"source":"3x9az88Dkbxa6tkKByxqEn7jBTJCJCD4dVvou49L24ET","destination":"9jLkNAaW9E47LQMHvjohy2uAAyr1331bAxgJKFRU7wF6","lamports":1000000}},"stackHeight":null}],"recentBlockhash":"RBh1transfer1111111111111111111111111111111"}},"meta":{"err":null,"status":{"Ok":null},"fee":5000,"preBalances":[100000000,0,1],"postBalances":[98995000,1000000,1],"innerInstructions":[],"logMessages":["Program 11111111111111111111111111111111 invoke [1]","Program 11111111111111111111111111111111 success"],"preTokenBalances":[],"postTokenBalances":[],"loadedAddresses":{"writable":[],"readonly":[]}},"version":"legacy"},"id":1}""";
 
     private const string Inner =
-        """{"jsonrpc":"2.0","result":{"slot":250000001,"blockTime":1700000001,"transaction":{"signatures":["sig2bbbb"],"message":{"accountKeys":[{"pubkey":"67vHA8qZGCJKw1UNGUJZME4MwEWDRGWzp7MGvsut43A8","signer":true,"writable":true,"source":"transaction"},{"pubkey":"GE3oyzjSohCRBKq75a2ug4pDFx7GGKJXsz1GfQr836uP","signer":false,"writable":true,"source":"transaction"},{"pubkey":"Gdc1ZJMLFqN3f3xMDu8Sm6KJ7NNQzJ2GbmLBKUU7pCs4","signer":false,"writable":true,"source":"transaction"},{"pubkey":"7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67","signer":false,"writable":false,"source":"transaction"},{"pubkey":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA","signer":false,"writable":false,"source":"transaction"}],"instructions":[{"programId":"7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67","accounts":["GE3oyzjSohCRBKq75a2ug4pDFx7GGKJXsz1GfQr836uP","Gdc1ZJMLFqN3f3xMDu8Sm6KJ7NNQzJ2GbmLBKUU7pCs4","67vHA8qZGCJKw1UNGUJZME4MwEWDRGWzp7MGvsut43A8"],"data":"3Bxs4h24hBtQy9rw","stackHeight":null}],"recentBlockhash":"RBh2inner11111111111111111111111111111111111"}},"meta":{"err":null,"fee":5000,"preBalances":[100000000,2039280,2039280,1,1],"postBalances":[99995000,2039280,2039280,1,1],"innerInstructions":[{"index":0,"instructions":[{"program":"spl-token","programId":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA","parsed":{"type":"transferChecked","info":{"source":"GE3oyzjSohCRBKq75a2ug4pDFx7GGKJXsz1GfQr836uP","destination":"Gdc1ZJMLFqN3f3xMDu8Sm6KJ7NNQzJ2GbmLBKUU7pCs4","mint":"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v","tokenAmount":{"amount":"1000000","decimals":6,"uiAmount":1.0,"uiAmountString":"1"},"authority":"67vHA8qZGCJKw1UNGUJZME4MwEWDRGWzp7MGvsut43A8"}},"stackHeight":2}]}],"logMessages":["Program X invoke [1]","Program Tokenkeg success"],"preTokenBalances":[{"accountIndex":1,"mint":"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v","owner":"67vHA8qZGCJKw1UNGUJZME4MwEWDRGWzp7MGvsut43A8","programId":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA","uiTokenAmount":{"amount":"5000000","decimals":6,"uiAmount":5.0,"uiAmountString":"5"}}],"postTokenBalances":[{"accountIndex":1,"mint":"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v","owner":"67vHA8qZGCJKw1UNGUJZME4MwEWDRGWzp7MGvsut43A8","programId":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA","uiTokenAmount":{"amount":"4000000","decimals":6,"uiAmount":4.0,"uiAmountString":"4"}},{"accountIndex":2,"mint":"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v","owner":"9jLkNAaW9E47LQMHvjohy2uAAyr1331bAxgJKFRU7wF6","programId":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA","uiTokenAmount":{"amount":"1000000","decimals":6,"uiAmount":1.0,"uiAmountString":"1"}}],"loadedAddresses":{"writable":[],"readonly":[]}},"version":0},"id":1}""";
+        """{"jsonrpc":"2.0","result":{"slot":250000001,"blockTime":1700000001,"transaction":{"signatures":["sig2bbbb"],"message":{"accountKeys":[{"pubkey":"67vHA8qZGCJKw1UNGUJZME4MwEWDRGWzp7MGvsut43A8","signer":true,"writable":true,"source":"transaction"},{"pubkey":"GE3oyzjSohCRBKq75a2ug4pDFx7GGKJXsz1GfQr836uP","signer":false,"writable":true,"source":"transaction"},{"pubkey":"Gdc1ZJMLFqN3f3xMDu8Sm6KJ7NNQzJ2GbmLBKUU7pCs4","signer":false,"writable":true,"source":"transaction"},{"pubkey":"7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67","signer":false,"writable":false,"source":"transaction"},{"pubkey":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA","signer":false,"writable":false,"source":"transaction"}],"instructions":[{"programId":"7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67","accounts":["GE3oyzjSohCRBKq75a2ug4pDFx7GGKJXsz1GfQr836uP","Gdc1ZJMLFqN3f3xMDu8Sm6KJ7NNQzJ2GbmLBKUU7pCs4","67vHA8qZGCJKw1UNGUJZME4MwEWDRGWzp7MGvsut43A8"],"data":"3Bxs4h24hBtQy9rw","stackHeight":null}],"recentBlockhash":"RBh2inner11111111111111111111111111111111111"}},"meta":{"err":null,"status":{"Ok":null},"fee":5000,"preBalances":[100000000,2039280,2039280,1,1],"postBalances":[99995000,2039280,2039280,1,1],"innerInstructions":[{"index":0,"instructions":[{"program":"spl-token","programId":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA","parsed":{"type":"transferChecked","info":{"source":"GE3oyzjSohCRBKq75a2ug4pDFx7GGKJXsz1GfQr836uP","destination":"Gdc1ZJMLFqN3f3xMDu8Sm6KJ7NNQzJ2GbmLBKUU7pCs4","mint":"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v","tokenAmount":{"amount":"1000000","decimals":6,"uiAmount":1.0,"uiAmountString":"1"},"authority":"67vHA8qZGCJKw1UNGUJZME4MwEWDRGWzp7MGvsut43A8"}},"stackHeight":2}]}],"logMessages":["Program X invoke [1]","Program Tokenkeg success"],"preTokenBalances":[{"accountIndex":1,"mint":"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v","owner":"67vHA8qZGCJKw1UNGUJZME4MwEWDRGWzp7MGvsut43A8","programId":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA","uiTokenAmount":{"amount":"5000000","decimals":6,"uiAmount":5.0,"uiAmountString":"5"}}],"postTokenBalances":[{"accountIndex":1,"mint":"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v","owner":"67vHA8qZGCJKw1UNGUJZME4MwEWDRGWzp7MGvsut43A8","programId":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA","uiTokenAmount":{"amount":"4000000","decimals":6,"uiAmount":4.0,"uiAmountString":"4"}},{"accountIndex":2,"mint":"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v","owner":"9jLkNAaW9E47LQMHvjohy2uAAyr1331bAxgJKFRU7wF6","programId":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA","uiTokenAmount":{"amount":"1000000","decimals":6,"uiAmount":1.0,"uiAmountString":"1"}}],"loadedAddresses":{"writable":[],"readonly":[]}},"version":0},"id":1}""";
 
     private const string Versioned =
-        """{"jsonrpc":"2.0","result":{"slot":250000002,"blockTime":1700000002,"transaction":{"signatures":["sig3cccc"],"message":{"accountKeys":[{"pubkey":"3x9az88Dkbxa6tkKByxqEn7jBTJCJCD4dVvou49L24ET","signer":true,"writable":true,"source":"transaction"},{"pubkey":"7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67","signer":false,"writable":false,"source":"transaction"},{"pubkey":"5CTyWy6H2GiE3mNp8aJjUVqu7eH2JRXbDqNhpVPkRBvo","signer":false,"writable":true,"source":"lookupTable"},{"pubkey":"Fydr76JtKYEyFnzTvoEJbKpfgfaWC29XSPWibA4SzEFu","signer":false,"writable":false,"source":"lookupTable"}],"instructions":[{"programId":"7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67","accounts":["5CTyWy6H2GiE3mNp8aJjUVqu7eH2JRXbDqNhpVPkRBvo","Fydr76JtKYEyFnzTvoEJbKpfgfaWC29XSPWibA4SzEFu"],"data":"ABCD","stackHeight":null}],"recentBlockhash":"RBh3v01111111111111111111111111111111111111"}},"meta":{"err":null,"fee":5000,"preBalances":[1,1,1,1],"postBalances":[1,1,1,1],"innerInstructions":[],"logMessages":[],"preTokenBalances":[],"postTokenBalances":[],"loadedAddresses":{"writable":["5CTyWy6H2GiE3mNp8aJjUVqu7eH2JRXbDqNhpVPkRBvo"],"readonly":["Fydr76JtKYEyFnzTvoEJbKpfgfaWC29XSPWibA4SzEFu"]}},"version":0},"id":1}""";
+        """{"jsonrpc":"2.0","result":{"slot":250000002,"blockTime":1700000002,"transaction":{"signatures":["sig3cccc"],"message":{"accountKeys":[{"pubkey":"3x9az88Dkbxa6tkKByxqEn7jBTJCJCD4dVvou49L24ET","signer":true,"writable":true,"source":"transaction"},{"pubkey":"7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67","signer":false,"writable":false,"source":"transaction"},{"pubkey":"5CTyWy6H2GiE3mNp8aJjUVqu7eH2JRXbDqNhpVPkRBvo","signer":false,"writable":true,"source":"lookupTable"},{"pubkey":"Fydr76JtKYEyFnzTvoEJbKpfgfaWC29XSPWibA4SzEFu","signer":false,"writable":false,"source":"lookupTable"}],"instructions":[{"programId":"7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67","accounts":["5CTyWy6H2GiE3mNp8aJjUVqu7eH2JRXbDqNhpVPkRBvo","Fydr76JtKYEyFnzTvoEJbKpfgfaWC29XSPWibA4SzEFu"],"data":"ABCD","stackHeight":null}],"recentBlockhash":"RBh3v01111111111111111111111111111111111111"}},"meta":{"err":null,"status":{"Ok":null},"fee":5000,"preBalances":[1,1,1,1],"postBalances":[1,1,1,1],"innerInstructions":[],"logMessages":[],"preTokenBalances":[],"postTokenBalances":[],"loadedAddresses":{"writable":["5CTyWy6H2GiE3mNp8aJjUVqu7eH2JRXbDqNhpVPkRBvo"],"readonly":["Fydr76JtKYEyFnzTvoEJbKpfgfaWC29XSPWibA4SzEFu"]}},"version":0},"id":1}""";
 
     private const string Memo =
-        """{"jsonrpc":"2.0","result":{"slot":250000003,"blockTime":1700000003,"transaction":{"signatures":["sigMemo"],"message":{"accountKeys":[{"pubkey":"3x9az88Dkbxa6tkKByxqEn7jBTJCJCD4dVvou49L24ET","signer":true,"writable":true,"source":"transaction"},{"pubkey":"MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr","signer":false,"writable":false,"source":"transaction"}],"instructions":[{"program":"spl-memo","programId":"MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr","parsed":"gm wagmi","stackHeight":null}],"recentBlockhash":"RBhMemo1111111111111111111111111111111111111"}},"meta":{"err":null,"fee":5000,"preBalances":[1,1],"postBalances":[1,1],"innerInstructions":[],"logMessages":[],"preTokenBalances":[],"postTokenBalances":[],"loadedAddresses":{"writable":[],"readonly":[]}},"version":"legacy"},"id":1}""";
+        """{"jsonrpc":"2.0","result":{"slot":250000003,"blockTime":1700000003,"transaction":{"signatures":["sigMemo"],"message":{"accountKeys":[{"pubkey":"3x9az88Dkbxa6tkKByxqEn7jBTJCJCD4dVvou49L24ET","signer":true,"writable":true,"source":"transaction"},{"pubkey":"MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr","signer":false,"writable":false,"source":"transaction"}],"instructions":[{"program":"spl-memo","programId":"MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr","parsed":"gm wagmi","stackHeight":null}],"recentBlockhash":"RBhMemo1111111111111111111111111111111111111"}},"meta":{"err":null,"status":{"Ok":null},"fee":5000,"preBalances":[1,1],"postBalances":[1,1],"innerInstructions":[],"logMessages":[],"preTokenBalances":[],"postTokenBalances":[],"loadedAddresses":{"writable":[],"readonly":[]}},"version":"legacy"},"id":1}""";
 
     private const string Failed =
-        """{"jsonrpc":"2.0","result":{"slot":250000004,"blockTime":1700000004,"transaction":{"signatures":["sigFail"],"message":{"accountKeys":[{"pubkey":"3x9az88Dkbxa6tkKByxqEn7jBTJCJCD4dVvou49L24ET","signer":true,"writable":true,"source":"transaction"},{"pubkey":"11111111111111111111111111111111","signer":false,"writable":false,"source":"transaction"}],"instructions":[{"program":"system","programId":"11111111111111111111111111111111","parsed":{"type":"transfer","info":{"lamports":1}},"stackHeight":null}],"recentBlockhash":"RBhFail1111111111111111111111111111111111111"}},"meta":{"err":{"InstructionError":[0,{"Custom":6001}]},"fee":5000,"preBalances":[1,1],"postBalances":[1,1],"innerInstructions":[],"logMessages":["Program failed"],"preTokenBalances":[],"postTokenBalances":[],"loadedAddresses":{"writable":[],"readonly":[]}},"version":"legacy"},"id":1}""";
+        """{"jsonrpc":"2.0","result":{"slot":250000004,"blockTime":1700000004,"transaction":{"signatures":["sigFail"],"message":{"accountKeys":[{"pubkey":"3x9az88Dkbxa6tkKByxqEn7jBTJCJCD4dVvou49L24ET","signer":true,"writable":true,"source":"transaction"},{"pubkey":"11111111111111111111111111111111","signer":false,"writable":false,"source":"transaction"}],"instructions":[{"program":"system","programId":"11111111111111111111111111111111","parsed":{"type":"transfer","info":{"lamports":1}},"stackHeight":null}],"recentBlockhash":"RBhFail1111111111111111111111111111111111111"}},"meta":{"err":{"InstructionError":[0,{"Custom":6001}]},"status":{"Err":{"InstructionError":[0,{"Custom":6001}]}},"fee":5000,"preBalances":[1,1],"postBalances":[1,1],"innerInstructions":[],"logMessages":["Program failed"],"preTokenBalances":[],"postTokenBalances":[],"loadedAddresses":{"writable":[],"readonly":[]}},"version":"legacy"},"id":1}""";
 
     private const string InnerMemo =
-        """{"jsonrpc":"2.0","result":{"slot":250000005,"blockTime":1700000005,"transaction":{"signatures":["sigInnerMemo"],"message":{"accountKeys":[{"pubkey":"67vHA8qZGCJKw1UNGUJZME4MwEWDRGWzp7MGvsut43A8","signer":true,"writable":true,"source":"transaction"},{"pubkey":"7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67","signer":false,"writable":false,"source":"transaction"}],"instructions":[{"programId":"7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67","accounts":["67vHA8qZGCJKw1UNGUJZME4MwEWDRGWzp7MGvsut43A8"],"data":"3Bxs","stackHeight":null}],"recentBlockhash":"RBhInner111111111111111111111111111111111111"}},"meta":{"err":null,"fee":5000,"preBalances":[1,1],"postBalances":[1,1],"innerInstructions":[{"index":0,"instructions":[{"program":"spl-memo","programId":"MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr","parsed":"cpi memo","stackHeight":2}]}],"logMessages":[],"preTokenBalances":[],"postTokenBalances":[],"loadedAddresses":{"writable":[],"readonly":[]}},"version":0},"id":1}""";
+        """{"jsonrpc":"2.0","result":{"slot":250000005,"blockTime":1700000005,"transaction":{"signatures":["sigInnerMemo"],"message":{"accountKeys":[{"pubkey":"67vHA8qZGCJKw1UNGUJZME4MwEWDRGWzp7MGvsut43A8","signer":true,"writable":true,"source":"transaction"},{"pubkey":"7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67","signer":false,"writable":false,"source":"transaction"}],"instructions":[{"programId":"7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67","accounts":["67vHA8qZGCJKw1UNGUJZME4MwEWDRGWzp7MGvsut43A8"],"data":"3Bxs","stackHeight":null}],"recentBlockhash":"RBhInner111111111111111111111111111111111111"}},"meta":{"err":null,"status":{"Ok":null},"fee":5000,"preBalances":[1,1],"postBalances":[1,1],"innerInstructions":[{"index":0,"instructions":[{"program":"spl-memo","programId":"MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr","parsed":"cpi memo","stackHeight":2}]}],"logMessages":[],"preTokenBalances":[],"postTokenBalances":[],"loadedAddresses":{"writable":[],"readonly":[]}},"version":0},"id":1}""";
 
     private const string NotFound = """{"jsonrpc":"2.0","result":null,"id":1}""";
 
     private const string Malformed =
-        """{"jsonrpc":"2.0","result":{"transaction":{"signatures":["sigX"],"message":{"accountKeys":[{"pubkey":"3x9az88Dkbxa6tkKByxqEn7jBTJCJCD4dVvou49L24ET","signer":true,"writable":true}],"instructions":[],"recentBlockhash":"RBh4mal111111111111111111111111111111111111"}}},"id":1}""";
+        """{"jsonrpc":"2.0","result":{"slot":0,"blockTime":null,"transaction":{"signatures":["sigX"],"message":{"accountKeys":[{"pubkey":"3x9az88Dkbxa6tkKByxqEn7jBTJCJCD4dVvou49L24ET","signer":true,"writable":true,"source":null}],"instructions":[],"recentBlockhash":"RBh4mal111111111111111111111111111111111111"}},"meta":null},"id":1}""";
 
     private const string BlockJson =
-        """{"jsonrpc":"2.0","result":{"blockhash":"BHash5block11111111111111111111111111111111","previousBlockhash":"BHash6parent1111111111111111111111111111111","parentSlot":249999999,"blockHeight":123456,"blockTime":1700000005,"transactions":[{"transaction":{"signatures":["sigA"],"message":{"accountKeys":[{"pubkey":"3x9az88Dkbxa6tkKByxqEn7jBTJCJCD4dVvou49L24ET","signer":true,"writable":true,"source":"transaction"},{"pubkey":"9jLkNAaW9E47LQMHvjohy2uAAyr1331bAxgJKFRU7wF6","signer":false,"writable":true,"source":"transaction"},{"pubkey":"11111111111111111111111111111111","signer":false,"writable":false,"source":"transaction"}],"instructions":[{"program":"system","programId":"11111111111111111111111111111111","parsed":{"type":"transfer","info":{"lamports":42}},"stackHeight":null}],"recentBlockhash":"RBh7blktx111111111111111111111111111111111"}},"meta":{"err":null,"fee":5000,"preBalances":[1,1,1],"postBalances":[1,1,1],"innerInstructions":[],"logMessages":[],"preTokenBalances":[],"postTokenBalances":[],"loadedAddresses":{"writable":[],"readonly":[]}},"version":"legacy"},{"transaction":{"signatures":["sigB"],"message":{"accountKeys":[{"pubkey":"67vHA8qZGCJKw1UNGUJZME4MwEWDRGWzp7MGvsut43A8","signer":true,"writable":true,"source":"transaction"}],"instructions":[],"recentBlockhash":"RBh8blktx211111111111111111111111111111111"}},"meta":null,"version":0}]},"id":1}""";
+        """{"jsonrpc":"2.0","result":{"blockhash":"BHash5block11111111111111111111111111111111","previousBlockhash":"BHash6parent1111111111111111111111111111111","parentSlot":249999999,"blockHeight":123456,"blockTime":1700000005,"numRewardPartitions":4,"transactions":[{"transaction":{"signatures":["sigA"],"message":{"accountKeys":[{"pubkey":"3x9az88Dkbxa6tkKByxqEn7jBTJCJCD4dVvou49L24ET","signer":true,"writable":true,"source":"transaction"},{"pubkey":"9jLkNAaW9E47LQMHvjohy2uAAyr1331bAxgJKFRU7wF6","signer":false,"writable":true,"source":"transaction"},{"pubkey":"11111111111111111111111111111111","signer":false,"writable":false,"source":"transaction"}],"instructions":[{"program":"system","programId":"11111111111111111111111111111111","parsed":{"type":"transfer","info":{"lamports":42}},"stackHeight":null}],"recentBlockhash":"RBh7blktx111111111111111111111111111111111"}},"meta":{"err":null,"status":{"Ok":null},"fee":5000,"preBalances":[1,1,1],"postBalances":[1,1,1],"innerInstructions":[],"logMessages":[],"preTokenBalances":[],"postTokenBalances":[],"loadedAddresses":{"writable":[],"readonly":[]}},"version":"legacy"},{"transaction":{"signatures":["sigB"],"message":{"accountKeys":[{"pubkey":"67vHA8qZGCJKw1UNGUJZME4MwEWDRGWzp7MGvsut43A8","signer":true,"writable":true,"source":"transaction"}],"instructions":[],"recentBlockhash":"RBh8blktx211111111111111111111111111111111"}},"meta":null,"version":0}]},"id":1}""";
 }

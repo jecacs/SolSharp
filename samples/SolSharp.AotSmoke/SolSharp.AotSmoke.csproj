@@ -8,11 +8,15 @@
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(UsePackedSolSharp)' != 'true'">
     <ProjectReference Include="../../src/SolSharp.Core/SolSharp.Core.csproj" />
     <ProjectReference Include="../../src/SolSharp.Wallet/SolSharp.Wallet.csproj" />
     <ProjectReference Include="../../src/SolSharp.Rpc/SolSharp.Rpc.csproj" />
     <ProjectReference Include="../../src/SolSharp.Programs/SolSharp.Programs.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UsePackedSolSharp)' == 'true'">
+    <PackageReference Include="SolSharp" Version="$(SolSharpPackageVersion)" />
   </ItemGroup>
 
 </Project>

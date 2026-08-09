@@ -52,16 +52,10 @@ public static class RpcRequestsTests
     public sealed class ParameterlessMethods
     {
         [Test]
-        public void GetHealth_HasEmptyParams()
-        {
-            Serialize(RpcRequests.GetHealth()).Should().Contain("\"params\":[]");
-        }
+        public void GetHealth_HasEmptyParams() => Serialize(RpcRequests.GetHealth()).Should().Contain("\"params\":[]");
 
         [Test]
-        public void GetVersion_SetsMethod()
-        {
-            Serialize(RpcRequests.GetVersion()).Should().Contain("\"method\":\"getVersion\"");
-        }
+        public void GetVersion_SetsMethod() => Serialize(RpcRequests.GetVersion()).Should().Contain("\"method\":\"getVersion\"");
     }
 
     [TestFixture]

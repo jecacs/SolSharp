@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Globalization;
 using System.Security.Cryptography;
 
 namespace SolSharp.Wallet;
@@ -70,7 +71,8 @@ public static class Slip10
                 throw new FormatException(
                     $"Ed25519 (SLIP-0010) supports hardened derivation only; write \"{part}'\" instead of \"{part}\".");
 
-            if (!uint.TryParse(part[..^1], out var index) || index >= HardenedOffset)
+            if (!uint.TryParse(part.AsSpan(0, part.Length - 1), NumberStyles.None, CultureInfo.InvariantCulture, out var index)
+                || index >= HardenedOffset)
                 throw new FormatException($"Invalid derivation index '{part}'.");
 
             indexes[n - 1] = index | HardenedOffset;

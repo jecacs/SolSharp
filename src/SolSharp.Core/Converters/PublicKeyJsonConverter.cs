@@ -15,6 +15,9 @@ public sealed class PublicKeyJsonConverter : JsonConverter<PublicKey>
     /// <inheritdoc/>
     public override PublicKey Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
+        if (reader.TokenType != JsonTokenType.String)
+            throw new JsonException($"Expected a public-key string, got {reader.TokenType}.");
+
         var text = reader.GetString();
         if (PublicKey.TryParse(text, out var key))
             return key;

@@ -14,10 +14,7 @@ public static class SolanaJsonSerializerTests
         private const string SystemProgram = "11111111111111111111111111111111";
 
         [Test]
-        public void IsFrozen()
-        {
-            SolanaJsonSerializer.Options.IsReadOnly.Should().BeTrue();
-        }
+        public void IsFrozen() => SolanaJsonSerializer.Options.IsReadOnly.Should().BeTrue();
 
         [Test]
         public void SerializesTheCoreWirePrimitives()
@@ -25,6 +22,8 @@ public static class SolanaJsonSerializerTests
             // Act & Assert
             JsonSerializer.Serialize(Commitment.Confirmed, SolanaJsonSerializer.Options)
                 .Should().Be("\"confirmed\"");
+            JsonSerializer.Serialize(Hash.Parse(SystemProgram), SolanaJsonSerializer.Options)
+                .Should().Be($"\"{SystemProgram}\"");
             JsonSerializer.Serialize(PublicKey.Parse(SystemProgram), SolanaJsonSerializer.Options)
                 .Should().Be($"\"{SystemProgram}\"");
         }
@@ -35,8 +34,33 @@ public static class SolanaJsonSerializerTests
             // Act & Assert
             JsonSerializer.Deserialize<Commitment>("\"finalized\"", SolanaJsonSerializer.Options)
                 .Should().Be(Commitment.Finalized);
+            JsonSerializer.Deserialize<Hash>($"\"{SystemProgram}\"", SolanaJsonSerializer.Options)
+                .Should().Be(Hash.Parse(SystemProgram));
             JsonSerializer.Deserialize<PublicKey>($"\"{SystemProgram}\"", SolanaJsonSerializer.Options)
                 .Should().Be(PublicKey.Parse(SystemProgram));
+        }
+
+        [Test]
+        public void SerializesNullablePublicKey()
+        {
+            // Arrange
+            PublicKey? key = PublicKey.Parse(SystemProgram);
+
+            // Act & Assert
+            JsonSerializer.Serialize(key, SolanaJsonSerializer.Options)
+                .Should().Be($"\"{SystemProgram}\"");
+            JsonSerializer.Serialize<PublicKey?>(null, SolanaJsonSerializer.Options)
+                .Should().Be("null");
+        }
+
+        [Test]
+        public void DeserializesNullablePublicKey()
+        {
+            // Act & Assert
+            JsonSerializer.Deserialize<PublicKey?>($"\"{SystemProgram}\"", SolanaJsonSerializer.Options)
+                .Should().Be(PublicKey.Parse(SystemProgram));
+            JsonSerializer.Deserialize<PublicKey?>("null", SolanaJsonSerializer.Options)
+                .Should().BeNull();
         }
 
         [Test]

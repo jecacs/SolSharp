@@ -1,16 +1,21 @@
 # SolSharp
 
-A lean, modern .NET SDK for Solana: RPC + WebSocket streaming, wire-level transaction
-signing/building. Optimised for low latency and a small dependency footprint — it is a
-deliberate, focused alternative to the heavier general-purpose SDKs, not a clone of them.
+A modern, contract-driven .NET SDK for Solana: keys and signing, program instructions,
+transaction wire formats, RPC, and WebSocket streaming. It is optimized for low latency,
+bounded hostile-input handling, focused dependencies with a dependency-light Core, and Native AOT.
 
-Status: 1.3.0, stable release line (semver compatibility promise now applies to the public API). All four projects are in place: Core primitives (incl. a Borsh reader/writer), the Rpc client (reads + typed account state via `Mint`/`TokenAccount`/`NonceAccount` + Token-2022 extension decoding (`TokenExtensionSet`), `jsonParsed` transaction/block/account reads, the full current JSON-RPC HTTP read surface (deprecated getStakeActivation excluded), send/simulate with coherent `confirmed` preflight defaults, single-pass JSON-RPC envelope validation, JSON-RPC batching via `RpcBatch`, typed transaction errors, full WebSocket subscription surface (incl. unstable voteSubscribe/slotsUpdatesSubscribe) with auto-reconnect and a bounded transport (message-size cap, per-subscription buffers, opt-in receive timeout), DI + resilience), the Wallet (Ed25519 keys, signing, verification, key parsing, BIP-39/SLIP-0010 mnemonic derivation; span-based Ed25519 hot paths), and Programs (System/Token/ATA/Compute Budget/Memo + the complete Address Lookup Table program incl. freeze, the full Token-2022 `AuthorityType` set, PDA/ATA, legacy + v0 transaction building/signing/parsing with Solana's sanitize checks on deserialize, durable-nonce builder support, and instruction decompilation). As of 0.7.0 all JSON is source-generated (no reflection) and every assembly is Native AOT compatible (`IsAotCompatible`), with an AOT smoke sample published and run in CI. A separate live integration suite exercises the read and streaming paths against a real cluster.
+Status: 2.0.0. SolSharp is independently implemented
+against immutable Anza Solana SDK, Agave, and SPL source revisions; exact pins, client-side
+coverage, verification criteria, and deliberate node/runtime exclusions live in
+`docs/RUST_PARITY.md`. All JSON used by the library is source-generated and all four functional
+assemblies are Native AOT compatible; the package also contains a minimal facade. The live integration suite exercises read, streaming,
+and devnet write paths against real nodes.
 
 ## Commands
 
 Run from the repo root (where `SolSharp.sln` lives):
 
-- `dotnet build` — code style is enforced on build (`EnforceCodeStyleInBuild`), so style violations surface as warnings.
+- `dotnet build` — Roslyn and StyleCop code style is enforced on build (`EnforceCodeStyleInBuild`), so actionable style violations surface as warnings. Repository-specific StyleCop suppressions and the shared Rider/Roslyn modifier order live in `.editorconfig`.
 - `dotnet test` — NUnit suite.
 - `dotnet format` — auto-applies the style. Note: it cannot auto-fix naming (IDE1006); fix those by hand.
 
@@ -21,16 +26,21 @@ Run from the repo root (where `SolSharp.sln` lives):
 - **Comments earn their place.** Explain *why* — non-obvious rationale, wire-format quirks, gotchas — never restate what the code already says. No filler, decorative, or obvious comments. Public API carries full XML docs (summary, every `<param>`, `<returns>`, and thrown `<exception>`); inline noise does not.
 - **Default to `internal`; `public` is a deliberate contract.** This is a library, so the public surface is an API others depend on — keep it minimal. A type is `public` only when a consumer constructs, receives, or catches it (i.e. it appears in a public signature). Everything else — request/response plumbing, converters, sinks, internal helpers — is `internal`, and tests reach it through `InternalsVisibleTo`.
 - **Attributes on their own line** — never inline with the member, e.g. `[JsonPropertyName("id")]` goes above the property, not beside it. `dotnet format` does not enforce this (only Rider does), so write it that way by hand.
-- **Target framework is `net8.0`.** Do not use net9-only APIs (e.g. `JsonStringEnumMemberName`, `InlineArray`-based span tricks that need newer ref-safety).
-- **Modern C# only.** File-scoped namespaces, `var`, collection expressions `[]`, primary constructors, switch expressions, pattern matching, `is null` / `is not null`. The full rule set lives in `.editorconfig` + `Directory.Build.props` — follow the analyzers, don't fight them. Do not restate style rules here.
-- **A feature is not done until it is documented.** Every user-facing addition or change lands in the same commit with all four documentation layers: (1) XML docs on the public API (enforced by CS1591 anyway); (2) `docs/USAGE.md` — a runnable example in the matching section (or a new section + `Contents` entry), with every snippet checked against the real signatures and model properties, not written from memory; (3) `README.md` — the wire-method list, feature bullets, and Layout if the shape of the repo changed (`README.nuget.md` only if the pitch/quick-start changes — it carries no method lists by design); (4) `CHANGELOG.md` under the release being prepared. Release-only extras: bump `Version` in `Directory.Build.props`, refresh `PackageReleaseNotes` in `src/SolSharp/SolSharp.csproj` (nuget.org shows only the current version's notes), and update the `Status:` line here.
+- **Target framework is `net8.0`.** Do not use net9-only APIs (e.g. `JsonStringEnumMemberName`,
+  `InlineArray`-based span tricks that need newer ref-safety). `global.json` starts at SDK 8.0.100
+  with `rollForward: major`, so a development machine with only a newer SDK can still build the
+  repository. Hosted runners also contain newer SDKs; after installing 8.x, every CI/release job asserts
+  the resolver's actual `dotnet --version` is 8.x. Do not remove that check or CI could silently stop
+  proving the minimum if SDK selection or runner contents change.
+- **Modern C# 12 only.** File-scoped namespaces, `var`, collection expressions `[]`, primary constructors, switch expressions, pattern matching, `is null` / `is not null`. The full rule set lives in `.editorconfig` + `Directory.Build.props` — follow the analyzers, don't fight them. Do not restate style rules here.
+- **A feature is not done until it is documented.** Every user-facing addition or change lands in the same commit with all four documentation layers: (1) XML docs on the public API (CS1591 enforces presence on production members; full `<param>`, `<returns>`, and `<exception>` content remains a review policy); (2) `docs/USAGE.md` — a runnable example in the matching section (or a new section + `Contents` entry), with every snippet checked against the real signatures and model properties, not written from memory; (3) `README.md` — the wire-method list, feature bullets, and Layout if the shape of the repo changed (`README.nuget.md` only if the pitch/quick-start changes — it carries no method lists by design); (4) `CHANGELOG.md` under the release being prepared. Release-only extras: bump `Version` in `Directory.Build.props`, refresh `PackageReleaseNotes` in `src/SolSharp/SolSharp.csproj` (nuget.org shows only the current version's notes), and update the `Status:` line here.
 
 ## Architecture
 
 Layering (dependencies point downward; no cycles):
 
 - **Core** — byte-level types and codecs. No I/O, no crypto engine. Only dependency: `SimpleBase`.
-- **Wallet** — the Ed25519 engine: sign, keygen, verify. Depends on Core.
+- **Wallet** — Ed25519 and BLS12-381 key/signature engines plus offline signing contracts. Depends on Core.
 - **Rpc** — HTTP JSON-RPC + WebSocket streaming client. Depends on Core.
 - **Programs** — instruction builders, PDA/ATA derivation, message compilation, transaction building. Depends on Core and Wallet (for `ISigner` and the on-curve check).
 
@@ -38,20 +48,22 @@ Rules:
 
 - `Core` references no other SolSharp project and pulls no network/crypto package. Litmus for "is it Core?": a pure type/constant/codec that everyone needs, with no I/O and no knowledge of a specific program/DEX.
 - Folder = namespace.
-- **Ed25519 / signing belongs in `Wallet`, never in `Core`.** Signature verification is exposed as an extension on `PublicKey` from `Wallet` (Core keeps the type, Wallet owns the crypto).
+- **Cryptographic key/signature engines belong in `Wallet`, never in `Core`.** Ed25519 verification is exposed as an extension on `PublicKey` from Wallet; the BLS value types and native backend also stay there.
 
 ## Layout
 
 ```
 SolSharp/
-  src/SolSharp.Core/        Encoding/  Primitives/  Converters/  Constants/
+  src/SolSharp.Core/        Encoding/  Primitives/  Converters/  Constants/  SysvarStates/
   src/SolSharp.Rpc/         Protocol/  Models/  Streaming/  + client, options, DI
-  src/SolSharp.Wallet/      Keypair (+ parsing), ISigner, PublicKeyExtensions, Ed25519Curve
-  src/SolSharp.Programs/    AccountMeta/Instruction, Message + MessageV0, Transaction, TransactionBuilder, program builders (System/Token/ATA/Compute Budget/Memo/ALT), PDA/ATA
+  src/SolSharp.Wallet/      Ed25519/BLS keys, signers, verification, off-chain messages
+  src/SolSharp.Programs/    native/SPL clients and states, legacy/v0/V1 messages and transactions, PDA/ATA
   src/SolSharp/             packaging facade: bundles the four assemblies into the single SolSharp NuGet package (no source of its own)
   tests/                    SolSharp.{Core,Rpc,Wallet,Programs}.Tests (nested fixtures, mirroring src) + SolSharp.IntegrationTests (live cluster)
   benchmarks/               SolSharp.Benchmarks: a standalone BenchmarkDotNet harness, outside the solution (run with dotnet run -c Release --project benchmarks/SolSharp.Benchmarks)
-  samples/                  SolSharp.AotSmoke: the Native AOT smoke sample, part of the solution (so regular builds compile it); CI additionally publishes it with PublishAot and runs the binary
+  samples/                  SolSharp.AotSmoke: the Native AOT smoke sample, part of the solution (so regular builds compile it); CI packs SolSharp, consumes that nupkg, publishes with PublishAot, and runs the binary
+  docs/                     USAGE.md task guide and RUST_PARITY.md pinned compatibility matrix
+  THIRD_PARTY_NOTICES.md    compatibility-source pins and native dependency attribution
 ```
 
 ## Testing
@@ -70,18 +82,22 @@ SolSharp/
 
 - Anything that touches transaction bytes or signing must be tested against known-good vectors before it is trusted.
 - Never commit secrets or private keys. `.gitignore` covers `*.key`, `.env`, `secrets.json`, `appsettings.*.local.json`.
-- Never hand a raw private key to a third-party library. Build with theirs if needed, but sign with our own signer; simulate and assert instructions/amounts/destination before sending.
+- Never expose or export a raw private key to an RPC provider, hosted service, or third-party transaction builder. Keep signing behind `ISigner`; cryptographic backends are vetted implementation dependencies, not key-custody integrations. Simulate and assert instructions/amounts/destination before sending.
 
 ## Decisions
 
 - `PublicKey` is a `readonly struct` backed by four `ulong` words (32 bytes inline, value equality, no per-key heap allocation). Base58 is cached only when the key is built from a string; from-bytes stays allocation-free. No zero-copy `AsSpan()` by design — use `CopyTo` / `ToBytes`.
 - `Commitment` serializes via a custom `JsonConverter` applied as a `[JsonConverter]` attribute (net8 has no `JsonStringEnumMemberName`). The attribute makes it self-serializing under default options, not just `SolanaJsonSerializer.Options`.
 - Wire enums/types follow that same pattern: self-serializing via attribute so they hold their wire form regardless of which `JsonSerializerOptions` are in play.
-- **JSON is source-generated; reflection serialization is banned in src.** All RPC/WS paths go through the internal `RpcJson.Options` (resolver: `JsonTypeInfoResolver.Combine(SolanaJsonContext, CoreJsonContext)`; `SolanaJsonContext` in `Rpc/Protocol/` holds ~60 closed root registrations); Core's public `SolanaJsonSerializer.Options` covers only the Core primitives via the public `CoreJsonContext`, with no reflection fallback. GOTCHA: a source-gen context can only materialize a converter-attributed type if it can construct the converter - an inaccessible converter makes the generator drop the type (SYSLIB1220 + SYSLIB1030; warnings locally, errors under CI's `-warnaserror`) and every use fails at runtime with `NotSupportedException`. That is why `CommitmentJsonConverter`/`PublicKeyJsonConverter` are **public**: keep converters of converter-attributed wire types public, and keep `CoreJsonContext` in the chain. Consequences: request `params` entries are object-typed and dispatch by **exact runtime type**, so every boxed shape (configs in `Protocol/RpcParams.cs`, primitives, arrays — collections are pinned with `ToArray()`) must be registered in the context; anonymous types cannot be used in requests; a new `SendAsync<T>`/subscription/batch root type must be added to `SolanaJsonContext` (unregistered types throw `NotSupportedException`, which the offline client tests catch); types behind hand-written converters are invisible to the generator's graph walk, so what a converter reads via `options.GetTypeInfo<T>()` needs explicit registration. All four src projects set `IsAotCompatible` — the trim/AOT analyzers plus `-warnaserror` reject `RequiresUnreferencedCode`/`RequiresDynamicCode` APIs (e.g. `JsonSerializer.Serialize(..., options)` overloads, `ValidateDataAnnotations`).
+- **JSON is source-generated; reflection serialization is banned in src.** All RPC/WS paths go through the internal `RpcJson.Options` (resolver: `JsonTypeInfoResolver.Combine(SolanaJsonContext, CoreJsonContext)`; `SolanaJsonContext` in `Rpc/Protocol/` holds the closed root registrations); Core's public `SolanaJsonSerializer.Options` covers only the Core primitives via the public `CoreJsonContext`, with no reflection fallback. GOTCHA: a source-gen context can only materialize a converter-attributed type if it can construct the converter - an inaccessible converter makes the generator drop the type (SYSLIB1220 + SYSLIB1030; warnings locally, errors under CI's `-warnaserror`) and every use fails at runtime with `NotSupportedException`. That is why converter-attributed Core wire converters such as `CommitmentJsonConverter`, `PublicKeyJsonConverter`, and `HashJsonConverter` are **public**: keep these converters public, and keep `CoreJsonContext` in the chain. Consequences: request `params` entries are object-typed and dispatch by **exact runtime type**, so every boxed shape (configs in `Protocol/RpcParams.cs`, primitives, arrays — collections are pinned with `ToArray()`) must be registered in the context; anonymous types cannot be used in requests; a new `SendAsync<T>`/subscription/batch root type must be added to `SolanaJsonContext` (unregistered types throw `NotSupportedException`, which the offline client tests catch); types behind hand-written converters are invisible to the generator's graph walk, so what a converter reads via `options.GetTypeInfo<T>()` needs explicit registration. Every production project sets `IsAotCompatible` — the trim/AOT analyzers plus `-warnaserror` reject `RequiresUnreferencedCode`/`RequiresDynamicCode` APIs (e.g. `JsonSerializer.Serialize(..., options)` overloads, `ValidateDataAnnotations`). CI consumes the generated nupkg for its native smoke test, so the packaging layer is covered too.
 - **Ed25519 lives in `Wallet` on `BouncyCastle.Cryptography`** — not the .NET BCL (net8/10 ship no usable cross-platform `Ed25519`: Windows unsupported, Apple's is non-conformant) and not a hand-rolled curve. Pure-managed/portable was chosen over libsodium/NSec's native dependency, since signing throughput is not the bottleneck; `ISigner` keeps the backend swappable.
+- **BLS12-381 lives in `Wallet` on `Nethermind.Crypto.Bls` 1.0.5 / Supranational `blst`** — the pinned Solana min-pk POP ciphersuite is implemented over a vetted native backend, never hand-rolled. Parse and verify paths require canonical subgroup points and reject infinity; secrets are canonical little-endian scalars and are zeroed. Supported packaged RIDs are Linux x64/arm64, macOS x64/arm64, and Windows x64; keep the facade dependency and `THIRD_PARTY_NOTICES.md` in sync.
 - `Keypair` is one word to match the Solana ecosystem (`solana-keygen`, web3.js `Keypair`), not .NET's `KeyPair`. It stores only the 32-byte seed, derives the public key once, and zeroes the seed on `Dispose`.
-- Transactions support both the **legacy** and **v0 (versioned)** message formats behind a shared `ITransactionMessage`, so `Transaction` signs and serializes either. Account ordering matches Solana's compilation exactly (fee payer first, then accounts sorted by public-key bytes within the writable-signer / readonly-signer / writable / readonly classes). v0 additionally drains non-signer, non-program accounts found in a supplied lookup table into a table lookup and prefixes the `0x80` version byte. Both are validated byte-for-byte against `solana-sdk` (solders).
+- Solana version-0 signed off-chain messages live in `Wallet`: they use the pinned SDK's exact
+  `0xffsolana offchain` domain, canonical bounded ASCII/UTF-8 formats, SHA-256 hashing, and the same strict
+  Ed25519 signer/verification path. They are not transactions and examples must not imply on-chain authority.
+- Transactions support **legacy**, **v0**, and feature-gated **SIMD-0385 V1** messages behind `ITransactionMessage`. Account ordering matches the pinned Solana SDK (fee payer first, then public-key byte order within writable-signer / readonly-signer / writable / readonly classes). v0 drains eligible accounts into lookup tables and prefixes `0x80`; V1 prefixes `0x81`, keeps all addresses inline, carries an inline execution config, and writes the message before its fixed number of signatures. V1's omitted compute/data limits mean zero and cluster activation is external, so examples must set deliberate limits and never imply universal availability. All formats use exact pinned Rust vectors.
 - `PublicKey.IsOnCurve` is direct field arithmetic, not BouncyCastle: BC's public-key validation rejects non-canonical encodings (y ≥ p) that Solana's `curve25519-dalek` accepts after reducing mod p. It is fuzzed against solders so PDA/ATA derivation matches the network.
 - **SPL Token account state uses the fixed-size `Pack` layout, not Borsh.** `Mint` (82 bytes) and `TokenAccount` (165 bytes) read a `COption` as a 4-byte little-endian tag followed by an *always-present* value (the slot is reserved even when `None`) — unlike Borsh's 1-byte tag with the value present only when `Some`. So `BorshReader` / `BorshWriter` are for Anchor/Borsh data; the SPL decoders are hand-written against the Pack layout and KAT'd against `solders.token.state`. (The Token *instruction* data is different again: a minimal `COption` of a 1-byte tag plus the value only when `Some`.)
 - Money-critical encodings (message/transaction serialization, instruction data, PDA/ATA, on-curve) are checked byte-for-byte against `solana-sdk` (solders) and `solana-py`, not just round-trips.
-- **Ships as one NuGet package.** The source stays four layered projects (so the compiler keeps Core crypto/IO-free, Wallet owns Ed25519, etc.), but only the `src/SolSharp` facade is packable: it references the four with `PrivateAssets="all"` and an MSBuild target (`BundleProjectReferences`) folds their DLLs + XML docs into a single `SolSharp` package, re-declaring the real third-party deps (kept in sync by hand). PDBs are embedded (`DebugType=embedded`) so symbols ride inside the bundled DLLs rather than a near-empty `.snupkg`. Default-`false` `IsPackable` (overridden only for `MSBuildProjectName == SolSharp`) keeps every other project from emitting its own package.
+- **Ships as one NuGet package.** The source stays four layered projects (so the compiler keeps Core crypto/IO-free, Wallet owns Ed25519, etc.), but only the `src/SolSharp` facade is packable: it references the four with `PrivateAssets="all"` and an MSBuild target (`BundleProjectReferences`) folds their DLLs + XML docs into a single `SolSharp` package, re-declaring the real third-party deps (kept in sync by hand). PDBs are embedded (`DebugType=embedded`) so symbols ride inside the bundled DLLs rather than a near-empty `.snupkg`. Default-`false` `IsPackable` (overridden only for `MSBuildProjectName == SolSharp`) keeps every other project from emitting its own package. Package validation compares the packed public API with the previous stable `PackageValidationBaselineVersion`; update that baseline deliberately when preparing each release.

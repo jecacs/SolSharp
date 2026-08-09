@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using SolSharp.Core.Encoding;
 using SolSharp.Core.Primitives;
 
@@ -6,7 +7,7 @@ namespace SolSharp.Programs;
 /// <summary>
 /// A compiled v0 (versioned) transaction message: like a legacy <see cref="Message"/>, but able to load
 /// extra accounts from on-chain address lookup tables so a transaction can reference far more accounts.
-/// Build one with <see cref="Compile"/>, then <see cref="Serialize()"/> for the signed-and-sent bytes, which
+/// Build one with <c>Compile</c>, then <see cref="Serialize()"/> for the signed-and-sent bytes, which
 /// begin with the <see cref="VersionPrefix"/> byte.
 /// </summary>
 public sealed class MessageV0 : ITransactionMessage
@@ -64,12 +65,36 @@ public sealed class MessageV0 : ITransactionMessage
     /// non-signers - and indexes each instruction against the static keys followed by the loaded accounts.
     /// </summary>
     /// <param name="feePayer">The account that pays the fee; always the first static account and a writable signer.</param>
+    /// <param name="recentBlockhash">A recent blockhash, e.g. from <c>getLatestBlockhash</c>.</param>
+    /// <param name="instructions">The instructions to include, in execution order.</param>
+    /// <param name="addressLookupTables">The lookup tables to source extra accounts from; pass an empty list for none.</param>
+    /// <returns>The compiled v0 message.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="instructions"/> or <paramref name="addressLookupTables"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">
+    /// The instructions reference more than <see cref="MaxAccounts"/> distinct accounts, require more than
+    /// 255 signatures, or a supplied lookup table holds more than <see cref="MaxAccounts"/> addresses.
+    /// </exception>
+    public static MessageV0 Compile(
+        PublicKey feePayer,
+        Hash recentBlockhash,
+        IReadOnlyList<Instruction> instructions,
+        IReadOnlyList<AddressLookupTableAccount> addressLookupTables)
+        => Compile(feePayer, recentBlockhash.ToString(), instructions, addressLookupTables);
+
+    /// <summary>
+    /// Compiles instructions into a v0 message using a base58 blockhash string and optional address
+    /// lookup tables.
+    /// </summary>
+    /// <param name="feePayer">The account that pays the fee; always the first static account and a writable signer.</param>
     /// <param name="recentBlockhash">A recent blockhash (base58), e.g. from <c>getLatestBlockhash</c>.</param>
     /// <param name="instructions">The instructions to include, in execution order.</param>
     /// <param name="addressLookupTables">The lookup tables to source extra accounts from; pass an empty list for none.</param>
     /// <returns>The compiled v0 message.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="recentBlockhash"/>, <paramref name="instructions"/>, or <paramref name="addressLookupTables"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentException">The instructions reference more than <see cref="MaxAccounts"/> distinct accounts, or a supplied lookup table holds more than <see cref="MaxAccounts"/> addresses.</exception>
+    /// <exception cref="ArgumentException">
+    /// The instructions reference more than <see cref="MaxAccounts"/> distinct accounts, require more than
+    /// 255 signatures, or a supplied lookup table holds more than <see cref="MaxAccounts"/> addresses.
+    /// </exception>
     public static MessageV0 Compile(
         PublicKey feePayer,
         string recentBlockhash,
@@ -94,6 +119,15 @@ public sealed class MessageV0 : ITransactionMessage
             Merge(instruction.ProgramId, signer: false, writable: false, invoked: true);
             foreach (var account in instruction.Accounts)
                 Merge(account.PublicKey, account.IsSigner, account.IsWritable, invoked: false);
+        }
+
+        // The runtime resolves a durable nonce before loading address tables, so the nonce account
+        // named by a first System instruction whose data starts with the AdvanceNonceAccount
+        // discriminator must remain in the static keys. Solana permits trailing instruction data here.
+        if (TryGetNonceAccount(instructions, out var nonceAccount))
+        {
+            var current = metas[nonceAccount];
+            metas[nonceAccount] = current with { IsNonce = true };
         }
 
         if (metas.Count > MaxAccounts)
@@ -129,7 +163,7 @@ public sealed class MessageV0 : ITransactionMessage
                     continue;
 
                 var meta = metas[key];
-                if (meta.IsSigner || meta.IsInvoked || !meta.IsWritable)
+                if (meta.IsSigner || meta.IsInvoked || meta.IsNonce || !meta.IsWritable)
                     continue;
 
                 var index = IndexInTable(table.Addresses, key);
@@ -147,7 +181,7 @@ public sealed class MessageV0 : ITransactionMessage
                     continue;
 
                 var meta = metas[key];
-                if (meta.IsSigner || meta.IsInvoked || meta.IsWritable)
+                if (meta.IsSigner || meta.IsInvoked || meta.IsNonce || meta.IsWritable)
                     continue;
 
                 var index = IndexInTable(table.Addresses, key);
@@ -183,7 +217,9 @@ public sealed class MessageV0 : ITransactionMessage
         AddClass(orderedStatic, staticRemaining, metas, signer: false, writable: true);
         AddClass(orderedStatic, staticRemaining, metas, signer: false, writable: false);
 
-        byte requiredSignatures = 0, readonlySigned = 0, readonlyUnsigned = 0;
+        var requiredSignatures = 0;
+        var readonlySigned = 0;
+        var readonlyUnsigned = 0;
         foreach (var key in orderedStatic)
         {
             var meta = metas[key];
@@ -198,6 +234,11 @@ public sealed class MessageV0 : ITransactionMessage
                 readonlyUnsigned++;
             }
         }
+
+        if (requiredSignatures > byte.MaxValue)
+            throw new ArgumentException(
+                $"A v0 message can require at most {byte.MaxValue} signatures, got {requiredSignatures}.",
+                nameof(instructions));
 
         var position = new Dictionary<PublicKey, int>(metas.Count);
         var slot = 0;
@@ -220,11 +261,18 @@ public sealed class MessageV0 : ITransactionMessage
             {
                 ProgramIdIndex = (byte)position[instruction.ProgramId],
                 AccountIndexes = accountIndexes,
-                Data = instruction.Data
+                Data = [.. instruction.Data]
             };
         }
 
-        return new MessageV0(requiredSignatures, readonlySigned, readonlyUnsigned, orderedStatic, recentBlockhash, compiled, lookups);
+        return new MessageV0(
+            (byte)requiredSignatures,
+            (byte)readonlySigned,
+            (byte)readonlyUnsigned,
+            orderedStatic,
+            recentBlockhash,
+            compiled,
+            lookups);
     }
 
     /// <summary>Serializes the message to its canonical wire bytes - what a signer signs over - starting with <see cref="VersionPrefix"/>.</summary>
@@ -242,7 +290,7 @@ public sealed class MessageV0 : ITransactionMessage
     public int GetSerializedLength()
     {
         var length = 1 + 3 // the version prefix and the header counts
-            + ShortVec.GetByteCount(AccountKeys.Count) + AccountKeys.Count * PublicKey.Length
+            + ShortVec.GetByteCount(AccountKeys.Count) + (AccountKeys.Count * PublicKey.Length)
             + PublicKey.Length // the recent blockhash
             + ShortVec.GetByteCount(Instructions.Count);
 
@@ -391,8 +439,8 @@ public sealed class MessageV0 : ITransactionMessage
     /// <param name="data">The serialized v0 message.</param>
     /// <returns>The parsed message.</returns>
     /// <exception cref="FormatException">
-    /// The data is not a versioned message, carries a version other than 0, is truncated, a compact-u16
-    /// length is malformed, or the message breaks a rule Solana's sanitize enforces: header counts that
+    /// The data is not a versioned message, carries a version other than 0, is truncated, contains trailing
+    /// bytes, has a malformed compact-u16 length, or breaks a rule Solana's sanitize enforces: header counts that
     /// overlap the static account list or leave no writable fee-payer signer, an address table lookup that
     /// loads no accounts, more than 256 addressable accounts, an instruction whose program id is the fee
     /// payer or a lookup-loaded account, or an out-of-range program id or account index.
@@ -406,7 +454,8 @@ public sealed class MessageV0 : ITransactionMessage
             if ((prefix & VersionPrefix) == 0)
                 throw new FormatException("Not a versioned message: the high bit of the version prefix is not set.");
 
-            // Only version 0 exists today; a future v1 payload must fail loudly rather than misparse as v0.
+            // SolSharp currently implements v0; a v1 or later payload must fail loudly rather than
+            // being misparsed as v0.
             var version = prefix & ~VersionPrefix;
             if (version != 0)
                 throw new FormatException($"Unsupported message version {version}; only v0 is supported.");
@@ -424,6 +473,11 @@ public sealed class MessageV0 : ITransactionMessage
 
             var lookupCount = ShortVec.Decode(data[offset..], out var read);
             offset += read;
+            const int minimumLookupBytes = PublicKey.Length + 2; // table key plus two zero length prefixes
+            if ((long)lookupCount * minimumLookupBytes > data.Length - offset)
+                throw new FormatException(
+                    $"The v0 message declares {lookupCount} address table lookup(s), but the remaining data cannot hold their minimum wire representation.");
+
             var addressTableLookups = new MessageAddressTableLookup[lookupCount];
             for (var i = 0; i < lookupCount; i++)
             {
@@ -447,6 +501,9 @@ public sealed class MessageV0 : ITransactionMessage
                     ReadonlyIndexes = readonlyIndexes
                 };
             }
+
+            if (offset != data.Length)
+                throw new FormatException($"The v0 message has {data.Length - offset} trailing byte(s).");
 
             // Mirror Solana's v0 sanitize so a message the network would refuse never parses successfully.
             MessageWire.SanitizeHeader(requiredSignatures, readonlySignedAccounts, readonlyUnsignedAccounts, accountKeys.Length);
@@ -515,5 +572,24 @@ public sealed class MessageV0 : ITransactionMessage
         return x.SequenceCompareTo(y);
     }
 
-    private readonly record struct KeyMeta(bool IsSigner, bool IsWritable, bool IsInvoked);
+    private static bool TryGetNonceAccount(IReadOnlyList<Instruction> instructions, out PublicKey nonceAccount)
+    {
+        if (instructions.Count > 0)
+        {
+            var first = instructions[0];
+            if (first.ProgramId == SystemProgram.ProgramId
+                && first.Data.Length >= sizeof(uint)
+                && BinaryPrimitives.ReadUInt32LittleEndian(first.Data.AsSpan(0, sizeof(uint))) == 4
+                && first.Accounts.Count > 0)
+            {
+                nonceAccount = first.Accounts[0].PublicKey;
+                return true;
+            }
+        }
+
+        nonceAccount = default;
+        return false;
+    }
+
+    private readonly record struct KeyMeta(bool IsSigner, bool IsWritable, bool IsInvoked, bool IsNonce = false);
 }

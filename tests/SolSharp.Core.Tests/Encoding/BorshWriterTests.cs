@@ -8,6 +8,22 @@ namespace SolSharp.Core.Tests.Encoding;
 public static class BorshWriterTests
 {
     [TestFixture]
+    public sealed class Constructor
+    {
+        [TestCase(0)]
+        [TestCase(-1)]
+        public void NonPositiveCapacity_ThrowsDocumentedArgumentException(int initialCapacity)
+        {
+            // Act
+            Action act = () => _ = new BorshWriter(initialCapacity);
+
+            // Assert
+            act.Should().Throw<ArgumentException>()
+                .Which.ParamName.Should().Be(nameof(initialCapacity));
+        }
+    }
+
+    [TestFixture]
     public sealed class Write
     {
         [Test]
@@ -27,7 +43,7 @@ public static class BorshWriterTests
             writer.WriteU64(1_000_000);
             writer.WriteI64(-7);
             writer.WriteU128(UInt128.MaxValue);
-            writer.WriteI128((Int128)(-12345));
+            writer.WriteI128(-12345);
             writer.WriteBool(true);
             writer.WriteOption(true);
             writer.WriteU64(7);
@@ -50,15 +66,15 @@ public static class BorshWriterTests
             reader.ReadU64().Should().Be(1_000_000);
             reader.ReadI64().Should().Be(-7);
             reader.ReadU128().Should().Be(UInt128.MaxValue);
-            reader.ReadI128().Should().Be((Int128)(-12345));
+            reader.ReadI128().Should().Be(-12345);
             reader.ReadBool().Should().BeTrue();
             reader.ReadOption().Should().BeTrue();
             reader.ReadU64().Should().Be(7);
             reader.ReadOption().Should().BeFalse();
             reader.ReadString().Should().Be("hi");
             reader.ReadPublicKey().Should().Be(pubkey);
-            reader.ReadBytes(2).ToArray().Should().Equal((byte)0xAA, 0xBB);
-            reader.ReadByteVector().Should().Equal((byte)1, 2, 3);
+            reader.ReadBytes(2).ToArray().Should().Equal(0xAA, 0xBB);
+            reader.ReadByteVector().Should().Equal(1, 2, 3);
             reader.Remaining.Should().Be(0);
         }
 
@@ -97,10 +113,42 @@ public static class BorshWriterTests
             var writer = new BorshWriter();
 
             // Act
-            Action act = () => writer.WriteLength(-1);
+            var act = () => writer.WriteLength(-1);
 
             // Assert
             act.Should().Throw<ArgumentOutOfRangeException>();
+        }
+    }
+
+    [TestFixture]
+    public sealed class WriteString
+    {
+        [Test]
+        public void MultibyteScalars_WritesUtf8Vector()
+        {
+            // Arrange
+            var writer = new BorshWriter();
+
+            // Act
+            writer.WriteString("A¢€𐍈");
+
+            // Assert
+            Convert.ToHexString(writer.ToArray()).ToLowerInvariant()
+                .Should().Be("0a00000041c2a2e282acf0908d88");
+        }
+
+        [Test]
+        public void LoneSurrogate_ThrowsEncoderFallbackExceptionWithoutWriting()
+        {
+            // Arrange
+            var writer = new BorshWriter();
+
+            // Act
+            var act = () => writer.WriteString("\ud800");
+
+            // Assert
+            act.Should().Throw<System.Text.EncoderFallbackException>();
+            writer.Length.Should().Be(0);
         }
     }
 }

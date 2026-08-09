@@ -35,17 +35,18 @@ public sealed record NonceAccount
     /// </returns>
     public static NonceAccount? Decode(ReadOnlySpan<byte> data)
     {
-        if (data.Length < Length)
+        if (data.Length != Length)
             return null;
 
         // bincode enum tags: Versions (0 = Legacy, 1 = Current), then State (0 = Uninitialized, 1 = Initialized).
+        var version = BinaryPrimitives.ReadUInt32LittleEndian(data);
         var state = BinaryPrimitives.ReadUInt32LittleEndian(data[4..]);
-        if (state != 1)
+        if (version > 1 || state != 1)
             return null;
 
         return new NonceAccount
         {
-            Version = BinaryPrimitives.ReadUInt32LittleEndian(data),
+            Version = version,
             Authority = new PublicKey(data.Slice(8, PublicKey.Length)),
             Nonce = Base58.Encode(data.Slice(40, 32)),
             LamportsPerSignature = BinaryPrimitives.ReadUInt64LittleEndian(data[72..])
