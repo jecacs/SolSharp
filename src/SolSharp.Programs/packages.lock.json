@@ -68,7 +68,7 @@
         "dependencies": {
           "BouncyCastle.Cryptography": "[2.7.0, )",
           "Nethermind.Crypto.Bls": "[1.0.5, )",
-          "SolSharp.Core": "[2.0.0, )"
+          "SolSharp.Core": "[3.0.0, )"
         }
       }
     }

@@ -457,8 +457,8 @@
       "solsharp.programs": {
         "type": "Project",
         "dependencies": {
-          "SolSharp.Core": "[2.0.0, )",
-          "SolSharp.Wallet": "[2.0.0, )"
+          "SolSharp.Core": "[3.0.0, )",
+          "SolSharp.Wallet": "[3.0.0, )"
         }
       },
       "solsharp.rpc": {
@@ -467,7 +467,7 @@
           "Microsoft.Extensions.Http": "[8.0.1, )",
           "Microsoft.Extensions.Http.Resilience": "[8.10.0, )",
           "Microsoft.Extensions.Logging.Abstractions": "[8.0.3, )",
-          "SolSharp.Core": "[2.0.0, )"
+          "SolSharp.Core": "[3.0.0, )"
         }
       },
       "solsharp.wallet": {
@@ -475,7 +475,7 @@
         "dependencies": {
           "BouncyCastle.Cryptography": "[2.7.0, )",
           "Nethermind.Crypto.Bls": "[1.0.5, )",
-          "SolSharp.Core": "[2.0.0, )"
+          "SolSharp.Core": "[3.0.0, )"
         }
       }
     }

@@ -4,7 +4,7 @@ A modern, contract-driven .NET SDK for Solana: keys and signing, program instruc
 transaction wire formats, RPC, and WebSocket streaming. It is optimized for low latency,
 bounded hostile-input handling, focused dependencies with a dependency-light Core, and Native AOT.
 
-Status: 2.0.0. SolSharp is independently implemented
+Status: 3.0.0. SolSharp is independently implemented
 against immutable Anza Solana SDK, Agave, and SPL source revisions; exact pins, client-side
 coverage, verification criteria, and deliberate node/runtime exclusions live in
 `docs/RUST_PARITY.md`. All JSON used by the library is source-generated and all four functional

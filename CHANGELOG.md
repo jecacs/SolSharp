@@ -7,13 +7,31 @@ version (on the earlier 0.x releases, minor versions could carry them).
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-08-10
+
 ### Changed
 
-- Raised every library, test, benchmark, and Native AOT sample project to .NET 10 and the latest stable
-  C# language version supported by the .NET 10 SDK. CI, release automation, package validation, dependency
-  locks, and documentation now enforce the same minimum toolchain and target framework.
+- Retargeted the SolSharp NuGet package and every library, test, benchmark, and Native AOT sample project
+  from `net8.0` to `net10.0`. Source builds now select the stable .NET 10 SDK line and C# 14 with preview
+  SDKs disabled.
+- Modernized implementation code for C# 14, including compiler-backed property storage and
+  `System.Threading.Lock`, while preserving the existing protocol-focused scope.
+- Updated dependency locks and the CI, security, CodeQL, release, package-validation, and packed-package
+  Native AOT paths to use and verify .NET 10 consistently.
 - Enforced deterministic member ordering for fields, constructors, properties, methods, and nested types,
   including public-to-private accessibility and constant/static/readonly precedence.
+- Aligned Rider/ReSharper with Roslyn's target-typed object-creation style so repository rules override
+  conflicting developer-level IDE preferences.
+
+### Fixed
+
+- Preserved BLS secret-key derivation under C# 14 by explicitly selecting the backend's mutable-span
+  constructor; the new overload resolution otherwise treated the zeroed output buffer as encoded key material.
+
+### Breaking changes
+
+- SolSharp 3.0.0 no longer contains a `net8.0` asset. Consumers must target `net10.0` (or a later compatible
+  .NET target) and recompile before upgrading.
 
 ## [2.0.0] - 2026-08-09
 
@@ -527,7 +545,8 @@ bundles four layered assemblies.
   transaction building, signing and serialization, `Transaction.Deserialize`, and instruction
   decompilation — every wire format validated byte-for-byte against the Rust `solana-sdk`.
 
-[Unreleased]: https://github.com/jecacs/SolSharp/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/jecacs/SolSharp/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/jecacs/SolSharp/compare/v2.0.0...v3.0.0
 [2.0.0]: https://github.com/jecacs/SolSharp/compare/v1.3.0...v2.0.0
 [1.3.0]: https://github.com/jecacs/SolSharp/releases/tag/v1.3.0
 [1.2.0]: https://github.com/jecacs/SolSharp/releases/tag/v1.2.0
