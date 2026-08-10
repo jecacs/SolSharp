@@ -14,6 +14,6 @@ internal sealed class SequenceHandler(params HttpResponseMessage[] responses) : 
         CallCount++;
         return Task.FromResult(_responses.Count > 0
             ? _responses.Dequeue()
-            : new HttpResponseMessage(HttpStatusCode.OK));
+            : new(HttpStatusCode.OK));
     }
 }

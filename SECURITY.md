@@ -7,11 +7,12 @@ taken seriously and are appreciated.
 
 | Version | Supported |
 | ------- | --------- |
+| 3.x     | ✅        |
 | 2.x     | ✅        |
 | 1.x     | ✅        |
 | < 1.0   | ❌        |
 
-Fixes ship as patch releases of the latest supported 2.x and 1.x lines.
+Fixes ship as patch releases of the supported release lines.
 
 ## Reporting a vulnerability
 

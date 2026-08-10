@@ -71,6 +71,6 @@ public static partial class Token2022Program
         for (var i = 0; i < offsets.Length; i++)
             data[cursor + i] = unchecked((byte)offsets[i]);
 
-        return new Instruction { ProgramId = ProgramId, Accounts = accounts, Data = data };
+        return new() { ProgramId = ProgramId, Accounts = accounts, Data = data };
     }
 }

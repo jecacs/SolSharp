@@ -23,9 +23,10 @@ namespace SolSharp.Rpc.Streaming;
 /// </summary>
 public sealed class SolanaWsClient : IAsyncDisposable
 {
+    private static readonly TimeSpan MaximumTimerDuration = TimeSpan.FromMilliseconds(uint.MaxValue - 1);
     private readonly Func<IWebSocketConnection> _connectionFactory;
     private readonly SolanaWsClientOptions _options;
-    private readonly object _stateGate = new();
+    private readonly Lock _stateGate = new();
     private readonly Dictionary<int, PendingSubscribe> _pending = [];
     private readonly Dictionary<long, Subscription> _active = [];
     private readonly Dictionary<(long Generation, ulong ServerId), Subscription> _byServerId = [];
@@ -47,36 +48,9 @@ public sealed class SolanaWsClient : IAsyncDisposable
     private TaskCompletionSource? _sendOperationsDrained;
     private int _cancellationRegistrationCount;
 
-    internal int RetainedCancellationRegistrationCount
-    {
-        get
-        {
-            lock (_stateGate)
-                return _cancellationRegistrationCount;
-        }
-    }
-
-    internal int RetainedPendingSubscriptionReferenceCount
-    {
-        get
-        {
-            lock (_stateGate)
-                return _pending.Values.Count(pending => pending.Subscription is not null);
-        }
-    }
-
-    internal int RetainedAcknowledgementTombstoneCount
-    {
-        get
-        {
-            lock (_stateGate)
-                return _pending.Values.Count(pending => pending.State == PendingState.Abandoned);
-        }
-    }
-
     /// <summary>Creates a client over a real <see cref="System.Net.WebSockets.ClientWebSocket"/> with default options.</summary>
     /// <param name="loggerFactory">Optional factory for connection/reconnection diagnostics; no logging when null.</param>
-    public SolanaWsClient(ILoggerFactory? loggerFactory = null) : this(new SolanaWsClientOptions(), loggerFactory)
+    public SolanaWsClient(ILoggerFactory? loggerFactory = null) : this(new(), loggerFactory)
     {
     }
 
@@ -119,8 +93,75 @@ public sealed class SolanaWsClient : IAsyncDisposable
     }
 
     internal SolanaWsClient(IWebSocketConnection connection)
-        : this(() => connection, new SolanaWsClientOptions { AutoReconnect = false })
+        : this(() => connection, new() { AutoReconnect = false })
     {
+    }
+
+    private enum ClientPhase
+    {
+        New,
+        Connecting,
+        Connected,
+        Reconnecting,
+        Stopped,
+        Disposing,
+        Disposed
+    }
+
+    private enum SubscriptionPhase
+    {
+        Establishing,
+        Active,
+        Terminal
+    }
+
+    private enum OneShotBehavior
+    {
+        None,
+        SignatureFinal
+    }
+
+    private enum PendingState
+    {
+        Awaiting,
+        Abandoned,
+        Acknowledged,
+        LateAcknowledged,
+        Failed
+    }
+
+    private interface ISubscriptionSink
+    {
+        void Deliver(JsonElement result);
+
+        void Complete(Exception? exception);
+    }
+
+    internal int RetainedCancellationRegistrationCount
+    {
+        get
+        {
+            lock (_stateGate)
+                return _cancellationRegistrationCount;
+        }
+    }
+
+    internal int RetainedPendingSubscriptionReferenceCount
+    {
+        get
+        {
+            lock (_stateGate)
+                return _pending.Values.Count(static pending => pending.Subscription is not null);
+        }
+    }
+
+    internal int RetainedAcknowledgementTombstoneCount
+    {
+        get
+        {
+            lock (_stateGate)
+                return _pending.Values.Count(static pending => pending.State == PendingState.Abandoned);
+        }
     }
 
     /// <summary>
@@ -149,73 +190,12 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
             _phase = ClientPhase.Connecting;
             _endpoint = endpoint;
-            completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
             _connectTask = completion.Task;
         }
 
         _ = ConnectInitialAsync(endpoint, completion, cancellationToken);
         return completion.Task;
-    }
-
-    private async Task ConnectInitialAsync(
-        Uri endpoint,
-        TaskCompletionSource completion,
-        CancellationToken cancellationToken)
-    {
-        ConnectionEpoch? epoch = null;
-        try
-        {
-            epoch = CreateConnectionEpoch();
-            lock (_stateGate)
-            {
-                ObjectDisposedException.ThrowIf(_phase != ClientPhase.Connecting, this);
-
-                _connecting = epoch;
-            }
-
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(
-                cancellationToken, _lifetimeCts.Token, epoch.Token);
-            await epoch.Connection.ConnectAsync(endpoint, linked.Token);
-
-            lock (_stateGate)
-            {
-                ObjectDisposedException.ThrowIf(
-                    _phase != ClientPhase.Connecting || !ReferenceEquals(_connecting, epoch),
-                    this);
-
-                _connecting = null;
-                _connection = epoch;
-                _phase = ClientPhase.Connected;
-                _runLoop = Task.Run(() => RunAsync(epoch, _lifetimeCts.Token), CancellationToken.None);
-            }
-
-            completion.TrySetResult();
-        }
-        catch (Exception exception)
-        {
-            lock (_stateGate)
-            {
-                if (ReferenceEquals(_connecting, epoch))
-                    _connecting = null;
-                if (_phase == ClientPhase.Connecting)
-                    _phase = ClientPhase.New;
-            }
-
-            if (epoch is not null)
-                await epoch.DisposeOnceAsync();
-
-            if (exception is OperationCanceledException canceled)
-            {
-                if (cancellationToken.IsCancellationRequested)
-                    completion.TrySetCanceled(cancellationToken);
-                else if (_lifetimeCts.IsCancellationRequested)
-                    completion.TrySetException(new ObjectDisposedException(nameof(SolanaWsClient), canceled.Message));
-                else
-                    completion.TrySetCanceled(canceled.CancellationToken);
-            }
-            else
-                completion.TrySetException(exception);
-        }
     }
 
     /// <summary>
@@ -365,7 +345,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
             account,
             new AccountInfoConfig
             {
-                Encoding = options.Encoding is { } encoding ? RpcWireNames.AccountEncoding(encoding) : null,
+                Encoding = options.Encoding is { } encoding ? encoding.WireName : null,
                 Commitment = options.Commitment
             }
         ];
@@ -423,7 +403,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
             {
                 Encoding = "base64",
                 Commitment = commitment,
-                Filters = filters?.Select(filter => filter.Payload).ToArray()
+                Filters = filters?.Select(static filter => filter.Payload).ToArray()
             }
         ];
         await RegisterAsync("programSubscribe", parameters, "programUnsubscribe", sink, cancellationToken);
@@ -453,9 +433,9 @@ public sealed class SolanaWsClient : IAsyncDisposable
             program,
             new ProgramAccountsConfig
             {
-                Encoding = options.Encoding is { } encoding ? RpcWireNames.AccountEncoding(encoding) : null,
+                Encoding = options.Encoding is { } encoding ? encoding.WireName : null,
                 Commitment = options.Commitment,
-                Filters = options.Filters?.Select(filter => filter.Payload).ToArray()
+                Filters = options.Filters?.Select(static filter => filter.Payload).ToArray()
             }
         ];
         await RegisterAsync("programSubscribe", parameters, "programUnsubscribe", sink, cancellationToken);
@@ -484,7 +464,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
             {
                 Encoding = "jsonParsed",
                 Commitment = commitment,
-                Filters = filters?.Select(filter => filter.Payload).ToArray()
+                Filters = filters?.Select(static filter => filter.Payload).ToArray()
             }
         ];
         await RegisterAsync("programSubscribe", parameters, "programUnsubscribe", sink, cancellationToken);
@@ -567,29 +547,6 @@ public sealed class SolanaWsClient : IAsyncDisposable
             maxSupportedTransactionVersion,
             cancellationToken);
 
-    private async Task<ChannelReader<RpcContextValue<BlockNotification>>> SubscribeBlocksCoreAsync(
-        object filter,
-        Commitment commitment,
-        byte maxSupportedTransactionVersion,
-        CancellationToken cancellationToken)
-    {
-        var sink = CreateSubscriptionSink<RpcContextValue<BlockNotification>>();
-        object[] parameters =
-        [
-            filter,
-            new BlockSubscribeConfig
-            {
-                Commitment = commitment,
-                Encoding = "json",
-                TransactionDetails = "signatures",
-                ShowRewards = false,
-                MaxSupportedTransactionVersion = maxSupportedTransactionVersion
-            }
-        ];
-        await RegisterAsync("blockSubscribe", parameters, "blockUnsubscribe", sink, cancellationToken);
-        return sink.Reader;
-    }
-
     /// <summary>
     /// Subscribes to blocks using the exact upstream filter, encoding, transaction-details, rewards,
     /// commitment, and transaction-version configuration. The block body remains JSON because those choices
@@ -621,10 +578,10 @@ public sealed class SolanaWsClient : IAsyncDisposable
             {
                 Commitment = options.Commitment,
                 Encoding = options.Encoding is { } encoding
-                    ? RpcWireNames.TransactionEncoding(encoding)
+                    ? encoding.WireName
                     : null,
                 TransactionDetails = options.TransactionDetails is { } details
-                    ? RpcWireNames.TransactionDetails(details)
+                    ? details.WireName
                     : null,
                 ShowRewards = options.ShowRewards,
                 MaxSupportedTransactionVersion = options.MaxSupportedTransactionVersion
@@ -712,29 +669,6 @@ public sealed class SolanaWsClient : IAsyncDisposable
             maxSupportedTransactionVersion,
             cancellationToken);
 
-    private async Task<ChannelReader<RpcContextValue<ParsedBlockNotification>>> SubscribeParsedBlocksCoreAsync(
-        object filter,
-        Commitment commitment,
-        byte maxSupportedTransactionVersion,
-        CancellationToken cancellationToken)
-    {
-        var sink = CreateSubscriptionSink<RpcContextValue<ParsedBlockNotification>>();
-        object[] parameters =
-        [
-            filter,
-            new BlockSubscribeConfig
-            {
-                Commitment = commitment,
-                Encoding = "jsonParsed",
-                TransactionDetails = "full",
-                ShowRewards = false,
-                MaxSupportedTransactionVersion = maxSupportedTransactionVersion
-            }
-        ];
-        await RegisterAsync("blockSubscribe", parameters, "blockUnsubscribe", sink, cancellationToken);
-        return sink.Reader;
-    }
-
     /// <summary>
     /// Subscribes to a single notification fired when <paramref name="signature"/> reaches
     /// <paramref name="commitment"/>; the node unsubscribes automatically afterward. Prefer
@@ -780,33 +714,6 @@ public sealed class SolanaWsClient : IAsyncDisposable
             options.Commitment,
             options.EnableReceivedNotification,
             cancellationToken);
-    }
-
-    private async Task<ChannelReader<RpcContextValue<SignatureNotification>>> SubscribeSignatureCoreAsync(
-        string signature,
-        Commitment? commitment,
-        bool? enableReceivedNotification,
-        CancellationToken cancellationToken)
-    {
-        var sink = CreateSubscriptionSink<RpcContextValue<SignatureNotification>>();
-        object[] parameters =
-        [
-            signature,
-            new SignatureSubscribeConfig
-            {
-                Commitment = commitment,
-                EnableReceivedNotification = enableReceivedNotification
-            }
-        ];
-        await RegisterAsync(
-            "signatureSubscribe",
-            parameters,
-            "signatureUnsubscribe",
-            sink,
-            cancellationToken,
-            OneShotBehavior.SignatureFinal,
-            allowReceivedNotification: enableReceivedNotification is true);
-        return sink.Reader;
     }
 
     /// <summary>
@@ -860,6 +767,45 @@ public sealed class SolanaWsClient : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Closes the connection and ends every subscription: active channels and streams complete without an
+    /// error, and a subscribe still awaiting its acknowledgement faults with
+    /// <see cref="ObjectDisposedException"/>. Safe to call more than once.
+    /// </summary>
+    /// <returns>A task that completes once cleanup is done.</returns>
+    public ValueTask DisposeAsync()
+    {
+        TaskCompletionSource completion;
+        ConnectionEpoch? connection;
+        ConnectionEpoch? connecting;
+        Task? runLoop;
+        Task? connectTask;
+        Task sendOperationsDrained;
+
+        lock (_stateGate)
+        {
+            if (_disposeTask is not null)
+                return new(_disposeTask);
+
+            completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            _disposeTask = completion.Task;
+            _phase = ClientPhase.Disposing;
+            runLoop = _runLoop;
+            connectTask = _connectTask;
+            connection = _connection;
+            connecting = _connecting;
+            _connection = null;
+            _connecting = null;
+            sendOperationsDrained = _sendOperationCount == 0
+                ? Task.CompletedTask
+                : _sendOperationsDrained!.Task;
+        }
+
+        _ = DisposeCoreAsync(
+            completion, connection, connecting, connectTask, runLoop, sendOperationsDrained);
+        return new(completion.Task);
+    }
+
     private static async Task CancelAfterAsync(CancellationTokenSource source, TimeSpan timeout)
     {
         try
@@ -877,6 +823,155 @@ public sealed class SolanaWsClient : IAsyncDisposable
         {
             // Confirmation finished or caller cancellation won; the timeout task only needs to stop.
         }
+    }
+
+    private static async Task SuppressAsync(Task task)
+    {
+        try
+        {
+            await task;
+        }
+        catch
+        {
+            // The owning operation has already translated or logged the failure.
+        }
+    }
+
+    private static ConnectionEpochEndedException ConnectionChangedBeforeSend()
+        => new(new InvalidOperationException("The WebSocket connection changed before the request was sent."));
+
+    private async Task ConnectInitialAsync(
+        Uri endpoint,
+        TaskCompletionSource completion,
+        CancellationToken cancellationToken)
+    {
+        ConnectionEpoch? epoch = null;
+        try
+        {
+            epoch = CreateConnectionEpoch();
+            lock (_stateGate)
+            {
+                ObjectDisposedException.ThrowIf(_phase != ClientPhase.Connecting, this);
+
+                _connecting = epoch;
+            }
+
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken, _lifetimeCts.Token, epoch.Token);
+            await epoch.Connection.ConnectAsync(endpoint, linked.Token);
+
+            lock (_stateGate)
+            {
+                ObjectDisposedException.ThrowIf(
+                    _phase != ClientPhase.Connecting || !ReferenceEquals(_connecting, epoch),
+                    this);
+
+                _connecting = null;
+                _connection = epoch;
+                _phase = ClientPhase.Connected;
+                _runLoop = Task.Run(() => RunAsync(epoch, _lifetimeCts.Token), CancellationToken.None);
+            }
+
+            completion.TrySetResult();
+        }
+        catch (Exception exception)
+        {
+            lock (_stateGate)
+            {
+                if (ReferenceEquals(_connecting, epoch))
+                    _connecting = null;
+                if (_phase == ClientPhase.Connecting)
+                    _phase = ClientPhase.New;
+            }
+
+            if (epoch is not null)
+                await epoch.DisposeOnceAsync();
+
+            if (exception is OperationCanceledException canceled)
+            {
+                if (cancellationToken.IsCancellationRequested)
+                    completion.TrySetCanceled(cancellationToken);
+                else if (_lifetimeCts.IsCancellationRequested)
+                    completion.TrySetException(new ObjectDisposedException(nameof(SolanaWsClient), canceled.Message));
+                else
+                    completion.TrySetCanceled(canceled.CancellationToken);
+            }
+            else
+                completion.TrySetException(exception);
+        }
+    }
+
+    private async Task<ChannelReader<RpcContextValue<BlockNotification>>> SubscribeBlocksCoreAsync(
+        object filter,
+        Commitment commitment,
+        byte maxSupportedTransactionVersion,
+        CancellationToken cancellationToken)
+    {
+        var sink = CreateSubscriptionSink<RpcContextValue<BlockNotification>>();
+        object[] parameters =
+        [
+            filter,
+            new BlockSubscribeConfig
+            {
+                Commitment = commitment,
+                Encoding = "json",
+                TransactionDetails = "signatures",
+                ShowRewards = false,
+                MaxSupportedTransactionVersion = maxSupportedTransactionVersion
+            }
+        ];
+        await RegisterAsync("blockSubscribe", parameters, "blockUnsubscribe", sink, cancellationToken);
+        return sink.Reader;
+    }
+
+    private async Task<ChannelReader<RpcContextValue<ParsedBlockNotification>>> SubscribeParsedBlocksCoreAsync(
+        object filter,
+        Commitment commitment,
+        byte maxSupportedTransactionVersion,
+        CancellationToken cancellationToken)
+    {
+        var sink = CreateSubscriptionSink<RpcContextValue<ParsedBlockNotification>>();
+        object[] parameters =
+        [
+            filter,
+            new BlockSubscribeConfig
+            {
+                Commitment = commitment,
+                Encoding = "jsonParsed",
+                TransactionDetails = "full",
+                ShowRewards = false,
+                MaxSupportedTransactionVersion = maxSupportedTransactionVersion
+            }
+        ];
+        await RegisterAsync("blockSubscribe", parameters, "blockUnsubscribe", sink, cancellationToken);
+        return sink.Reader;
+    }
+
+    private async Task<ChannelReader<RpcContextValue<SignatureNotification>>> SubscribeSignatureCoreAsync(
+        string signature,
+        Commitment? commitment,
+        bool? enableReceivedNotification,
+        CancellationToken cancellationToken)
+    {
+        var sink = CreateSubscriptionSink<RpcContextValue<SignatureNotification>>();
+        object[] parameters =
+        [
+            signature,
+            new SignatureSubscribeConfig
+            {
+                Commitment = commitment,
+                EnableReceivedNotification = enableReceivedNotification
+            }
+        ];
+        await RegisterAsync(
+            "signatureSubscribe",
+            parameters,
+            "signatureUnsubscribe",
+            sink,
+            cancellationToken,
+            OneShotBehavior.SignatureFinal,
+            allowReceivedNotification: enableReceivedNotification is true);
+        return sink.Reader;
     }
 
     private SubscriptionSink<T> CreateSubscriptionSink<T>()
@@ -922,7 +1017,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
                 throw new InvalidOperationException("The client is not connected.");
 
             var localId = ++_nextLocalId;
-            subscription = new Subscription(
+            subscription = new(
                 localId,
                 subscribeMethod,
                 subscribeParams,
@@ -975,7 +1070,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
             }
 
             var requestId = ++_nextRequestId;
-            pending = new PendingSubscribe(requestId, epoch, subscription, initial);
+            pending = new(requestId, epoch, subscription, initial);
             subscription.Attempt = pending;
             _pending.Add(requestId, pending);
         }
@@ -984,7 +1079,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         {
             var sendTask = SendAsync(
                 epoch,
-                new RpcRequest
+                new()
                 {
                     Id = pending.RequestId,
                     Method = subscription.SubscribeMethod,
@@ -1156,7 +1251,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         }
 
         var reservationHeld = unsubscribe && binding is not null && TryReserveSendLocked(binding.Value.Epoch);
-        return new TerminalWork(subscription, exception, binding, registration, reservationHeld);
+        return new(subscription, exception, binding, registration, reservationHeld);
     }
 
     private async Task ExecuteTerminalWorkAsync(TerminalWork work)
@@ -1186,7 +1281,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
             await SendAsync(
                 binding.Epoch,
-                new RpcRequest { Id = requestId, Method = method, Params = [binding.ServerId] },
+                new() { Id = requestId, Method = method, Params = [binding.ServerId] },
                 _lifetimeCts.Token,
                 reservationHeld: true);
         }
@@ -1271,7 +1366,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
             return false;
 
         if (_sendOperationCount++ == 0)
-            _sendOperationsDrained = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _sendOperationsDrained = new(TaskCreationOptions.RunContinuationsAsynchronously);
         return true;
     }
 
@@ -1534,7 +1629,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         {
             established =
             [
-                .. _active.Values.Where(subscription =>
+                .. _active.Values.Where(static subscription =>
                     subscription.Phase == SubscriptionPhase.Active && subscription.Binding is null)
             ];
         }
@@ -1853,18 +1948,6 @@ public sealed class SolanaWsClient : IAsyncDisposable
             await ExecuteTerminalWorkAsync(item);
     }
 
-    private static async Task SuppressAsync(Task task)
-    {
-        try
-        {
-            await task;
-        }
-        catch
-        {
-            // The owning operation has already translated or logged the failure.
-        }
-    }
-
     private async Task SafeDisposeAsync(IWebSocketConnection connection)
     {
         try
@@ -1875,45 +1958,6 @@ public sealed class SolanaWsClient : IAsyncDisposable
         {
             _logger.LogDebug(ex, "Solana WS connection dispose failed");
         }
-    }
-
-    /// <summary>
-    /// Closes the connection and ends every subscription: active channels and streams complete without an
-    /// error, and a subscribe still awaiting its acknowledgement faults with
-    /// <see cref="ObjectDisposedException"/>. Safe to call more than once.
-    /// </summary>
-    /// <returns>A task that completes once cleanup is done.</returns>
-    public ValueTask DisposeAsync()
-    {
-        TaskCompletionSource completion;
-        ConnectionEpoch? connection;
-        ConnectionEpoch? connecting;
-        Task? runLoop;
-        Task? connectTask;
-        Task sendOperationsDrained;
-
-        lock (_stateGate)
-        {
-            if (_disposeTask is not null)
-                return new ValueTask(_disposeTask);
-
-            completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            _disposeTask = completion.Task;
-            _phase = ClientPhase.Disposing;
-            runLoop = _runLoop;
-            connectTask = _connectTask;
-            connection = _connection;
-            connecting = _connecting;
-            _connection = null;
-            _connecting = null;
-            sendOperationsDrained = _sendOperationCount == 0
-                ? Task.CompletedTask
-                : _sendOperationsDrained!.Task;
-        }
-
-        _ = DisposeCoreAsync(
-            completion, connection, connecting, connectTask, runLoop, sendOperationsDrained);
-        return new ValueTask(completion.Task);
     }
 
     private async Task DisposeCoreAsync(
@@ -1954,6 +1998,8 @@ public sealed class SolanaWsClient : IAsyncDisposable
             completion.TrySetResult();
         }
     }
+
+    private readonly record struct RouteBinding(ConnectionEpoch Epoch, ulong ServerId);
 
     private sealed class PendingSubscribe(
         int requestId,
@@ -1997,7 +2043,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
             Generation = generation;
             Connection = connection;
             _disposeConnection = disposeConnection;
-            _dispose = new Lazy<Task>(DisposeCoreAsync, LazyThreadSafetyMode.ExecutionAndPublication);
+            _dispose = new(DisposeCoreAsync, LazyThreadSafetyMode.ExecutionAndPublication);
         }
 
         public long Generation { get; }
@@ -2025,8 +2071,6 @@ public sealed class SolanaWsClient : IAsyncDisposable
             }
         }
     }
-
-    private readonly record struct RouteBinding(ConnectionEpoch Epoch, ulong ServerId);
 
     private sealed record TerminalWork(
         Subscription Subscription,
@@ -2070,6 +2114,16 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
         public bool AllowReceivedNotification { get; } = allowReceivedNotification;
 
+        public SubscriptionPhase Phase { get; set; } = SubscriptionPhase.Establishing;
+
+        public PendingSubscribe? Attempt { get; set; }
+
+        public RouteBinding? Binding { get; set; }
+
+        public CancellationTokenRegistration CancellationRegistration { get; set; }
+
+        public bool HasCancellationRegistration { get; set; }
+
         public void ValidateNotification(JsonElement notification)
         {
             if (SubscribeMethod is "accountSubscribe" or "logsSubscribe" or "programSubscribe" or "blockSubscribe" or "signatureSubscribe")
@@ -2100,77 +2154,22 @@ public sealed class SolanaWsClient : IAsyncDisposable
                 value.ValueKind == JsonValueKind.Object,
             _ => false
         };
-
-        public SubscriptionPhase Phase { get; set; } = SubscriptionPhase.Establishing;
-
-        public PendingSubscribe? Attempt { get; set; }
-
-        public RouteBinding? Binding { get; set; }
-
-        public CancellationTokenRegistration CancellationRegistration { get; set; }
-
-        public bool HasCancellationRegistration { get; set; }
     }
-
-    private enum ClientPhase
-    {
-        New,
-        Connecting,
-        Connected,
-        Reconnecting,
-        Stopped,
-        Disposing,
-        Disposed
-    }
-
-    private enum SubscriptionPhase
-    {
-        Establishing,
-        Active,
-        Terminal
-    }
-
-    private enum OneShotBehavior
-    {
-        None,
-        SignatureFinal
-    }
-
-    private enum PendingState
-    {
-        Awaiting,
-        Abandoned,
-        Acknowledged,
-        LateAcknowledged,
-        Failed
-    }
-
-    private static ConnectionEpochEndedException ConnectionChangedBeforeSend()
-        => new(new InvalidOperationException("The WebSocket connection changed before the request was sent."));
 
     private sealed class ConnectionEpochEndedException(Exception innerException)
         : InvalidOperationException(innerException.Message, innerException)
     {
     }
 
-    private static readonly TimeSpan MaximumTimerDuration = TimeSpan.FromMilliseconds(uint.MaxValue - 1);
-
-    private interface ISubscriptionSink
-    {
-        void Deliver(JsonElement result);
-
-        void Complete(Exception? exception);
-    }
-
     private sealed class SubscriptionSink<T> : ISubscriptionSink
     {
         private readonly Channel<T> _channel;
         private readonly int _capacity;
-        private volatile bool _completed;
 
         // Resolved once per sink so an unregistered notification type fails at subscribe time, not on
         // first delivery deep inside the receive loop.
         private readonly JsonTypeInfo<T> _typeInfo = RpcJson.TypeInfo<T>();
+        private volatile bool _completed;
 
         public SubscriptionSink(int capacity)
         {

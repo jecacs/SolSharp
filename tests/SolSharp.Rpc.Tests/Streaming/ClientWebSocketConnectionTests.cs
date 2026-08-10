@@ -10,7 +10,7 @@ namespace SolSharp.Rpc.Tests.Streaming;
 public static class ClientWebSocketConnectionTests
 {
     [TestFixture]
-    public sealed class ReceiveAsync
+    public sealed class Receive
     {
         [Test]
         public async Task FragmentedTextWithinLimit_ReturnsCompleteMessage()
@@ -37,7 +37,8 @@ public static class ClientWebSocketConnectionTests
             await using var connection = new ClientWebSocketConnection(socket, 4, TimeSpan.FromMilliseconds(20));
 
             // Act
-            var act = async () => await connection.ReceiveAsync(CancellationToken.None);
+            var act = connection.Awaiting(static subject =>
+                subject.ReceiveAsync(CancellationToken.None));
 
             // Assert
             await act.Should().ThrowAsync<InvalidDataException>()
@@ -54,7 +55,8 @@ public static class ClientWebSocketConnectionTests
             await using var connection = new ClientWebSocketConnection(socket, 1024, TimeSpan.FromMilliseconds(20));
 
             // Act
-            var act = async () => await connection.ReceiveAsync(CancellationToken.None);
+            var act = connection.Awaiting(static subject =>
+                subject.ReceiveAsync(CancellationToken.None));
 
             // Assert
             await act.Should().ThrowAsync<InvalidDataException>()
@@ -71,7 +73,7 @@ public static class ClientWebSocketConnectionTests
                 PeerCloseStatus = WebSocketCloseStatus.EndpointUnavailable,
                 PeerCloseDescription = "maintenance"
             };
-            socket.Push((byte[])[], WebSocketMessageType.Close, endOfMessage: true);
+            socket.Push([], WebSocketMessageType.Close, endOfMessage: true);
             await using var connection = new ClientWebSocketConnection(socket, 1024, TimeSpan.FromMilliseconds(20));
 
             // Act
@@ -81,6 +83,33 @@ public static class ClientWebSocketConnectionTests
             message.Should().BeNull();
             socket.SentCloseStatus.Should().Be(WebSocketCloseStatus.EndpointUnavailable);
             socket.SentCloseDescription.Should().Be("maintenance");
+        }
+
+        [Test]
+        public async Task ConcurrentCall_IsRejectedWhileFirstReceiveCompletesNormally()
+        {
+            // Arrange
+            var socket = new FakeClientWebSocket();
+            await using var connection = new ClientWebSocketConnection(socket, 1024, TimeSpan.FromSeconds(1));
+            var first = connection.ReceiveAsync(CancellationToken.None).AsTask();
+            await socket.ReceiveStarted.Task;
+
+            // Act
+            var second = connection.Awaiting(static subject =>
+                subject.ReceiveAsync(CancellationToken.None));
+
+            try
+            {
+                // Assert
+                await second.Should().ThrowAsync<InvalidOperationException>()
+                    .WithMessage("Only one WebSocket receive may be active at a time.");
+            }
+            finally
+            {
+                socket.Push("first", WebSocketMessageType.Text, endOfMessage: true);
+            }
+
+            (await first).Should().Be("first");
         }
     }
 
@@ -136,12 +165,131 @@ public static class ClientWebSocketConnectionTests
             dispose.IsCompleted.Should().BeFalse();
             socket.CloseAsyncCalled.Should().BeFalse();
 
-            socket.Push((byte[])[], WebSocketMessageType.Close, endOfMessage: true);
+            socket.Push([], WebSocketMessageType.Close, endOfMessage: true);
             (await receive).Should().BeNull();
             await dispose.WaitAsync(TimeSpan.FromSeconds(1));
 
             socket.AbortCalled.Should().BeFalse();
             socket.DisposeCalled.Should().BeTrue();
+        }
+
+        [Test]
+        public async Task WithActiveReceiveAndIntermediateText_AllowsNextReceiveToCompleteHandshake()
+        {
+            // Arrange
+            var socket = new FakeClientWebSocket();
+            var connection = new ClientWebSocketConnection(socket, 1024, TimeSpan.FromSeconds(1));
+            var firstReceive = connection.ReceiveAsync(CancellationToken.None).AsTask();
+            await socket.ReceiveStarted.Task;
+
+            // Act: disposal sends its close half, but the active receive may still return text that
+            // was already in flight. The receive loop must remain able to read the peer's close next.
+            var dispose = connection.DisposeAsync().AsTask();
+            await socket.CloseOutputStarted.Task;
+            socket.Push("in-flight", WebSocketMessageType.Text, endOfMessage: true);
+            (await firstReceive).Should().Be("in-flight");
+
+            var secondReceive = connection.ReceiveAsync(CancellationToken.None).AsTask();
+            socket.Push([], WebSocketMessageType.Close, endOfMessage: true);
+
+            // Assert
+            (await secondReceive).Should().BeNull();
+            await dispose.WaitAsync(TimeSpan.FromSeconds(1));
+            socket.CloseOutputCallCount.Should().Be(1);
+        }
+
+        [Test]
+        public async Task AfterPeerCloseWhileDisposeIsFinishing_RejectsAnotherReceive()
+        {
+            // Arrange
+            using var disposeEntered = new ManualResetEventSlim();
+            using var releaseDispose = new ManualResetEventSlim();
+            var socket = new FakeClientWebSocket
+            {
+                DisposeEntered = disposeEntered,
+                DisposeRelease = releaseDispose
+            };
+            var connection = new ClientWebSocketConnection(socket, 1024, TimeSpan.FromSeconds(1));
+            var receive = connection.ReceiveAsync(CancellationToken.None).AsTask();
+            await socket.ReceiveStarted.Task;
+            var dispose = connection.DisposeAsync().AsTask();
+            try
+            {
+                await socket.CloseOutputStarted.Task;
+                socket.Push([], WebSocketMessageType.Close, endOfMessage: true);
+                (await receive).Should().BeNull();
+                (await Task.Run(() => disposeEntered.Wait(TimeSpan.FromSeconds(1)))).Should().BeTrue();
+
+                // Act
+                var lateReceive = connection.Awaiting(static subject => subject
+                    .ReceiveAsync(CancellationToken.None)
+                    .AsTask()
+                    .WaitAsync(TimeSpan.FromSeconds(1)));
+
+                // Assert
+                await lateReceive.Should().ThrowAsync<ObjectDisposedException>();
+            }
+            finally
+            {
+                releaseDispose.Set();
+                await dispose.WaitAsync(TimeSpan.FromSeconds(1));
+            }
+        }
+
+        [Test]
+        public async Task BackendDisposeThrows_AllCallersObserveTheSharedFailure()
+        {
+            // Arrange
+            var socket = new FakeClientWebSocket
+            {
+                DisposeException = new InvalidOperationException("backend dispose failed")
+            };
+            var connection = new ClientWebSocketConnection(socket, 1024, TimeSpan.FromSeconds(1));
+
+            // Act
+            var first = connection.DisposeAsync().AsTask();
+            var second = connection.DisposeAsync().AsTask();
+
+            // Assert
+            first.Should().BeSameAs(second);
+            var firstFailure = async () => await first.WaitAsync(TimeSpan.FromSeconds(1));
+            var secondFailure = async () => await second.WaitAsync(TimeSpan.FromSeconds(1));
+            await firstFailure.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("backend dispose failed");
+            await secondFailure.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("backend dispose failed");
+        }
+
+        [Test]
+        public async Task PeerCloseRacesOpenStateSnapshot_SendsOnlyOneCloseOutput()
+        {
+            // Arrange
+            using var stateReadEntered = new ManualResetEventSlim();
+            using var releaseStateRead = new ManualResetEventSlim();
+            var socket = new FakeClientWebSocket();
+            var connection = new ClientWebSocketConnection(socket, 1024, TimeSpan.FromSeconds(1));
+            var receive = connection.ReceiveAsync(CancellationToken.None).AsTask();
+            await socket.ReceiveStarted.Task;
+            socket.GateNextStateRead(stateReadEntered, releaseStateRead);
+
+            // Dispose captures Open, then pauses before invoking CloseOutputAsync. Meanwhile the receive
+            // path observes the peer close and claims the one permitted close-output operation.
+            var dispose = Task.Run(() => connection.DisposeAsync().AsTask());
+            try
+            {
+                (await Task.Run(() => stateReadEntered.Wait(TimeSpan.FromSeconds(1)))).Should().BeTrue();
+                socket.Push([], WebSocketMessageType.Close, endOfMessage: true);
+                (await receive).Should().BeNull();
+                await socket.CloseOutputStarted.Task;
+            }
+            finally
+            {
+                releaseStateRead.Set();
+                await dispose.WaitAsync(TimeSpan.FromSeconds(1));
+            }
+
+            // Assert
+            socket.CloseOutputCallCount.Should().Be(1);
         }
 
         [Test]
@@ -172,7 +320,32 @@ public static class ClientWebSocketConnectionTests
         private readonly Channel<(byte[] Data, WebSocketMessageType Type, bool EndOfMessage)> _frames =
             Channel.CreateUnbounded<(byte[], WebSocketMessageType, bool)>();
 
-        public WebSocketState State { get; private set; } = WebSocketState.Open;
+        private int _closeOutputCallCount;
+        private int _gateNextStateRead;
+        private ManualResetEventSlim? _stateReadEntered;
+        private ManualResetEventSlim? _stateReadRelease;
+
+        public FakeClientWebSocket()
+        {
+            State = WebSocketState.Open;
+        }
+
+        public WebSocketState State
+        {
+            get
+            {
+                var snapshot = field;
+                if (Interlocked.Exchange(ref _gateNextStateRead, 0) != 0)
+                {
+                    _stateReadEntered!.Set();
+                    _stateReadRelease!.Wait();
+                }
+
+                return snapshot;
+            }
+
+            private set;
+        }
 
         public WebSocketCloseStatus? PeerCloseStatus { get; init; } = WebSocketCloseStatus.NormalClosure;
 
@@ -186,8 +359,6 @@ public static class ClientWebSocketConnectionTests
 
         public string? SentCloseDescription { get; private set; }
 
-        public bool BlockCloseOutput { get; init; }
-
         public bool BlockCloseAsync { get; init; }
 
         public bool CloseAsyncCalled { get; private set; }
@@ -195,6 +366,14 @@ public static class ClientWebSocketConnectionTests
         public bool AbortCalled { get; private set; }
 
         public bool DisposeCalled { get; private set; }
+
+        public int CloseOutputCallCount => Volatile.Read(ref _closeOutputCallCount);
+
+        public ManualResetEventSlim? DisposeEntered { get; init; }
+
+        public ManualResetEventSlim? DisposeRelease { get; init; }
+
+        public Exception? DisposeException { get; init; }
 
         public TaskCompletionSource ReceiveStarted { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -222,22 +401,22 @@ public static class ClientWebSocketConnectionTests
                     ? WebSocketState.Closed
                     : WebSocketState.CloseReceived;
 
-            return new ValueWebSocketReceiveResult(frame.Data.Length, frame.Type, frame.EndOfMessage);
+            return new(frame.Data.Length, frame.Type, frame.EndOfMessage);
         }
 
-        public async Task CloseOutputAsync(
+        public Task CloseOutputAsync(
             WebSocketCloseStatus closeStatus,
             string? statusDescription,
             CancellationToken cancellationToken)
         {
+            Interlocked.Increment(ref _closeOutputCallCount);
             SentCloseStatus = closeStatus;
             SentCloseDescription = statusDescription;
             CloseOutputStarted.TrySetResult();
-            if (BlockCloseOutput)
-                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             State = State == WebSocketState.CloseReceived
                 ? WebSocketState.Closed
                 : WebSocketState.CloseSent;
+            return Task.CompletedTask;
         }
 
         public async Task CloseAsync(
@@ -259,7 +438,21 @@ public static class ClientWebSocketConnectionTests
             State = WebSocketState.Aborted;
         }
 
-        public void Dispose() => DisposeCalled = true;
+        public void Dispose()
+        {
+            DisposeEntered?.Set();
+            DisposeRelease?.Wait();
+            DisposeCalled = true;
+            if (DisposeException is not null)
+                throw DisposeException;
+        }
+
+        public void GateNextStateRead(ManualResetEventSlim entered, ManualResetEventSlim release)
+        {
+            _stateReadEntered = entered;
+            _stateReadRelease = release;
+            Volatile.Write(ref _gateNextStateRead, 1);
+        }
 
         public void Push(string text, WebSocketMessageType type, bool endOfMessage)
             => Push(Encoding.UTF8.GetBytes(text), type, endOfMessage);

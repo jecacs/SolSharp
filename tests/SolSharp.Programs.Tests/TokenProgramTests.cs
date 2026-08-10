@@ -24,7 +24,7 @@ public static class TokenProgramTests
             // Assert
             instruction.ProgramId.Should().Be(TokenProgram.ProgramId);
             instruction.Data.Should().Equal(Hex("03e803000000000000"));
-            instruction.Accounts.Select(a => (a.PublicKey, a.IsSigner, a.IsWritable)).Should().Equal(
+            instruction.Accounts.Select(static a => (a.PublicKey, a.IsSigner, a.IsWritable)).Should().Equal(
                 (Key(4), false, true),
                 (Key(5), false, true),
                 (Key(6), true, false));
@@ -44,7 +44,7 @@ public static class TokenProgramTests
             // Assert
             instruction.ProgramId.Should().Be(TokenProgram.ProgramId);
             instruction.Data.Should().Equal(Hex("0ce80300000000000006"));
-            instruction.Accounts.Select(a => (a.PublicKey, a.IsSigner, a.IsWritable)).Should().Equal(
+            instruction.Accounts.Select(static a => (a.PublicKey, a.IsSigner, a.IsWritable)).Should().Equal(
                 (Key(4), false, true),
                 (Key(3), false, false),
                 (Key(5), false, true),
@@ -68,8 +68,8 @@ public static class TokenProgramTests
             classic.ProgramId.Should().Be(TokenProgram.ProgramId); // default stays classic SPL Token
             extended.ProgramId.Should().Be(Token2022);
             extended.Data.Should().Equal(classic.Data);
-            extended.Accounts.Select(a => (a.PublicKey, a.IsSigner, a.IsWritable))
-                .Should().Equal(classic.Accounts.Select(a => (a.PublicKey, a.IsSigner, a.IsWritable)));
+            extended.Accounts.Select(static a => (a.PublicKey, a.IsSigner, a.IsWritable))
+                .Should().Equal(classic.Accounts.Select(static a => (a.PublicKey, a.IsSigner, a.IsWritable)));
         }
 
         [Test]

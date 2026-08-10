@@ -7,16 +7,13 @@ namespace SolSharp.Rpc.Models;
 /// <seealso href="https://solana.com/docs/rpc/http/getsignaturesforaddress">getSignaturesForAddress</seealso>
 public sealed record SignatureInfo
 {
-    private string? _signature;
-    private string? _confirmationStatus;
-
     /// <summary>The transaction signature, base58.</summary>
     [JsonPropertyName("signature")]
     [JsonRequired]
     public string Signature
     {
-        get => _signature ?? throw new InvalidOperationException("The signature entry has not been initialized.");
-        init => _signature = value ?? throw new JsonException("A signature entry must carry its signature.");
+        get => field ?? throw new InvalidOperationException("The signature entry has not been initialized.");
+        init => field = value ?? throw new JsonException("A signature entry must carry its signature.");
     }
 
     /// <summary>The slot the transaction was processed in.</summary>
@@ -44,13 +41,13 @@ public sealed record SignatureInfo
     [JsonRequired]
     public string? ConfirmationStatus
     {
-        get => _confirmationStatus;
+        get;
         init
         {
             if (value is not null and not ("processed" or "confirmed" or "finalized"))
                 throw new JsonException($"Unknown transaction confirmation status '{value}'.");
 
-            _confirmationStatus = value;
+            field = value;
         }
     }
 

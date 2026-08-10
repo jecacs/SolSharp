@@ -11,6 +11,16 @@ public static class AccountFilterTests
 {
     private const string ProgramId = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 
+    private static async Task<string> NextRequestAsync(FakeWebSocketConnection connection)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(1);
+        while (connection.SentCount == 0 && DateTime.UtcNow < deadline)
+            await Task.Yield();
+
+        connection.SentCount.Should().BeGreaterThan(0);
+        return connection.SentSnapshot()[0];
+    }
+
     [TestFixture]
     public sealed class MemoryCompare
     {
@@ -34,7 +44,7 @@ public static class AccountFilterTests
         public void NegativeOffset_ThrowsArgumentOutOfRangeException()
         {
             // Arrange
-            Action act = () => _ = AccountFilter.MemoryCompare(-1, "1");
+            Action act = static () => _ = AccountFilter.MemoryCompare(-1, "1");
 
             // Act & Assert
             act.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("offset");
@@ -48,7 +58,7 @@ public static class AccountFilterTests
         public void MaximumDecodedLengthAndOffset_AreAccepted()
         {
             // Arrange
-            var encoded = Base58.Encode(Enumerable.Repeat(byte.MaxValue, 128).ToArray());
+            var encoded = Base58.Encode([.. Enumerable.Repeat(byte.MaxValue, 128)]);
             encoded.Should().HaveLength(175);
 
             // Act
@@ -65,7 +75,7 @@ public static class AccountFilterTests
         public void InvalidEncoding_ThrowsArgumentException()
         {
             // Arrange
-            Action act = () => _ = AccountFilter.MemoryCompareBase58(0, "III");
+            Action act = static () => _ = AccountFilter.MemoryCompareBase58(0, "III");
 
             // Act & Assert
             act.Should().Throw<ArgumentException>().WithParameterName("bytesBase58");
@@ -107,7 +117,7 @@ public static class AccountFilterTests
         public void InvalidEncoding_ThrowsArgumentException()
         {
             // Arrange
-            Action act = () => _ = AccountFilter.MemoryCompareBase64(0, "not-base64");
+            Action act = static () => _ = AccountFilter.MemoryCompareBase64(0, "not-base64");
 
             // Act & Assert
             act.Should().Throw<ArgumentException>().WithParameterName("bytesBase64");
@@ -149,7 +159,7 @@ public static class AccountFilterTests
         public void MoreThan128Bytes_ThrowsArgumentException()
         {
             // Arrange
-            Action act = () => _ = AccountFilter.MemoryCompareRaw(0, new byte[129]);
+            Action act = static () => _ = AccountFilter.MemoryCompareRaw(0, new byte[129]);
 
             // Act & Assert
             act.Should().Throw<ArgumentException>().WithParameterName("bytes");
@@ -173,7 +183,7 @@ public static class AccountFilterTests
         public void NegativeValue_ThrowsArgumentOutOfRangeException()
         {
             // Arrange
-            Action act = () => _ = AccountFilter.DataSize(-1);
+            Action act = static () => _ = AccountFilter.DataSize(-1);
 
             // Act & Assert
             act.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("size");
@@ -216,7 +226,8 @@ public static class AccountFilterTests
         {
             // Arrange
             var handler = new FakeHttpMessageHandler("""{"jsonrpc":"2.0","result":[],"id":1}""");
-            using var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
+            using var http = new HttpClient(handler);
+            http.BaseAddress = new("http://localhost");
             var client = new SolanaRpcClient(http);
             var options = new GetProgramAccountsOptions
             {
@@ -249,10 +260,10 @@ public static class AccountFilterTests
             // Arrange
             var fake = new FakeWebSocketConnection();
             await using var client = new SolanaWsClient(fake);
-            await client.ConnectAsync(new Uri("wss://localhost"));
+            await client.ConnectAsync(new("wss://localhost"));
             var subscribe = client.SubscribeProgramWithOptionsAsync(
                 PublicKey.Parse(ProgramId),
-                new ProgramSubscriptionOptions
+                new()
                 {
                     Encoding = RpcAccountEncoding.Base64,
                     Filters =
@@ -274,15 +285,5 @@ public static class AccountFilterTests
             request.Should().Be(
                 """{"jsonrpc":"2.0","id":1,"method":"programSubscribe","params":["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",{"encoding":"base64","filters":[{"memcmp":{"offset":18446744073709551615,"bytes":"3Mc6vR","encoding":"base58"}},{"memcmp":{"offset":8,"bytes":"AQID","encoding":"base64"}},{"memcmp":{"offset":9,"bytes":[0,1,2,255],"encoding":"bytes"}},{"dataSize":18446744073709551615},"tokenAccountState"]}]}""");
         }
-    }
-
-    private static async Task<string> NextRequestAsync(FakeWebSocketConnection connection)
-    {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(1);
-        while (connection.SentCount == 0 && DateTime.UtcNow < deadline)
-            await Task.Yield();
-
-        connection.SentCount.Should().BeGreaterThan(0);
-        return connection.SentSnapshot()[0];
     }
 }

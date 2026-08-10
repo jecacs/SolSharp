@@ -15,11 +15,11 @@ public ref struct BorshReader(ReadOnlySpan<byte> data)
     private static readonly System.Text.Encoding StrictUtf8 = new System.Text.UTF8Encoding(false, true);
     private readonly ReadOnlySpan<byte> _data = data;
 
-    /// <summary>The number of bytes consumed so far.</summary>
-    public int Position { get; private set; }
-
     /// <summary>The number of bytes left to read.</summary>
     public readonly int Remaining => _data.Length - Position;
+
+    /// <summary>The number of bytes consumed so far.</summary>
+    public int Position { get; private set; }
 
     /// <summary>Reads a <see cref="byte"/> (u8).</summary>
     /// <returns>The value.</returns>
@@ -107,7 +107,7 @@ public ref struct BorshReader(ReadOnlySpan<byte> data)
     /// <summary>Reads a length-prefixed byte vector (a u32 length, then that many bytes) into a new array.</summary>
     /// <returns>The bytes read.</returns>
     /// <exception cref="FormatException">There are not enough bytes left.</exception>
-    public byte[] ReadByteVector() => Take(ReadLength()).ToArray();
+    public byte[] ReadByteVector() => [.. Take(ReadLength())];
 
     /// <summary>
     /// Reads a u32 length prefix - as used by Borsh Vec and String - returning it as an <see cref="int"/>.

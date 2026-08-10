@@ -23,13 +23,13 @@ internal static class MessageDecompiler
             for (var a = 0; a < compiled.AccountIndexes.Length; a++)
             {
                 int index = compiled.AccountIndexes[a];
-                accounts[a] = new AccountMeta(
+                accounts[a] = new(
                     KeyAt(keys, index),
                     IsSigner(index, numSigners),
                     IsWritable(index, numSigners, numReadonlySigned, numReadonlyUnsigned, numStatic, numLoadedWritable));
             }
 
-            result[n] = new Instruction
+            result[n] = new()
             {
                 ProgramId = KeyAt(keys, compiled.ProgramIdIndex),
                 Accounts = accounts,

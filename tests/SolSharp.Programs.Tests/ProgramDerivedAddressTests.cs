@@ -6,7 +6,7 @@ namespace SolSharp.Programs.Tests;
 
 public static class ProgramDerivedAddressTests
 {
-    private static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
+    private static PublicKey Key(byte value) => new([.. Enumerable.Repeat(value, PublicKey.Length)]);
 
     [TestFixture]
     public sealed class CreateWithSeed
@@ -60,7 +60,7 @@ public static class ProgramDerivedAddressTests
         public void NullSeed_Throws()
         {
             // Act
-            Action act = () => ProgramDerivedAddress.CreateWithSeed(Key(1), null!, Key(2));
+            Action act = static () => ProgramDerivedAddress.CreateWithSeed(Key(1), null!, Key(2));
 
             // Assert
             act.Should().Throw<ArgumentNullException>()
@@ -71,7 +71,7 @@ public static class ProgramDerivedAddressTests
         public void InvalidUtf16Seed_Throws()
         {
             // Act
-            Action act = () => ProgramDerivedAddress.CreateWithSeed(Key(1), "\uD800", Key(2));
+            Action act = static () => ProgramDerivedAddress.CreateWithSeed(Key(1), "\uD800", Key(2));
 
             // Assert
             act.Should().Throw<ArgumentException>()
@@ -101,7 +101,7 @@ public static class ProgramDerivedAddressTests
         public void SixteenSeeds_Throws()
         {
             // Arrange: 16 caller seeds leave no slot for the bump.
-            var seeds = Enumerable.Range(0, ProgramDerivedAddress.MaxSeeds).Select(i => new byte[] { (byte)i }).ToArray();
+            var seeds = Enumerable.Range(0, ProgramDerivedAddress.MaxSeeds).Select(static i => new[] { (byte)i }).ToArray();
 
             // Act
             Action act = () => ProgramDerivedAddress.FindProgramAddress(seeds, Key(9));
@@ -145,7 +145,7 @@ public static class ProgramDerivedAddressTests
         public void MoreSeedsThanMax_Throws()
         {
             // Arrange
-            var seeds = Enumerable.Range(0, ProgramDerivedAddress.MaxSeeds + 1).Select(i => new byte[] { (byte)i }).ToArray();
+            var seeds = Enumerable.Range(0, ProgramDerivedAddress.MaxSeeds + 1).Select(static i => new[] { (byte)i }).ToArray();
 
             // Act
             Action act = () => ProgramDerivedAddress.TryCreateProgramAddress(seeds, Key(9), out _);
@@ -159,7 +159,7 @@ public static class ProgramDerivedAddressTests
         {
             // Arrange: 16 seeds is the solana-sdk limit itself, so the derivation must run (whether or not
             // the resulting hash lands off-curve).
-            var seeds = Enumerable.Range(0, ProgramDerivedAddress.MaxSeeds).Select(i => new byte[] { (byte)i }).ToArray();
+            var seeds = Enumerable.Range(0, ProgramDerivedAddress.MaxSeeds).Select(static i => new[] { (byte)i }).ToArray();
 
             // Act
             Action act = () => ProgramDerivedAddress.TryCreateProgramAddress(seeds, Key(9), out _);

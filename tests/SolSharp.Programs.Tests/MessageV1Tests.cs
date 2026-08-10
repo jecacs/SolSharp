@@ -172,7 +172,7 @@ public static class MessageV1Tests
             message.ReadonlyUnsignedAccounts.Should().Be(2);
             message.AccountKeys.Should().Equal(Pk(1), Pk(6), Pk(5), Pk(4), Pk(3), Pk(9));
             decompiled.Should().ContainSingle();
-            decompiled[0].Accounts.Select(meta => (meta.PublicKey, meta.IsSigner, meta.IsWritable)).Should().Equal(
+            decompiled[0].Accounts.Select(static meta => (meta.PublicKey, meta.IsSigner, meta.IsWritable)).Should().Equal(
                 (Pk(3), false, false),
                 (Pk(5), true, false),
                 (Pk(4), false, true),
@@ -217,7 +217,7 @@ public static class MessageV1Tests
             var instruction = new Instruction
             {
                 ProgramId = Pk(250),
-                Accounts = [.. Enumerable.Range(2, 12).Select(value => AccountMeta.ReadonlySigner(Pk((byte)value)))],
+                Accounts = [.. Enumerable.Range(2, 12).Select(static value => AccountMeta.ReadonlySigner(Pk((byte)value)))],
                 Data = []
             };
 
@@ -235,7 +235,7 @@ public static class MessageV1Tests
             var instruction = new Instruction
             {
                 ProgramId = Pk(250),
-                Accounts = [.. Enumerable.Range(2, 63).Select(value => AccountMeta.Readonly(Pk((byte)value)))],
+                Accounts = [.. Enumerable.Range(2, 63).Select(static value => AccountMeta.Readonly(Pk((byte)value)))],
                 Data = []
             };
 
@@ -325,7 +325,7 @@ public static class MessageV1Tests
             var message = MessageV1.Compile(Pk(1), new Hash(Fill(8)), [instruction]);
 
             // Act
-            Action act = message.Validate;
+            var act = message.Validate;
 
             // Assert
             act.Should().NotThrow();
@@ -341,7 +341,7 @@ public static class MessageV1Tests
             accountKeys.Add(Pk(1));
 
             // Act
-            Action act = message.Validate;
+            var act = message.Validate;
 
             // Assert
             act.Should().Throw<FormatException>().WithMessage("*duplicate account address*");
@@ -361,7 +361,7 @@ public static class MessageV1Tests
             message.Instructions[0].AccountIndexes[0] = byte.MaxValue;
 
             // Act
-            Action act = message.Validate;
+            var act = message.Validate;
 
             // Assert
             act.Should().Throw<FormatException>().WithMessage("*outside*");

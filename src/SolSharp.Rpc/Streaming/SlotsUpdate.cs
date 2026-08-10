@@ -10,8 +10,6 @@ namespace SolSharp.Rpc.Streaming;
 /// <seealso href="https://solana.com/docs/rpc/websocket/slotsupdatessubscribe">slotsUpdatesSubscribe</seealso>
 public sealed record SlotsUpdate : IJsonOnDeserialized
 {
-    private string? _type;
-
     /// <summary>The slot the update is about.</summary>
     [JsonPropertyName("slot")]
     [JsonRequired]
@@ -26,8 +24,8 @@ public sealed record SlotsUpdate : IJsonOnDeserialized
     [JsonRequired]
     public string Type
     {
-        get => _type ?? throw new InvalidOperationException("The slot-update type has not been initialized.");
-        init => _type = value ?? throw new JsonException("A slot update must carry its type.");
+        get => field ?? throw new InvalidOperationException("The slot-update type has not been initialized.");
+        init => field = value ?? throw new JsonException("A slot update must carry its type.");
     }
 
     /// <summary>The update's Unix timestamp in milliseconds.</summary>

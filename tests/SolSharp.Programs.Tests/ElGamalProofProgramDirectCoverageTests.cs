@@ -63,9 +63,9 @@ public static class ElGamalProofProgramDirectCoverageTests
         public void CloseAndUnknownDiscriminators_AreRejected()
         {
             // Act
-            Action close = () => _ = ElGamalProofProgram.GetProofDataLength(
+            Action close = static () => _ = ElGamalProofProgram.GetProofDataLength(
                 ElGamalProofInstruction.CloseContextState);
-            Action unknown = () => _ = ElGamalProofProgram.GetProofDataLength((ElGamalProofInstruction)13);
+            Action unknown = static () => _ = ElGamalProofProgram.GetProofDataLength((ElGamalProofInstruction)13);
 
             // Assert
             close.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("proofInstruction");

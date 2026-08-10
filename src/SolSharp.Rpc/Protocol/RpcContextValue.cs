@@ -7,15 +7,13 @@ namespace SolSharp.Rpc.Protocol;
 /// <typeparam name="T">The type of the wrapped <see cref="Value"/>.</typeparam>
 public sealed record RpcContextValue<T>
 {
-    private RpcContext? _context;
-
     /// <summary>The slot context the result was produced at.</summary>
     [JsonPropertyName("context")]
     [JsonRequired]
     public RpcContext Context
     {
-        get => _context ?? throw new InvalidOperationException("The RPC context has not been initialized.");
-        init => _context = value ?? throw new JsonException("An RPC context wrapper must carry a non-null context.");
+        get => field ?? throw new InvalidOperationException("The RPC context has not been initialized.");
+        init => field = value ?? throw new JsonException("An RPC context wrapper must carry a non-null context.");
     }
 
     /// <summary>The method's actual result value.</summary>

@@ -168,20 +168,6 @@ public sealed class TransactionBuilder
         return signers.Length > 0 ? transaction.Sign(signers) : transaction;
     }
 
-    private Message Compile(PublicKey feePayer)
-    {
-        if (_recentBlockhash is null)
-            throw new InvalidOperationException("A recent blockhash is required; call SetRecentBlockhash.");
-        if (_instructions.Count == 0 && _nonceAdvance is null)
-            throw new InvalidOperationException("At least one instruction is required.");
-
-        return Message.Compile(feePayer, _recentBlockhash, EffectiveInstructions());
-    }
-
-    // A durable-nonce transaction must run AdvanceNonceAccount as its first instruction.
-    private List<Instruction> EffectiveInstructions()
-        => _nonceAdvance is null ? _instructions : [_nonceAdvance, .. _instructions];
-
     /// <summary>Compiles the collected instructions into an unsigned v0 <see cref="MessageV0"/>, using the set lookup tables.</summary>
     /// <returns>The compiled v0 message.</returns>
     /// <exception cref="InvalidOperationException">
@@ -212,16 +198,6 @@ public sealed class TransactionBuilder
 
         var transaction = Transaction.Create(CompileV0(feePayer));
         return signers.Length > 0 ? transaction.Sign(signers) : transaction;
-    }
-
-    private MessageV0 CompileV0(PublicKey feePayer)
-    {
-        if (_recentBlockhash is null)
-            throw new InvalidOperationException("A recent blockhash is required; call SetRecentBlockhash.");
-        if (_instructions.Count == 0 && _nonceAdvance is null)
-            throw new InvalidOperationException("At least one instruction is required.");
-
-        return MessageV0.Compile(feePayer, _recentBlockhash, EffectiveInstructions(), _lookupTables);
     }
 
     /// <summary>Compiles the collected instructions and inline configuration into an unsigned V1 message.</summary>
@@ -267,6 +243,36 @@ public sealed class TransactionBuilder
         return signers.Length > 0 ? transaction.Sign(signers) : transaction;
     }
 
+    private static void ValidateSigners(IReadOnlyList<ISigner> signers)
+    {
+        foreach (var signer in signers)
+            ArgumentNullException.ThrowIfNull(signer, nameof(signers));
+    }
+
+    private Message Compile(PublicKey feePayer)
+    {
+        if (_recentBlockhash is null)
+            throw new InvalidOperationException("A recent blockhash is required; call SetRecentBlockhash.");
+        if (_instructions.Count == 0 && _nonceAdvance is null)
+            throw new InvalidOperationException("At least one instruction is required.");
+
+        return Message.Compile(feePayer, _recentBlockhash, EffectiveInstructions());
+    }
+
+    // A durable-nonce transaction must run AdvanceNonceAccount as its first instruction.
+    private List<Instruction> EffectiveInstructions()
+        => _nonceAdvance is null ? _instructions : [_nonceAdvance, .. _instructions];
+
+    private MessageV0 CompileV0(PublicKey feePayer)
+    {
+        if (_recentBlockhash is null)
+            throw new InvalidOperationException("A recent blockhash is required; call SetRecentBlockhash.");
+        if (_instructions.Count == 0 && _nonceAdvance is null)
+            throw new InvalidOperationException("At least one instruction is required.");
+
+        return MessageV0.Compile(feePayer, _recentBlockhash, EffectiveInstructions(), _lookupTables);
+    }
+
     private MessageV1 CompileV1(PublicKey feePayer)
     {
         if (_recentBlockhash is null)
@@ -277,11 +283,5 @@ public sealed class TransactionBuilder
             throw new InvalidOperationException("V1 messages do not support address lookup tables; clear them before building V1.");
 
         return MessageV1.Compile(feePayer, _recentBlockhash, EffectiveInstructions(), _v1Config);
-    }
-
-    private static void ValidateSigners(IReadOnlyList<ISigner> signers)
-    {
-        foreach (var signer in signers)
-            ArgumentNullException.ThrowIfNull(signer, nameof(signers));
     }
 }

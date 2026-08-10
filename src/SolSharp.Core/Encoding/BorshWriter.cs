@@ -15,12 +15,12 @@ public sealed class BorshWriter
     private readonly ArrayBufferWriter<byte> _buffer;
 
     /// <summary>Creates an empty writer.</summary>
-    public BorshWriter() => _buffer = new ArrayBufferWriter<byte>();
+    public BorshWriter() => _buffer = new();
 
     /// <summary>Creates an empty writer with a preallocated capacity.</summary>
     /// <param name="initialCapacity">The number of bytes to reserve up front.</param>
     /// <exception cref="ArgumentException"><paramref name="initialCapacity"/> is less than or equal to zero.</exception>
-    public BorshWriter(int initialCapacity) => _buffer = new ArrayBufferWriter<byte>(initialCapacity);
+    public BorshWriter(int initialCapacity) => _buffer = new(initialCapacity);
 
     /// <summary>The number of bytes written so far.</summary>
     public int Length => _buffer.WrittenCount;

@@ -9,14 +9,14 @@ public static class ShortVecTests
     // Canonical compact-u16 encodings, shared by Encode and Decode fixtures.
     public static IEnumerable<TestCaseData> Vectors()
     {
-        yield return new TestCaseData(0, new byte[] { 0x00 });
-        yield return new TestCaseData(1, new byte[] { 0x01 });
-        yield return new TestCaseData(127, new byte[] { 0x7f });
-        yield return new TestCaseData(128, new byte[] { 0x80, 0x01 });
-        yield return new TestCaseData(255, new byte[] { 0xff, 0x01 });
-        yield return new TestCaseData(16383, new byte[] { 0xff, 0x7f });
-        yield return new TestCaseData(16384, new byte[] { 0x80, 0x80, 0x01 });
-        yield return new TestCaseData(65535, new byte[] { 0xff, 0xff, 0x03 });
+        yield return new(0, new byte[] { 0x00 });
+        yield return new(1, new byte[] { 0x01 });
+        yield return new(127, new byte[] { 0x7f });
+        yield return new(128, new byte[] { 0x80, 0x01 });
+        yield return new(255, new byte[] { 0xff, 0x01 });
+        yield return new(16383, new byte[] { 0xff, 0x7f });
+        yield return new(16384, new byte[] { 0x80, 0x80, 0x01 });
+        yield return new(65535, new byte[] { 0xff, 0xff, 0x03 });
     }
 
     public static IEnumerable<TestCaseData> MalformedInputs()

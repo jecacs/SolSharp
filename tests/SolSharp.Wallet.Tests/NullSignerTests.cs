@@ -13,7 +13,7 @@ public static class NullSignerTests
         public void ReturnsSolanaZeroSignaturePlaceholder()
         {
             // Arrange
-            var publicKey = new PublicKey(Enumerable.Repeat((byte)1, PublicKey.Length).ToArray());
+            var publicKey = new PublicKey([.. Enumerable.Repeat((byte)1, PublicKey.Length)]);
             var signer = new NullSigner(publicKey);
 
             // Act
@@ -21,7 +21,7 @@ public static class NullSignerTests
 
             // Assert
             signer.PublicKey.Should().Be(publicKey);
-            signature.Should().HaveCount(Signature.Length).And.OnlyContain(value => value == 0);
+            signature.Should().HaveCount(Signature.Length).And.OnlyContain(static value => value == 0);
         }
 
         [Test]
@@ -35,7 +35,7 @@ public static class NullSignerTests
             first[0] = 1;
 
             // Assert
-            signer.Sign([]).Should().OnlyContain(value => value == 0);
+            signer.Sign([]).Should().OnlyContain(static value => value == 0);
         }
     }
 }

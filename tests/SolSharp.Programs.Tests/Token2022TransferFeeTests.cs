@@ -6,12 +6,12 @@ namespace SolSharp.Programs.Tests;
 
 public static class Token2022TransferFeeTests
 {
-    private static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
+    private static PublicKey Key(byte value) => new([.. Enumerable.Repeat(value, PublicKey.Length)]);
 
     private static string Hex(Instruction instruction) => Convert.ToHexString(instruction.Data).ToLowerInvariant();
 
     private static (PublicKey, bool, bool)[] Metas(Instruction instruction)
-        => [.. instruction.Accounts.Select(account => (account.PublicKey, account.IsSigner, account.IsWritable))];
+        => [.. instruction.Accounts.Select(static account => (account.PublicKey, account.IsSigner, account.IsWritable))];
 
     [TestFixture]
     public sealed class InitializeTransferFeeConfig

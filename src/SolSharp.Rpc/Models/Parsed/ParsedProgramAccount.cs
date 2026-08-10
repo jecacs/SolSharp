@@ -8,8 +8,6 @@ namespace SolSharp.Rpc.Models.Parsed;
 /// <seealso href="https://solana.com/docs/rpc/websocket/programsubscribe">programSubscribe</seealso>
 public sealed record ParsedProgramAccount
 {
-    private ParsedAccountInfo? _account;
-
     /// <summary>The account address.</summary>
     [JsonPropertyName("pubkey")]
     public required PublicKey PublicKey { get; init; }
@@ -18,7 +16,7 @@ public sealed record ParsedProgramAccount
     [JsonPropertyName("account")]
     public required ParsedAccountInfo Account
     {
-        get => _account!;
-        init => _account = value ?? throw new JsonException("A parsed keyed account must carry a non-null account.");
+        get;
+        init => field = value ?? throw new JsonException("A parsed keyed account must carry a non-null account.");
     }
 }

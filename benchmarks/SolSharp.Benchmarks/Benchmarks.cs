@@ -29,9 +29,9 @@ public class SigningBenchmarks
 [MemoryDiagnoser]
 public class TransactionBenchmarks
 {
+    private const string Blockhash = "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8";
     private static readonly PublicKey Payer = new(Fill(1));
     private static readonly PublicKey Recipient = new(Fill(2));
-    private const string Blockhash = "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8";
 
     private readonly Keypair _signer = Keypair.FromSeed(Fill(1));
     private readonly Transaction _signed;
@@ -74,8 +74,8 @@ public class TransactionBenchmarks
 [MemoryDiagnoser]
 public class Base58Benchmarks
 {
-    private static readonly byte[] KeyBytes = [.. Enumerable.Range(0, 32).Select(i => (byte)i)];
     private const string KeyBase58 = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+    private static readonly byte[] KeyBytes = [.. Enumerable.Range(0, 32).Select(static i => (byte)i)];
 
     [Benchmark]
     public string Encode() => Base58.Encode(KeyBytes);
@@ -108,26 +108,31 @@ public class JsonBenchmarks
     private static readonly RpcRequest Request = RpcRequests.GetAccountInfo(
         PublicKey.Parse("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"), Commitment.Confirmed);
 
-    [BenchmarkCategory("serialize request"), Benchmark(Baseline = true)]
+    [BenchmarkCategory("serialize request")]
+    [Benchmark(Baseline = true)]
     public string SerializeRequest_Reflection()
         => JsonSerializer.Serialize(Request, ReflectionOptions);
 
-    [BenchmarkCategory("serialize request"), Benchmark]
+    [BenchmarkCategory("serialize request")]
+    [Benchmark]
     public string SerializeRequest_SourceGen()
         => JsonSerializer.Serialize(Request, RpcJson.TypeInfo<RpcRequest>());
 
-    [BenchmarkCategory("deserialize parsed tx"), Benchmark(Baseline = true)]
+    [BenchmarkCategory("deserialize parsed tx")]
+    [Benchmark(Baseline = true)]
     public ParsedTransaction? DeserializeParsedTransaction_Reflection()
         => JsonSerializer.Deserialize<ParsedTransaction>(ParsedTransactionJson, ReflectionOptions);
 
-    [BenchmarkCategory("deserialize parsed tx"), Benchmark]
+    [BenchmarkCategory("deserialize parsed tx")]
+    [Benchmark]
     public ParsedTransaction? DeserializeParsedTransaction_SourceGen()
         => JsonSerializer.Deserialize(ParsedTransactionJson, RpcJson.TypeInfo<ParsedTransaction>());
 
     // First serialization through freshly built options: metadata for the request graph is constructed
     // from scratch, which is where reflection pays its warmup cost. This approximates per-process
     // startup, not steady-state throughput.
-    [BenchmarkCategory("cold start"), Benchmark(Baseline = true)]
+    [BenchmarkCategory("cold start")]
+    [Benchmark(Baseline = true)]
     public string ColdStart_Reflection()
     {
         var options = new JsonSerializerOptions
@@ -140,7 +145,8 @@ public class JsonBenchmarks
         return JsonSerializer.Serialize(Request, options);
     }
 
-    [BenchmarkCategory("cold start"), Benchmark]
+    [BenchmarkCategory("cold start")]
+    [Benchmark]
     public string ColdStart_SourceGen()
     {
         var options = new JsonSerializerOptions

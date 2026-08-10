@@ -8,9 +8,6 @@ namespace SolSharp.Rpc.Models;
 /// <seealso href="https://solana.com/docs/rpc/http/gettokenlargestaccounts">getTokenLargestAccounts</seealso>
 public sealed record TokenLargestAccount
 {
-    private string? _amount;
-    private string? _uiAmountString;
-
     /// <summary>The token account's address.</summary>
     [JsonPropertyName("address")]
     [JsonRequired]
@@ -21,8 +18,8 @@ public sealed record TokenLargestAccount
     [JsonRequired]
     public string Amount
     {
-        get => _amount ?? throw new InvalidOperationException("The token-account amount has not been initialized.");
-        init => _amount = value ?? throw new JsonException("A largest-token-account entry must carry its amount.");
+        get => field ?? throw new InvalidOperationException("The token-account amount has not been initialized.");
+        init => field = value ?? throw new JsonException("A largest-token-account entry must carry its amount.");
     }
 
     /// <summary>The mint's decimals.</summary>
@@ -40,7 +37,7 @@ public sealed record TokenLargestAccount
     [JsonRequired]
     public string UiAmountString
     {
-        get => _uiAmountString ?? throw new InvalidOperationException("The UI token-account amount has not been initialized.");
-        init => _uiAmountString = value ?? throw new JsonException("A largest-token-account entry must carry its UI amount string.");
+        get => field ?? throw new InvalidOperationException("The UI token-account amount has not been initialized.");
+        init => field = value ?? throw new JsonException("A largest-token-account entry must carry its UI amount string.");
     }
 }

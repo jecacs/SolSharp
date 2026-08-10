@@ -14,13 +14,13 @@ public static class Token2022ExtensionsTests
     {
         var bytes = new byte[PublicKey.Length];
         Array.Fill(bytes, value);
-        return new PublicKey(bytes);
+        return new(bytes);
     }
 
     /// <summary>Builds extended account data: 165 padded base bytes, the account-type byte, then TLV entries.</summary>
     private static byte[] Extended(byte accountType, params (ushort Type, byte[] Value)[] entries)
     {
-        var data = new byte[166 + entries.Sum(entry => 4 + entry.Value.Length)];
+        var data = new byte[166 + entries.Sum(static entry => 4 + entry.Value.Length)];
         data[165] = accountType;
 
         var offset = 166;
@@ -180,7 +180,7 @@ public static class Token2022ExtensionsTests
                 Extended(accountType: 1, ((ushort)ExtensionType.DefaultAccountState, [state])));
 
             extensions.Should().NotBeNull();
-            extensions!.GetDefaultAccountState().Should().BeNull();
+            extensions.GetDefaultAccountState().Should().BeNull();
         }
 
         [Test]
@@ -190,7 +190,7 @@ public static class Token2022ExtensionsTests
                 Extended(accountType: 1, (29, [0xAA, 0xBB])));
 
             extensions.Should().NotBeNull();
-            extensions!.Extensions.Should().ContainSingle().Which.Should().BeEquivalentTo(
+            extensions.Extensions.Should().ContainSingle().Which.Should().BeEquivalentTo(
                 new TokenExtension { Type = (ExtensionType)29, Data = [0xAA, 0xBB] });
         }
 

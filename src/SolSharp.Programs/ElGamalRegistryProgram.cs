@@ -1,4 +1,3 @@
-using System.Text;
 using SolSharp.Core.Constants;
 using SolSharp.Core.Primitives;
 
@@ -10,11 +9,11 @@ public static class ElGamalRegistryProgram
     /// <summary>The encoded ElGamal registry state length.</summary>
     public const int RegistryStateLength = PublicKey.Length * 2;
 
-    private static readonly byte[] RegistrySeed = Encoding.ASCII.GetBytes("elgamal-registry");
-    private static readonly PublicKey InstructionsSysvar = PublicKey.Parse(Sysvars.Instructions);
-
     /// <summary>The SPL ElGamal registry program address.</summary>
     public static readonly PublicKey ProgramId = PublicKey.Parse("regVYJW7tcT8zipN5YiBvHsvR5jXW1uLFxaHSbugABg");
+
+    private static readonly byte[] RegistrySeed = [.. "elgamal-registry"u8];
+    private static readonly PublicKey InstructionsSysvar = PublicKey.Parse(Sysvars.Instructions);
 
     /// <summary>Derives the canonical registry PDA for a wallet owner.</summary>
     /// <param name="owner">The wallet owner.</param>
@@ -36,7 +35,7 @@ public static class ElGamalRegistryProgram
             AccountMeta.Readonly(SystemProgram.ProgramId)
         };
         var offset = AppendProofAccount(accounts, proofLocation);
-        return new Instruction { ProgramId = ProgramId, Accounts = accounts, Data = [0, unchecked((byte)offset)] };
+        return new() { ProgramId = ProgramId, Accounts = accounts, Data = [0, unchecked((byte)offset)] };
     }
 
     /// <summary>Updates a registry with an ElGamal key certified by a precomputed validity proof.</summary>
@@ -49,7 +48,7 @@ public static class ElGamalRegistryProgram
         var accounts = new List<AccountMeta> { AccountMeta.Writable(GetRegistryAddress(owner)) };
         var offset = AppendProofAccount(accounts, proofLocation);
         accounts.Add(AccountMeta.ReadonlySigner(owner));
-        return new Instruction { ProgramId = ProgramId, Accounts = accounts, Data = [1, unchecked((byte)offset)] };
+        return new() { ProgramId = ProgramId, Accounts = accounts, Data = [1, unchecked((byte)offset)] };
     }
 
     /// <summary>Decodes the fixed 64-byte registry state.</summary>
@@ -57,7 +56,7 @@ public static class ElGamalRegistryProgram
     /// <returns>The decoded registry, or <c>null</c> for the wrong length.</returns>
     public static ElGamalRegistryState? DecodeState(ReadOnlySpan<byte> data)
         => data.Length == RegistryStateLength
-            ? new ElGamalRegistryState(new PublicKey(data[..PublicKey.Length]), data[PublicKey.Length..].ToArray())
+            ? new ElGamalRegistryState(new(data[..PublicKey.Length]), [.. data[PublicKey.Length..]])
             : null;
 
     private static sbyte AppendProofAccount(List<AccountMeta> accounts, ConfidentialProofLocation proofLocation)

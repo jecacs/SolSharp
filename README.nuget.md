@@ -2,7 +2,7 @@
 
 [![Security checks](https://github.com/jecacs/SolSharp/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/jecacs/SolSharp/actions/workflows/security.yml?query=branch%3Amain)
 [![CodeQL](https://github.com/jecacs/SolSharp/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/jecacs/SolSharp/actions/workflows/codeql.yml?query=branch%3Amain)
-[![Unit test coverage](https://img.shields.io/badge/unit_test_coverage-93.7%25_line-brightgreen)](https://github.com/jecacs/SolSharp/blob/v2.0.0/README.md#quality-gates)
+[![Unit test coverage](https://img.shields.io/badge/unit_test_coverage-93.7%25_line-brightgreen)](https://github.com/jecacs/SolSharp/blob/v3.0.0/README.md#quality-gates)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/jecacs/SolSharp/badge)](https://scorecard.dev/viewer/?uri=github.com/jecacs/SolSharp)
 
 A modern, contract-driven, Native AOT-ready .NET SDK for Solana — keys and signatures,
@@ -33,11 +33,11 @@ and control, this is aimed at you.
   PoP-gated same-message BLS aggregation,
   and domain-separated Solana off-chain messages.
 - **Traceable parity.** Exact upstream commit pins, coverage boundaries, and exclusions are published
-  in the [Rust parity matrix](https://github.com/jecacs/SolSharp/blob/v2.0.0/docs/RUST_PARITY.md); SolSharp
+  in the [Rust parity matrix](https://github.com/jecacs/SolSharp/blob/v3.0.0/docs/RUST_PARITY.md); SolSharp
   is independently written and is not an official Anza/Solana product.
 - **Purposeful dependencies.** A dependency-light Core, allocation-free hot paths and span-based APIs;
   the RPC resilience pipeline and vetted Ed25519/BLS backends are included deliberately.
-- **Measured quality.** Across the four functional assemblies, the reproducible .NET 8 Linux
+- **Measured quality.** Across the four functional assemblies, the reproducible .NET 10 Linux
   unit-coverage baseline covers 93.7% of hand-written production lines. CI merges overlapping reports,
   excludes generated sources, publishes line and branch details, enforces a 90% repository-wide line
   floor, and rejects documentation that overstates the current result.
@@ -51,10 +51,10 @@ and control, this is aimed at you.
 
 Solnet is an established, ecosystem-oriented .NET SDK. This compact comparison uses its
 [published 8.7.0 release](https://github.com/bmresearch/Solnet/commit/e8df87bdb2006376ba3eea9e1d3b857c84fc5685);
-SolSharp is release 2.0.0; the reference column is the pinned
-[official Rust parity matrix](https://github.com/jecacs/SolSharp/blob/v2.0.0/docs/RUST_PARITY.md).
+SolSharp is release 3.0.0; the reference column is the pinned
+[official Rust parity matrix](https://github.com/jecacs/SolSharp/blob/v3.0.0/docs/RUST_PARITY.md).
 
-| Capability | Official Rust SDK / Agave | SolSharp 2.0 | Solnet published 8.7.0 |
+| Capability | Official Rust SDK / Agave | SolSharp 3.0 | Solnet published 8.7.0 |
 | --- | --- | --- | --- |
 | **Transactions** | Legacy, V0, feature-gated SIMD-0385 V1 | Legacy/V0/V1 exact wire build, parse, signing, validation, and decompilation | Legacy/V0; the published decoder rejects versions above 0 |
 | **RPC / PubSub** | 53 applicable request variants; nine subscription families and their effective config unions | 53/53 RPC; 9/9 PubSub, including exact HTTP/WS account-encoding unions, effective `SubscribeAccountWithOptionsAsync` / `SubscribeProgramWithOptionsAsync` configs, early signature events, and explicit V1 opt-ins | 50/53 RPC; 6/9 PubSub families |
@@ -65,7 +65,7 @@ SolSharp is release 2.0.0; the reference column is the pinned
 
 Solnet repository head contains newer unreleased work; in particular, its current class named V1 does not yet
 use the pinned SIMD-0385 message body and message-first signature envelope. The full evidence-linked comparison
-is in the [repository README](https://github.com/jecacs/SolSharp/blob/v2.0.0/README.md#how-it-compares-to-solnet).
+is in the [repository README](https://github.com/jecacs/SolSharp/blob/v3.0.0/README.md#how-it-compares-to-solnet).
 
 ## Quick start
 
@@ -108,13 +108,13 @@ var accountChanges = await ws.SubscribeAccountWithOptionsAsync(
 
 ## Learn more
 
-- [Usage guide](https://github.com/jecacs/SolSharp/blob/v2.0.0/docs/USAGE.md) — a task-oriented
+- [Usage guide](https://github.com/jecacs/SolSharp/blob/v3.0.0/docs/USAGE.md) — a task-oriented
   cookbook: keys, export, mnemonics, signed off-chain messages, reads, SPL token state, priority fees, v0 + address lookup
   tables, SIMD-0385 V1, durable nonces, decoding transactions, subscriptions, batching, and confirmation.
 - [GitHub repository](https://github.com/jecacs/SolSharp)
-- [Changelog](https://github.com/jecacs/SolSharp/blob/v2.0.0/CHANGELOG.md)
-- [Upstream parity and provenance](https://github.com/jecacs/SolSharp/blob/v2.0.0/docs/RUST_PARITY.md)
-- [Third-party notices](https://github.com/jecacs/SolSharp/blob/v2.0.0/THIRD_PARTY_NOTICES.md)
+- [Changelog](https://github.com/jecacs/SolSharp/blob/v3.0.0/CHANGELOG.md)
+- [Upstream parity and provenance](https://github.com/jecacs/SolSharp/blob/v3.0.0/docs/RUST_PARITY.md)
+- [Third-party notices](https://github.com/jecacs/SolSharp/blob/v3.0.0/THIRD_PARTY_NOTICES.md)
 
 ## Security
 

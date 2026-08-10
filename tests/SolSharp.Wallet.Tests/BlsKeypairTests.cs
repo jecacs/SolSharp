@@ -28,10 +28,10 @@ public static class BlsKeypairTests
         "94DF8CAD9915EF9E41269D181CD2DB7FE0590D52BBB1C10352CA557B454FE0732F0EF953F1938B7C019B75EB7A7831BA" +
         "02B385EDA726BDDC81B84E4B2D95435F6DD947E5CCCD22F4D311BE7BDCE02B0DC3E5B2B428F14F6AB1421B246BA0A5BF";
 
-    private static byte[] InputKeyMaterial => [.. Enumerable.Range(0, 32).Select(value => (byte)value)];
+    private static byte[] InputKeyMaterial => [.. Enumerable.Range(0, 32).Select(static value => (byte)value)];
 
     private static PublicKey VoteAccount =>
-        new(Enumerable.Range(0, 32).Select(value => (byte)(0x80 + value)).ToArray());
+        new([.. Enumerable.Range(0, 32).Select(static value => (byte)(0x80 + value))]);
 
     [TestFixture]
     public sealed class Generate
@@ -107,9 +107,9 @@ public static class BlsKeypairTests
 
             // Act
             using var imported = BlsKeypair.FromSecretKey(expected);
-            Action zero = () => _ = BlsKeypair.FromSecretKey(new byte[BlsKeypair.SecretKeyLength]);
-            Action noncanonical = () => _ = BlsKeypair.FromSecretKey(
-                Enumerable.Repeat(byte.MaxValue, BlsKeypair.SecretKeyLength).ToArray());
+            Action zero = static () => _ = BlsKeypair.FromSecretKey(new byte[BlsKeypair.SecretKeyLength]);
+            Action noncanonical = static () => _ = BlsKeypair.FromSecretKey(
+                [.. Enumerable.Repeat(byte.MaxValue, BlsKeypair.SecretKeyLength)]);
 
             // Assert
             imported.PublicKey.ToBytes().Should().Equal(Convert.FromHexString(ExpectedPublicKey));
@@ -188,7 +188,7 @@ public static class BlsKeypairTests
         public void NullSignerPlaceholder_IsRejectedBeforeKeyDerivation()
         {
             // Arrange
-            var signer = new NullSigner(new PublicKey(new byte[PublicKey.Length]));
+            var signer = new NullSigner(new(new byte[PublicKey.Length]));
 
             // Act
             Action act = () => _ = BlsKeypair.DeriveFromSigner(signer, "seed"u8);
@@ -201,7 +201,7 @@ public static class BlsKeypairTests
         public void Ed25519SignerAndPublicSeed_DeterministicallyDomainSeparateDerivedKeys()
         {
             // Arrange
-            using var signer = Keypair.FromSeed(Enumerable.Repeat((byte)7, Keypair.SeedLength).ToArray());
+            using var signer = Keypair.FromSeed([.. Enumerable.Repeat((byte)7, Keypair.SeedLength)]);
 
             // Act
             using var first = BlsKeypair.DeriveFromSigner(signer, "first"u8);
@@ -373,7 +373,7 @@ public static class BlsKeypairTests
             BlsProofOfPossession.Parse(proof.ToString()).Should().Be(proof);
             BlsProofOfPossession.TryParse("not base64", out _).Should().BeFalse();
 
-            var otherVoteAccount = new PublicKey(Enumerable.Repeat((byte)42, PublicKey.Length).ToArray());
+            var otherVoteAccount = new PublicKey([.. Enumerable.Repeat((byte)42, PublicKey.Length)]);
             keypair.PublicKey.VerifyVoteProofOfPossession(proof, otherVoteAccount).Should().BeFalse();
         }
     }
@@ -386,7 +386,7 @@ public static class BlsKeypairTests
         {
             // Arrange
             using var keypair = BlsKeypair.Derive(InputKeyMaterial);
-            using var otherKeypair = BlsKeypair.Derive(Enumerable.Range(1, 32).Select(value => (byte)value).ToArray());
+            using var otherKeypair = BlsKeypair.Derive([.. Enumerable.Range(1, 32).Select(static value => (byte)value)]);
 
             // Act
             var proof = keypair.CreateProofOfPossession("payload"u8);
@@ -401,6 +401,8 @@ public static class BlsKeypairTests
     [TestFixture]
     public sealed class Dispose
     {
+        // Disposal racing the captured keypair is the behavior under test.
+        // ReSharper disable AccessToDisposedClosure
         [Test]
         public async Task RacingWithExports_ReturnsOnlyCoherentKeysOrObjectDisposed()
         {
@@ -457,6 +459,7 @@ public static class BlsKeypairTests
             }
         }
 
+        // ReSharper restore AccessToDisposedClosure
         [Test]
         public void SecretOperationsThrowAfterDisposeWhilePublicKeyRemainsUsable()
         {

@@ -8,6 +8,12 @@ internal ref struct SysvarBincodeReader(ReadOnlySpan<byte> data)
     private readonly ReadOnlySpan<byte> _data = data;
     private int _offset;
 
+    public readonly void EnsureEnd()
+    {
+        if (_offset != _data.Length)
+            throw Invalid($"Account data has {_data.Length - _offset} trailing bytes.");
+    }
+
     public bool ReadBool()
     {
         var value = ReadByte();
@@ -40,11 +46,7 @@ internal ref struct SysvarBincodeReader(ReadOnlySpan<byte> data)
         return (int)count;
     }
 
-    public readonly void EnsureEnd()
-    {
-        if (_offset != _data.Length)
-            throw Invalid($"Account data has {_data.Length - _offset} trailing bytes.");
-    }
+    private static ArgumentException Invalid(string message) => new(message);
 
     private ReadOnlySpan<byte> ReadBytes(int length)
     {
@@ -55,6 +57,4 @@ internal ref struct SysvarBincodeReader(ReadOnlySpan<byte> data)
         _offset += length;
         return result;
     }
-
-    private static ArgumentException Invalid(string message) => new(message);
 }

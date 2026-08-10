@@ -43,7 +43,7 @@ public sealed class VoteEpochCreditJsonConverter : JsonConverter<VoteEpochCredit
             throw new JsonException("A vote epoch-credit value must be exactly [epoch, credits, previousCredits] as u64 values.");
         }
 
-        return new VoteEpochCredit(epoch, credits, previousCredits);
+        return new(epoch, credits, previousCredits);
     }
 
     /// <inheritdoc/>

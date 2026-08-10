@@ -7,8 +7,6 @@ namespace SolSharp.Rpc.Models.Parsed;
 /// <seealso href="https://solana.com/docs/rpc/json-structures">Solana RPC JSON structures</seealso>
 public sealed record ParsedInnerInstructions
 {
-    private IReadOnlyList<ParsedInstruction>? _instructions;
-
     /// <summary>The index of the top-level instruction these inner instructions were invoked from.</summary>
     [JsonPropertyName("index")]
     [JsonRequired]
@@ -19,13 +17,13 @@ public sealed record ParsedInnerInstructions
     [JsonRequired]
     public IReadOnlyList<ParsedInstruction> Instructions
     {
-        get => _instructions!;
+        get => field!;
         init
         {
             if (value is null || value.Any(static instruction => instruction is null))
                 throw new JsonException("Parsed inner instructions must carry only non-null instructions.");
 
-            _instructions = value;
+            field = value;
         }
     }
 }

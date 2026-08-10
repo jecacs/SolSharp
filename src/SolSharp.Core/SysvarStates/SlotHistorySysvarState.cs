@@ -19,9 +19,6 @@ public enum SlotHistoryCheck
 /// <summary>The exact fixed-size wincode state of the slot-history sysvar.</summary>
 public sealed record SlotHistorySysvarState
 {
-    private const int BitsPerBlock = 64;
-    private readonly ulong[] _blocks;
-
     /// <summary>The fixed number of slot bits retained by the runtime.</summary>
     public const ulong MaximumEntries = 1_048_576;
 
@@ -30,6 +27,8 @@ public sealed record SlotHistorySysvarState
 
     /// <summary>The exact number of serialized 64-bit bit-vector blocks.</summary>
     public const int BlockCount = 16_384;
+    private const int BitsPerBlock = 64;
+    private readonly ulong[] _blocks;
 
     private SlotHistorySysvarState(ulong[] blocks, ulong nextSlot)
     {

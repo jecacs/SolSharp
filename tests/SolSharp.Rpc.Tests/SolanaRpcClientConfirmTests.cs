@@ -15,17 +15,17 @@ public static class SolanaRpcClientConfirmTests
     private static (SolanaRpcClient Client, FakeHttpMessageHandler Handler) Make(string responseJson)
     {
         var handler = new FakeHttpMessageHandler(responseJson);
-        var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
-        return (new SolanaRpcClient(http), handler);
+        var http = new HttpClient(handler) { BaseAddress = new("http://localhost") };
+        return (new(http), handler);
     }
 
     private static SolanaRpcClient Sequenced(params string[] responses)
     {
         var messages = responses
-            .Select(json => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") })
+            .Select(static json => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") })
             .ToArray();
-        var http = new HttpClient(new SequenceHandler(messages)) { BaseAddress = new Uri("http://localhost") };
-        return new SolanaRpcClient(http);
+        var http = new HttpClient(new SequenceHandler(messages)) { BaseAddress = new("http://localhost") };
+        return new(http);
     }
 
     [TestFixture]
@@ -123,7 +123,7 @@ public static class SolanaRpcClientConfirmTests
         {
             // Arrange
             var handler = new BlockingHandler();
-            var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
+            var http = new HttpClient(handler) { BaseAddress = new("http://localhost") };
             var client = new SolanaRpcClient(http);
 
             // Act
@@ -153,10 +153,10 @@ public static class SolanaRpcClientConfirmTests
             var handler = new SequenceHandler(
                 Json(StatusWithoutConfirmationStatus("1")),
                 Json(StatusWithoutConfirmationStatus("2")));
-            var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
+            var http = new HttpClient(handler) { BaseAddress = new("http://localhost") };
             var client = new SolanaRpcClient(http);
 
-            var status = await client.ConfirmTransactionAsync("Sig111", Commitment.Confirmed);
+            var status = await client.ConfirmTransactionAsync("Sig111");
 
             status.Confirmations.Should().Be(2);
             handler.CallCount.Should().Be(2, "one confirmation is still processed in the legacy response shape");

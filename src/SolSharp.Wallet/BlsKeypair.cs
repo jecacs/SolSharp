@@ -30,9 +30,7 @@ public sealed class BlsKeypair : IDisposable
     /// <summary>The length of <c>ALPENGLOW || vote_account</c>.</summary>
     public const int VoteProofPayloadLength = 41;
 
-    private static ReadOnlySpan<byte> VoteProofDomain => "ALPENGLOW"u8;
-
-    private readonly object _secretGate = new();
+    private readonly Lock _secretGate = new();
     private readonly byte[] _secretKey;
     private bool _disposed;
 
@@ -40,7 +38,13 @@ public sealed class BlsKeypair : IDisposable
     {
         _secretKey = secretKey;
         PublicKey = BlsPublicKey.FromValidated(BlsOperations.DerivePublicKey(secretKey));
-        PopVerifiedPublicKey = new BlsPopVerifiedPublicKey(PublicKey);
+        PopVerifiedPublicKey = new(PublicKey);
+    }
+
+    /// <summary>Finalizer backstop that clears the managed secret when deterministic disposal was missed.</summary>
+    ~BlsKeypair()
+    {
+        ClearSecret();
     }
 
     /// <summary>The validated compressed BLS public key.</summary>
@@ -51,6 +55,8 @@ public sealed class BlsKeypair : IDisposable
     /// the locally held secret, it matches the pinned Rust keypair's <c>PopVerified</c> public-key boundary.
     /// </summary>
     public BlsPopVerifiedPublicKey PopVerifiedPublicKey { get; }
+
+    private static ReadOnlySpan<byte> VoteProofDomain => "ALPENGLOW"u8;
 
     /// <summary>Generates a keypair by applying the pinned BLS key-generation function to 32 random bytes.</summary>
     /// <returns>A fresh BLS keypair.</returns>
@@ -122,7 +128,7 @@ public sealed class BlsKeypair : IDisposable
         if (!BlsOperations.IsCanonicalSecretKey(secretKey))
             throw new ArgumentException("BLS secret key must be a canonical nonzero 32-byte little-endian scalar.", nameof(secretKey));
 
-        return Create(secretKey.ToArray());
+        return Create([.. secretKey]);
     }
 
     /// <summary>
@@ -154,7 +160,7 @@ public sealed class BlsKeypair : IDisposable
             CryptographicOperations.ZeroMemory(expectedPublicKey);
         }
 
-        return Create(secretKey.ToArray());
+        return Create([.. secretKey]);
     }
 
     /// <summary>
@@ -198,43 +204,6 @@ public sealed class BlsKeypair : IDisposable
         catch (JsonException exception)
         {
             throw new FormatException("BLS keypair is not a valid UTF-8 JSON number array.", exception);
-        }
-    }
-
-    private static BlsKeypair FromJsonValues(int[]? values)
-    {
-        if (values is null)
-            throw new FormatException($"BLS keypair JSON must contain exactly {KeypairLength} byte values.");
-
-        byte[]? bytes = null;
-        try
-        {
-            if (values.Length != KeypairLength)
-                throw new FormatException($"BLS keypair JSON must contain exactly {KeypairLength} byte values.");
-
-            bytes = new byte[KeypairLength];
-            for (var i = 0; i < values.Length; i++)
-            {
-                if (values[i] is < byte.MinValue or > byte.MaxValue)
-                    throw new FormatException($"BLS keypair JSON value at index {i} is outside the byte range.");
-
-                bytes[i] = (byte)values[i];
-            }
-
-            try
-            {
-                return FromBytes(bytes);
-            }
-            catch (ArgumentException exception)
-            {
-                throw new FormatException("BLS keypair JSON contains an invalid keypair.", exception);
-            }
-        }
-        finally
-        {
-            if (bytes is not null)
-                CryptographicOperations.ZeroMemory(bytes);
-            Array.Clear(values);
         }
     }
 
@@ -385,12 +354,6 @@ public sealed class BlsKeypair : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    /// <summary>Finalizer backstop that clears the managed secret when deterministic disposal was missed.</summary>
-    ~BlsKeypair()
-    {
-        ClearSecret();
-    }
-
     internal static void WriteVoteProofPayload(PublicKey voteAccount, Span<byte> destination)
     {
         if (destination.Length != VoteProofPayloadLength)
@@ -400,11 +363,48 @@ public sealed class BlsKeypair : IDisposable
         voteAccount.CopyTo(destination[VoteProofDomain.Length..]);
     }
 
+    private static BlsKeypair FromJsonValues(int[]? values)
+    {
+        if (values is null)
+            throw new FormatException($"BLS keypair JSON must contain exactly {KeypairLength} byte values.");
+
+        byte[]? bytes = null;
+        try
+        {
+            if (values.Length != KeypairLength)
+                throw new FormatException($"BLS keypair JSON must contain exactly {KeypairLength} byte values.");
+
+            bytes = new byte[KeypairLength];
+            for (var i = 0; i < values.Length; i++)
+            {
+                if (values[i] is < byte.MinValue or > byte.MaxValue)
+                    throw new FormatException($"BLS keypair JSON value at index {i} is outside the byte range.");
+
+                bytes[i] = (byte)values[i];
+            }
+
+            try
+            {
+                return FromBytes(bytes);
+            }
+            catch (ArgumentException exception)
+            {
+                throw new FormatException("BLS keypair JSON contains an invalid keypair.", exception);
+            }
+        }
+        finally
+        {
+            if (bytes is not null)
+                CryptographicOperations.ZeroMemory(bytes);
+            Array.Clear(values);
+        }
+    }
+
     private static BlsKeypair Create(byte[] ownedSecretKey)
     {
         try
         {
-            return new BlsKeypair(ownedSecretKey);
+            return new(ownedSecretKey);
         }
         catch
         {

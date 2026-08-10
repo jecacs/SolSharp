@@ -40,14 +40,16 @@ public static class BlsPublicKeyTests
             using var first = BlsKeypair.Derive(InputKeyMaterial(0));
             using var second = BlsKeypair.Derive(InputKeyMaterial(1));
             var proof = first.CreateProofOfPossession("registry"u8);
+            var firstPublicKey = first.PublicKey;
+            var secondPublicKey = second.PublicKey;
 
             // Act
-            var verified = first.PublicKey.VerifyAndWrapProofOfPossession(proof, "registry"u8);
-            Action wrongKey = () => _ = second.PublicKey.VerifyAndWrapProofOfPossession(proof, "registry"u8);
-            Action wrongPayload = () => _ = first.PublicKey.VerifyAndWrapProofOfPossession(proof, "other"u8);
+            var verified = firstPublicKey.VerifyAndWrapProofOfPossession(proof, "registry"u8);
+            Action wrongKey = () => _ = secondPublicKey.VerifyAndWrapProofOfPossession(proof, "registry"u8);
+            Action wrongPayload = () => _ = firstPublicKey.VerifyAndWrapProofOfPossession(proof, "other"u8);
 
             // Assert
-            verified.PublicKey.Should().Be(first.PublicKey);
+            verified.PublicKey.Should().Be(firstPublicKey);
             wrongKey.Should().Throw<CryptographicException>();
             wrongPayload.Should().Throw<CryptographicException>();
         }
@@ -138,7 +140,7 @@ public static class BlsSignatureTests
             BlsSignature[] nullEntry = [signature, null!];
 
             // Act
-            Action empty = () => _ = BlsSignature.Aggregate([]);
+            Action empty = static () => _ = BlsSignature.Aggregate([]);
             Action containsNull = () => _ = BlsSignature.Aggregate(nullEntry);
             Action infinity = () => _ = BlsSignature.Aggregate([signature, negative]);
 
@@ -223,7 +225,7 @@ public static class BlsAggregatePublicKeyTests
             BlsPopVerifiedPublicKey[] nullEntry = [verified, null!];
 
             // Act
-            Action empty = () => _ = BlsAggregatePublicKey.Aggregate([]);
+            Action empty = static () => _ = BlsAggregatePublicKey.Aggregate([]);
             Action containsNull = () => _ = BlsAggregatePublicKey.Aggregate(nullEntry);
             Action infinity = () => _ = BlsAggregatePublicKey.Aggregate([verified, negativeVerified]);
 
@@ -347,12 +349,12 @@ internal static class BlsAggregationVectors
         "1495F5519F918FEA72747905FD0EA49C264EA0F8FFBE17AAF583B21CD9838D246593B5BF94BDDE84191F68C29936EE28";
 
     internal static byte[] InputKeyMaterial(int offset) =>
-        [.. Enumerable.Range(offset, BlsKeypair.MinimumInputKeyMaterialLength).Select(value => checked((byte)value))];
+        [.. Enumerable.Range(offset, BlsKeypair.MinimumInputKeyMaterialLength).Select(static value => checked((byte)value))];
 
     internal static string ReplaceAt(string value, Index index, char replacement)
     {
         var chars = value.ToCharArray();
         chars[index] = replacement;
-        return new string(chars);
+        return new(chars);
     }
 }

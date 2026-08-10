@@ -2,6 +2,15 @@ using SolSharp.Core.Primitives;
 
 namespace SolSharp.Rpc;
 
+internal enum TokenAccountsFilterKind
+{
+    /// <summary>A mint-address filter.</summary>
+    Mint,
+
+    /// <summary>An SPL Token program-id filter.</summary>
+    ProgramId
+}
+
 /// <summary>
 /// The mutually exclusive mint or token-program filter accepted by
 /// <c>getTokenAccountsByOwner</c> and <c>getTokenAccountsByDelegate</c>.
@@ -29,13 +38,4 @@ public sealed class TokenAccountsFilter
     /// <returns>A token-program filter.</returns>
     public static TokenAccountsFilter ByProgramId(PublicKey programId) =>
         new(TokenAccountsFilterKind.ProgramId, programId);
-}
-
-internal enum TokenAccountsFilterKind
-{
-    /// <summary>A mint-address filter.</summary>
-    Mint,
-
-    /// <summary>An SPL Token program-id filter.</summary>
-    ProgramId
 }

@@ -163,7 +163,7 @@ public static class KeypairTests
         public void PublicKeyHalfDoesNotMatchSeed_Throws()
         {
             // Act
-            Action act = () => _ = Keypair.FromSecretKey(Hex(Test1Seed + Test2PublicKey));
+            Action act = static () => _ = Keypair.FromSecretKey(Hex(Test1Seed + Test2PublicKey));
 
             // Assert
             act.Should().Throw<ArgumentException>();
@@ -287,6 +287,8 @@ public static class KeypairTests
     [TestFixture]
     public sealed class Dispose
     {
+        // Disposal racing the captured keypair is the behavior under test.
+        // ReSharper disable AccessToDisposedClosure
         [Test]
         public async Task RacingWithExports_ReturnsOnlyCoherentKeysOrObjectDisposed()
         {
@@ -343,6 +345,7 @@ public static class KeypairTests
             }
         }
 
+        // ReSharper restore AccessToDisposedClosure
         [Test]
         public void SignAfterDispose_Throws()
         {

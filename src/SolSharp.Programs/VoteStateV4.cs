@@ -107,7 +107,7 @@ public sealed record VoteStateV4 : VoteStateVersions
         var authorizedVoters = ReadAuthorizedVoters(ref reader);
         var epochCredits = ReadEpochCredits(ref reader);
         var timestamp = ReadTimestamp(ref reader);
-        return new VoteStateV4(
+        return new(
             node,
             withdrawer,
             inflationCollector,

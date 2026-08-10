@@ -11,7 +11,7 @@ public static class BorshReaderTests
     {
         var bytes = new byte[PublicKey.Length];
         Array.Fill(bytes, value);
-        return new PublicKey(bytes);
+        return new(bytes);
     }
 
     [TestFixture]
@@ -64,7 +64,7 @@ public static class BorshReaderTests
         public void ReadingPastEnd_Throws()
         {
             // Act
-            var act = () => ReadU64From([1, 2]);
+            var act = static () => ReadU64From([1, 2]);
 
             // Assert
             act.Should().Throw<FormatException>();

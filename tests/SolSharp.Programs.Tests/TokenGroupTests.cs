@@ -6,35 +6,6 @@ using static SolSharp.Programs.Tests.TokenGroupTestHelpers;
 
 namespace SolSharp.Programs.Tests;
 
-internal static class TokenGroupTestHelpers
-{
-    internal static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
-
-    internal static string Hex(Instruction instruction) => Convert.ToHexString(instruction.Data).ToLowerInvariant();
-
-    internal static (PublicKey, bool, bool)[] Metas(Instruction instruction)
-        => [.. instruction.Accounts.Select(account => (account.PublicKey, account.IsSigner, account.IsWritable))];
-
-    internal static byte[] GroupData()
-    {
-        var data = new byte[TokenGroupState.Length];
-        Key(1).CopyTo(data);
-        Key(2).CopyTo(data.AsSpan(PublicKey.Length));
-        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(PublicKey.Length * 2), 3UL);
-        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan((PublicKey.Length * 2) + sizeof(ulong)), 4UL);
-        return data;
-    }
-
-    internal static byte[] MemberData()
-    {
-        var data = new byte[TokenGroupMemberState.Length];
-        Key(5).CopyTo(data);
-        Key(2).CopyTo(data.AsSpan(PublicKey.Length));
-        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(PublicKey.Length * 2), 6UL);
-        return data;
-    }
-}
-
 public static class TokenGroupTests
 {
     [TestFixture]
@@ -61,7 +32,7 @@ public static class TokenGroupTests
         public void MaybeNullRejectsAmbiguousZeroAddress()
         {
             // Act
-            Action act = () => _ = Token2022Program.InitializeTokenGroup(
+            Action act = static () => _ = Token2022Program.InitializeTokenGroup(
                 Key(1), Key(2), Key(3), default(PublicKey), 4);
 
             // Assert
@@ -134,7 +105,7 @@ public static class TokenGroupStateTests
 
             // Assert
             group.Should().NotBeNull();
-            group!.UpdateAuthority.Should().Be(Key(1));
+            group.UpdateAuthority.Should().Be(Key(1));
             group.Mint.Should().Be(Key(2));
             group.Size.Should().Be(3);
             group.MaximumSize.Should().Be(4);
@@ -159,10 +130,39 @@ public static class TokenGroupMemberStateTests
 
             // Assert
             member.Should().NotBeNull();
-            member!.Mint.Should().Be(Key(5));
+            member.Mint.Should().Be(Key(5));
             member.Group.Should().Be(Key(2));
             member.MemberNumber.Should().Be(6);
             TokenGroupMemberState.Decode(data.AsSpan()[..^1]).Should().BeNull();
         }
+    }
+}
+
+internal static class TokenGroupTestHelpers
+{
+    internal static PublicKey Key(byte value) => new([.. Enumerable.Repeat(value, PublicKey.Length)]);
+
+    internal static string Hex(Instruction instruction) => Convert.ToHexString(instruction.Data).ToLowerInvariant();
+
+    internal static (PublicKey, bool, bool)[] Metas(Instruction instruction)
+        => [.. instruction.Accounts.Select(static account => (account.PublicKey, account.IsSigner, account.IsWritable))];
+
+    internal static byte[] GroupData()
+    {
+        var data = new byte[TokenGroupState.Length];
+        Key(1).CopyTo(data);
+        Key(2).CopyTo(data.AsSpan(PublicKey.Length));
+        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(PublicKey.Length * 2), 3UL);
+        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan((PublicKey.Length * 2) + sizeof(ulong)), 4UL);
+        return data;
+    }
+
+    internal static byte[] MemberData()
+    {
+        var data = new byte[TokenGroupMemberState.Length];
+        Key(5).CopyTo(data);
+        Key(2).CopyTo(data.AsSpan(PublicKey.Length));
+        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(PublicKey.Length * 2), 6UL);
+        return data;
     }
 }

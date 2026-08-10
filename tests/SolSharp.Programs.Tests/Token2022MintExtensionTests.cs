@@ -6,12 +6,12 @@ namespace SolSharp.Programs.Tests;
 
 public static class Token2022MintExtensionTests
 {
-    private static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
+    private static PublicKey Key(byte value) => new([.. Enumerable.Repeat(value, PublicKey.Length)]);
 
     private static string Hex(Instruction instruction) => Convert.ToHexString(instruction.Data).ToLowerInvariant();
 
     private static (PublicKey, bool, bool)[] Metas(Instruction instruction)
-        => [.. instruction.Accounts.Select(account => (account.PublicKey, account.IsSigner, account.IsWritable))];
+        => [.. instruction.Accounts.Select(static account => (account.PublicKey, account.IsSigner, account.IsWritable))];
 
     private static void AssertPointerInitializer(
         Func<PublicKey, PublicKey?, PublicKey?, Instruction> build,
@@ -75,7 +75,7 @@ public static class Token2022MintExtensionTests
         public void MaybeNullRejectsAmbiguousZeroAddress()
         {
             // Act
-            Action act = () => _ = Token2022Program.InitializeMetadataPointer(Key(1), default(PublicKey), Key(2));
+            Action act = static () => _ = Token2022Program.InitializeMetadataPointer(Key(1), default(PublicKey), Key(2));
 
             // Assert
             act.Should().Throw<ArgumentException>().WithParameterName("authority");

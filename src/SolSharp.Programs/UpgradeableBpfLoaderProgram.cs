@@ -6,6 +6,13 @@ namespace SolSharp.Programs;
 /// <summary>Builds instructions for Solana's upgradeable BPF Loader 3 interface.</summary>
 public static class UpgradeableBpfLoaderProgram
 {
+    /// <summary>The general minimum extension after activation of SIMD-0431.</summary>
+    public const uint MinimumExtendProgramBytes = 10_240;
+
+    /// <summary>The upgradeable BPF Loader 3 address.</summary>
+    public static readonly PublicKey ProgramId =
+        PublicKey.Parse("BPFLoaderUpgradeab1e11111111111111111111111");
+
     private const uint InitializeBufferDiscriminator = 0;
     private const uint WriteDiscriminator = 1;
     private const uint DeployDiscriminator = 2;
@@ -17,13 +24,6 @@ public static class UpgradeableBpfLoaderProgram
 
     private static readonly PublicKey ClockSysvar = PublicKey.Parse(Sysvars.Clock);
     private static readonly PublicKey RentSysvar = PublicKey.Parse(Sysvars.Rent);
-
-    /// <summary>The upgradeable BPF Loader 3 address.</summary>
-    public static readonly PublicKey ProgramId =
-        PublicKey.Parse("BPFLoaderUpgradeab1e11111111111111111111111");
-
-    /// <summary>The general minimum extension after activation of SIMD-0431.</summary>
-    public const uint MinimumExtendProgramBytes = 10_240;
 
     /// <summary>Derives the ProgramData PDA belonging to an executable Program account.</summary>
     /// <param name="programAccount">The executable Program account.</param>
@@ -45,7 +45,7 @@ public static class UpgradeableBpfLoaderProgram
         ulong lamports,
         ulong programLength)
     {
-        var space = checked((ulong)UpgradeableBpfLoaderState.BufferMetadataLength + programLength);
+        var space = checked(UpgradeableBpfLoaderState.BufferMetadataLength + programLength);
         return
         [
             SystemProgram.CreateAccount(payer, buffer, lamports, space, ProgramId),

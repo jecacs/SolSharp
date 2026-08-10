@@ -28,18 +28,18 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Set up .NET 8
+      - name: Set up .NET 10
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: 10.0.x
           dotnet-quality: ga
 
-      - name: Verify .NET 8 SDK selection
+      - name: Verify .NET 10 SDK selection
         shell: bash
         run: |
           selected_version="$(dotnet --version)"
-          if [[ "${selected_version}" != 8.* ]]; then
-            echo "Expected a .NET 8 SDK, but dotnet selected ${selected_version}."
+          if [[ "${selected_version}" != 10.* ]]; then
+            echo "Expected a .NET 10 SDK, but dotnet selected ${selected_version}."
             dotnet --info
             exit 1
           fi
@@ -182,10 +182,13 @@ jobs:
           NUGET_PACKAGES: ${{ runner.temp }}/solsharp-release-packages
         run: |
           package_version="${GITHUB_REF_NAME#v}"
+          # This package is produced by the current job, so refresh the isolated consumer lock.
           dotnet restore samples/SolSharp.AotSmoke \
             --runtime linux-x64 \
+            --force-evaluate \
             -p:UsePackedSolSharp=true \
             -p:SolSharpPackageVersion="${package_version}" \
+            -p:RestoreLockedMode=false \
             --source ./artifacts \
             --source https://api.nuget.org/v3/index.json \
             -p:NuGetAuditMode=all \
@@ -199,16 +202,17 @@ jobs:
             exit 1
           fi
 
+          # Publish resolves Native AOT runtime packs; lock that restore to the graph above.
           dotnet publish samples/SolSharp.AotSmoke \
             --configuration Release \
             --runtime linux-x64 \
-            --no-restore \
             -warnaserror \
             -p:UsePackedSolSharp=true \
-            -p:SolSharpPackageVersion="${package_version}"
+            -p:SolSharpPackageVersion="${package_version}" \
+            -p:RestoreLockedMode=true
 
       - name: Run packed package consumer
-        run: samples/SolSharp.AotSmoke/bin/Release/net8.0/linux-x64/publish/SolSharp.AotSmoke
+        run: samples/SolSharp.AotSmoke/bin/Release/net10.0/linux-x64/publish/SolSharp.AotSmoke
 
       - name: Record exact package artifact
         id: package
@@ -342,7 +346,7 @@ jobs:
           name: attested-release-candidate
           path: ./candidate
 
-      # SDK 8 pack embeds a random core-properties name. A retry therefore must recover the exact
+      # SDK 10 pack embeds a random core-properties name. A retry therefore must recover the exact
       # bytes durably staged by the first run instead of treating its newly packed candidate as canonical.
       - name: Stage or recover canonical release assets
         id: stage
@@ -841,21 +845,21 @@ jobs:
       contents: read
       id-token: write       # required only for NuGet Trusted Publishing
     steps:
-      - name: Set up .NET 8
+      - name: Set up .NET 10
         id: setup_dotnet
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: 10.0.x
           dotnet-quality: ga
 
       # This privileged job deliberately has no checkout. Use an isolated, fixed global.json so
       # runner-installed newer SDKs cannot change the NuGet verification or publishing client.
-      - name: Verify .NET 8 SDK selection
+      - name: Verify .NET 10 SDK selection
         shell: bash
         env:
           INSTALLED_DOTNET_SDK: ${{ steps.setup_dotnet.outputs.dotnet-version }}
         run: |
-          if [[ ! "${INSTALLED_DOTNET_SDK}" =~ ^8\.[0-9]+\.[0-9]+$ ]]; then
+          if [[ ! "${INSTALLED_DOTNET_SDK}" =~ ^10\.[0-9]+\.[0-9]+$ ]]; then
             echo "setup-dotnet returned an unexpected SDK version: ${INSTALLED_DOTNET_SDK}."
             exit 1
           fi
@@ -1006,16 +1010,21 @@ jobs:
           lower_version="${package_version,,}"
           published_url="${package_base_address}solsharp/${lower_version}/solsharp.${lower_version}.nupkg"
           published_package="${RUNNER_TEMP}/published-${PACKAGE_NAME}"
-          for attempt in {1..30}; do
-            if curl --fail --silent --show-error --location \
-              "${published_url}" --output "${published_package}"; then
+          download_candidate="${published_package}.download"
+          for attempt in {1..91}; do
+            if curl --fail --silent --location \
+              "${published_url}" --output "${download_candidate}"; then
+              mv "${download_candidate}" "${published_package}"
               break
             fi
-            if (( attempt == 30 )); then
-              echo "The published package was not available from NuGet after 30 attempts."
+            if (( attempt == 91 )); then
+              echo "The published package was not available after 15 minutes of NuGet validation/indexing."
               exit 1
             fi
-            sleep 5
+            if (( attempt % 6 == 0 )); then
+              echo "Waiting for NuGet validation/indexing (${attempt}0 seconds elapsed)."
+            fi
+            sleep 10
           done
 
           (cd "${RUNNER_TEMP}/solsharp-dotnet-sdk" && \

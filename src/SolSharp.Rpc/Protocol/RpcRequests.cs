@@ -109,7 +109,7 @@ internal static class RpcRequests
                         ? null
                         : new SimulateTransactionAccountsConfig
                         {
-                            Encoding = RpcWireNames.AccountEncoding(accountsEncoding),
+                            Encoding = accountsEncoding.WireName,
                             Addresses = [.. accounts]
                         },
                     InnerInstructions = innerInstructions ? true : null
@@ -131,7 +131,7 @@ internal static class RpcRequests
                 account,
                 new AccountInfoConfig
                 {
-                    Encoding = encoding is { } value ? RpcWireNames.AccountEncoding(value) : null,
+                    Encoding = encoding is { } value ? value.WireName : null,
                     Commitment = commitment,
                     DataSlice = dataSlice,
                     MinContextSlot = minContextSlot
@@ -153,7 +153,7 @@ internal static class RpcRequests
                 accounts.ToArray(),
                 new AccountInfoConfig
                 {
-                    Encoding = encoding is { } value ? RpcWireNames.AccountEncoding(value) : null,
+                    Encoding = encoding is { } value ? value.WireName : null,
                     Commitment = commitment,
                     DataSlice = dataSlice,
                     MinContextSlot = minContextSlot
@@ -202,11 +202,11 @@ internal static class RpcRequests
                 programId,
                 new ProgramAccountsConfig
                 {
-                    Encoding = encoding is { } value ? RpcWireNames.AccountEncoding(value) : null,
+                    Encoding = encoding is { } value ? value.WireName : null,
                     Commitment = commitment,
                     MinContextSlot = minContextSlot,
                     DataSlice = dataSlice,
-                    Filters = filters?.Select(filter => filter.Payload).ToArray(),
+                    Filters = filters?.Select(static filter => filter.Payload).ToArray(),
                     WithContext = withContext,
                     SortResults = sortResults
                 }
@@ -266,7 +266,7 @@ internal static class RpcRequests
                 TokenAccountsFilterPayload(filter),
                 new AccountInfoConfig
                 {
-                    Encoding = encoding is { } value ? RpcWireNames.AccountEncoding(value) : null,
+                    Encoding = encoding is { } value ? value.WireName : null,
                     Commitment = commitment,
                     DataSlice = dataSlice,
                     MinContextSlot = minContextSlot
@@ -292,7 +292,7 @@ internal static class RpcRequests
                 {
                     Commitment = commitment,
                     MaxSupportedTransactionVersion = maxSupportedTransactionVersion,
-                    Encoding = encoding is { } value ? RpcWireNames.TransactionEncoding(value) : null
+                    Encoding = encoding is { } value ? value.WireName : null
                 }
             ]
         };
@@ -345,10 +345,10 @@ internal static class RpcRequests
                     Commitment = commitment,
                     MaxSupportedTransactionVersion = maxSupportedTransactionVersion,
                     Encoding = encoding is { } encodingValue
-                        ? RpcWireNames.TransactionEncoding(encodingValue)
+                        ? encodingValue.WireName
                         : null,
                     TransactionDetails = transactionDetails is { } detailsValue
-                        ? RpcWireNames.TransactionDetails(detailsValue)
+                        ? detailsValue.WireName
                         : null,
                     Rewards = rewards
                 }
@@ -443,7 +443,7 @@ internal static class RpcRequests
             ? [s, new LeaderScheduleConfig { Identity = identity, Commitment = commitment }]
             : [null!, new LeaderScheduleConfig { Identity = identity, Commitment = commitment }];
 
-        return new RpcRequest { Method = RpcMethods.GetLeaderSchedule, Params = parameters };
+        return new() { Method = RpcMethods.GetLeaderSchedule, Params = parameters };
     }
 
     public static RpcRequest GetBlocks(
@@ -456,7 +456,7 @@ internal static class RpcRequests
             ? [startSlot, end, new ContextConfig { Commitment = commitment, MinContextSlot = minContextSlot }]
             : [startSlot, new ContextConfig { Commitment = commitment, MinContextSlot = minContextSlot }];
 
-        return new RpcRequest { Method = RpcMethods.GetBlocks, Params = parameters };
+        return new() { Method = RpcMethods.GetBlocks, Params = parameters };
     }
 
     public static RpcRequest GetClusterNodes() =>
@@ -601,13 +601,16 @@ internal static class RpcRequests
                 TokenAccountsFilterPayload(filter),
                 new AccountInfoConfig
                 {
-                    Encoding = encoding is { } value ? RpcWireNames.AccountEncoding(value) : null,
+                    Encoding = encoding is { } value ? value.WireName : null,
                     Commitment = commitment,
                     DataSlice = dataSlice,
                     MinContextSlot = minContextSlot
                 }
             ]
         };
+
+    public static RpcRequest MinimumLedgerSlot() =>
+        new() { Method = RpcMethods.MinimumLedgerSlot };
 
     private static object TokenAccountsFilterPayload(TokenAccountsFilter filter)
     {
@@ -619,9 +622,6 @@ internal static class RpcRequests
             _ => throw new ArgumentOutOfRangeException(nameof(filter), "Unknown token-account filter kind.")
         };
     }
-
-    public static RpcRequest MinimumLedgerSlot() =>
-        new() { Method = RpcMethods.MinimumLedgerSlot };
 }
 
 internal static class RpcMethods

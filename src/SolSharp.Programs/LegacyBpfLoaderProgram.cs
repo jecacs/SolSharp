@@ -6,15 +6,13 @@ namespace SolSharp.Programs;
 /// <summary>Builds instructions for the deprecated non-upgradeable BPF loader interface.</summary>
 public static class LegacyBpfLoaderProgram
 {
-    private static readonly PublicKey RentSysvar = PublicKey.Parse(Sysvars.Rent);
-
     /// <summary>The BPF Loader 2 address used by the final non-upgradeable loader.</summary>
-    public static readonly PublicKey ProgramId =
-        PublicKey.Parse("BPFLoader2111111111111111111111111111111111");
+    public static readonly PublicKey ProgramId = PublicKey.Parse("BPFLoader2111111111111111111111111111111111");
 
     /// <summary>The original BPF loader address accepted by the generic legacy builders.</summary>
-    public static readonly PublicKey OriginalProgramId =
-        PublicKey.Parse("BPFLoader1111111111111111111111111111111111");
+    public static readonly PublicKey OriginalProgramId = PublicKey.Parse("BPFLoader1111111111111111111111111111111111");
+
+    private static readonly PublicKey RentSysvar = PublicKey.Parse(Sysvars.Rent);
 
     /// <summary>Writes program bytes into a legacy loader-owned account.</summary>
     /// <param name="programAccount">The writable program-account signer.</param>
@@ -30,7 +28,7 @@ public static class LegacyBpfLoaderProgram
         PublicKey? loaderProgramId = null)
     {
         var payload = bytes.ToArray();
-        return new Instruction
+        return new()
         {
             ProgramId = loaderProgramId ?? ProgramId,
             Accounts = [AccountMeta.WritableSigner(programAccount)],

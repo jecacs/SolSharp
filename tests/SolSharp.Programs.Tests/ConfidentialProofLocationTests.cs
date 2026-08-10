@@ -6,7 +6,7 @@ namespace SolSharp.Programs.Tests;
 
 public static class ConfidentialProofLocationTests
 {
-    private static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
+    private static PublicKey Key(byte value) => new([.. Enumerable.Repeat(value, PublicKey.Length)]);
 
     [TestFixture]
     public sealed class AtInstructionOffset
@@ -17,7 +17,7 @@ public static class ConfidentialProofLocationTests
             // Act
             var minimum = ConfidentialProofLocation.AtInstructionOffset(sbyte.MinValue);
             var maximum = ConfidentialProofLocation.AtInstructionOffset(sbyte.MaxValue);
-            Action zero = () => _ = ConfidentialProofLocation.AtInstructionOffset(0);
+            Action zero = static () => _ = ConfidentialProofLocation.AtInstructionOffset(0);
 
             // Assert
             minimum.IsInstructionOffset.Should().BeTrue();

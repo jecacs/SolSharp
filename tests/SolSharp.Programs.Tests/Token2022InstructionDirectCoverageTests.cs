@@ -7,7 +7,7 @@ namespace SolSharp.Programs.Tests;
 
 public static class Token2022InstructionDirectCoverageTests
 {
-    private static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
+    private static PublicKey Key(byte value) => new([.. Enumerable.Repeat(value, PublicKey.Length)]);
 
     private static byte[] Pod(byte value, int length) => [.. Enumerable.Repeat(value, length)];
 
@@ -17,7 +17,7 @@ public static class Token2022InstructionDirectCoverageTests
         => string.Concat(Enumerable.Repeat(value.ToString("x2"), count));
 
     private static (PublicKey, bool, bool)[] Metas(Instruction instruction)
-        => [.. instruction.Accounts.Select(account => (account.PublicKey, account.IsSigner, account.IsWritable))];
+        => [.. instruction.Accounts.Select(static account => (account.PublicKey, account.IsSigner, account.IsWritable))];
 
     [TestFixture]
     public sealed class UpdateConfidentialTransferMint
@@ -43,7 +43,7 @@ public static class Token2022InstructionDirectCoverageTests
         public void WrongLengthAuditorPod_IsRejected()
         {
             // Act
-            Action act = () => _ = Token2022Program.UpdateConfidentialTransferMint(
+            Action act = static () => _ = Token2022Program.UpdateConfidentialTransferMint(
                 Key(1), Key(2), false, Pod(3, Token2022Program.ElGamalPublicKeyLength - 1));
 
             // Assert
@@ -67,7 +67,7 @@ public static class Token2022InstructionDirectCoverageTests
                 (Key(1), false, true),
                 (PublicKey.Parse(Sysvars.Instructions), false, false),
                 (Key(2), true, false));
-            instruction.Accounts.Count(account => account.PublicKey == PublicKey.Parse(Sysvars.Instructions))
+            instruction.Accounts.Count(static account => account.PublicKey == PublicKey.Parse(Sysvars.Instructions))
                 .Should().Be(1);
         }
 
@@ -119,7 +119,7 @@ public static class Token2022InstructionDirectCoverageTests
                 (PublicKey.Parse(Sysvars.Instructions), false, false),
                 (Key(4), false, false),
                 (Key(3), true, false));
-            instruction.Accounts.Count(account => account.PublicKey == PublicKey.Parse(Sysvars.Instructions))
+            instruction.Accounts.Count(static account => account.PublicKey == PublicKey.Parse(Sysvars.Instructions))
                 .Should().Be(1);
         }
 
@@ -127,7 +127,7 @@ public static class Token2022InstructionDirectCoverageTests
         public void WrongLengthDecryptableBalance_IsRejected()
         {
             // Act
-            Action act = () => _ = Token2022Program.WithdrawConfidentialTokens(
+            Action act = static () => _ = Token2022Program.WithdrawConfidentialTokens(
                 Key(1),
                 Key(2),
                 1,
@@ -172,7 +172,7 @@ public static class Token2022InstructionDirectCoverageTests
         public void WrongLengthDecryptableBalance_IsRejected()
         {
             // Act
-            Action act = () => _ = Token2022Program.WithdrawConfidentialWithheldTokensFromMint(
+            Action act = static () => _ = Token2022Program.WithdrawConfidentialWithheldTokensFromMint(
                 Key(1),
                 Key(2),
                 Pod(8, Token2022Program.DecryptableBalanceLength - 1),
@@ -202,7 +202,7 @@ public static class Token2022InstructionDirectCoverageTests
         public void AllZeroProgramAddress_IsRejectedAsAmbiguousNull()
         {
             // Act
-            Action act = () => _ = Token2022Program.UpdateTransferHook(Key(1), Key(2), default(PublicKey));
+            Action act = static () => _ = Token2022Program.UpdateTransferHook(Key(1), Key(2), default(PublicKey));
 
             // Assert
             act.Should().Throw<ArgumentException>().WithParameterName("transferHookProgramId");
@@ -247,10 +247,10 @@ public static class Token2022InstructionDirectCoverageTests
 
 public static class TransferHookProgramDirectCoverageTests
 {
-    private static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
+    private static PublicKey Key(byte value) => new([.. Enumerable.Repeat(value, PublicKey.Length)]);
 
     private static (PublicKey, bool, bool)[] Metas(Instruction instruction)
-        => [.. instruction.Accounts.Select(account => (account.PublicKey, account.IsSigner, account.IsWritable))];
+        => [.. instruction.Accounts.Select(static account => (account.PublicKey, account.IsSigner, account.IsWritable))];
 
     [TestFixture]
     public sealed class ExecuteWithExtraAccountMetas
@@ -287,7 +287,7 @@ public static class TransferHookProgramDirectCoverageTests
         public void NullAdditionalAccounts_IsRejected()
         {
             // Act
-            Action act = () => _ = TransferHookProgram.ExecuteWithExtraAccountMetas(
+            Action act = static () => _ = TransferHookProgram.ExecuteWithExtraAccountMetas(
                 Key(9), Key(1), Key(2), Key(3), Key(4), Key(5), null!, 1);
 
             // Assert

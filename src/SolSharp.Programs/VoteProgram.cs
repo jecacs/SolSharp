@@ -6,6 +6,13 @@ namespace SolSharp.Programs;
 /// <summary>Builds bincode-compatible instructions for Solana's native Vote program.</summary>
 public static class VoteProgram
 {
+    /// <summary>The account size used by the current V4 vote state.</summary>
+    public const int AccountDataLength = 3762;
+
+    /// <summary>The native Vote program address.</summary>
+    public static readonly PublicKey ProgramId =
+        PublicKey.Parse("Vote111111111111111111111111111111111111111");
+
     private const uint InitializeAccountDiscriminator = 0;
     private const uint AuthorizeDiscriminator = 1;
     private const uint VoteDiscriminator = 2;
@@ -31,13 +38,6 @@ public static class VoteProgram
     private static readonly PublicKey RentSysvar = PublicKey.Parse(Sysvars.Rent);
     private static readonly PublicKey SlotHashesSysvar =
         PublicKey.Parse("SysvarS1otHashes111111111111111111111111111");
-
-    /// <summary>The native Vote program address.</summary>
-    public static readonly PublicKey ProgramId =
-        PublicKey.Parse("Vote111111111111111111111111111111111111111");
-
-    /// <summary>The account size used by the current V4 vote state.</summary>
-    public const int AccountDataLength = 3762;
 
     /// <summary>Initializes an allocated legacy vote account.</summary>
     /// <param name="voteAccount">The uninitialized writable vote account.</param>

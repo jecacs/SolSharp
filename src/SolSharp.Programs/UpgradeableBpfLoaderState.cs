@@ -22,6 +22,17 @@ public enum UpgradeableBpfLoaderStateKind : uint
 /// <summary>Decoded metadata and program bytes from an upgradeable-loader account.</summary>
 public sealed class UpgradeableBpfLoaderState
 {
+    /// <summary>The uninitialized-state metadata size.</summary>
+    public const int UninitializedMetadataLength = 4;
+
+    /// <summary>The buffer metadata size, including reserved optional-authority space.</summary>
+    public const int BufferMetadataLength = 37;
+
+    /// <summary>The executable Program metadata size.</summary>
+    public const int ProgramMetadataLength = 36;
+
+    /// <summary>The ProgramData metadata size, including reserved optional-authority space.</summary>
+    public const int ProgramDataMetadataLength = 45;
     private readonly byte[] _programBytes;
 
     private UpgradeableBpfLoaderState(
@@ -35,20 +46,8 @@ public sealed class UpgradeableBpfLoaderState
         Authority = authority;
         ProgramDataAddress = programDataAddress;
         Slot = slot;
-        _programBytes = programBytes.ToArray();
+        _programBytes = [.. programBytes];
     }
-
-    /// <summary>The uninitialized-state metadata size.</summary>
-    public const int UninitializedMetadataLength = 4;
-
-    /// <summary>The buffer metadata size, including reserved optional-authority space.</summary>
-    public const int BufferMetadataLength = 37;
-
-    /// <summary>The executable Program metadata size.</summary>
-    public const int ProgramMetadataLength = 36;
-
-    /// <summary>The ProgramData metadata size, including reserved optional-authority space.</summary>
-    public const int ProgramDataMetadataLength = 45;
 
     /// <summary>The decoded account variant.</summary>
     public UpgradeableBpfLoaderStateKind Kind { get; }
@@ -78,7 +77,7 @@ public sealed class UpgradeableBpfLoaderState
         var kindValue = BinaryPrimitives.ReadUInt32LittleEndian(data);
         return kindValue switch
         {
-            0 => new UpgradeableBpfLoaderState(
+            0 => new(
                 UpgradeableBpfLoaderStateKind.Uninitialized,
                 null,
                 null,
@@ -117,7 +116,7 @@ public sealed class UpgradeableBpfLoaderState
     private static UpgradeableBpfLoaderState ParseBuffer(ReadOnlySpan<byte> data)
     {
         EnsureLength(data, BufferMetadataLength);
-        return new UpgradeableBpfLoaderState(
+        return new(
             UpgradeableBpfLoaderStateKind.Buffer,
             ReadOptionalPublicKey(data[4..], "buffer authority"),
             null,
@@ -128,7 +127,7 @@ public sealed class UpgradeableBpfLoaderState
     private static UpgradeableBpfLoaderState ParseProgram(ReadOnlySpan<byte> data)
     {
         EnsureLength(data, ProgramMetadataLength);
-        return new UpgradeableBpfLoaderState(
+        return new(
             UpgradeableBpfLoaderStateKind.Program,
             null,
             new PublicKey(data.Slice(4, PublicKey.Length)),
@@ -139,7 +138,7 @@ public sealed class UpgradeableBpfLoaderState
     private static UpgradeableBpfLoaderState ParseProgramData(ReadOnlySpan<byte> data)
     {
         EnsureLength(data, ProgramDataMetadataLength);
-        return new UpgradeableBpfLoaderState(
+        return new(
             UpgradeableBpfLoaderStateKind.ProgramData,
             ReadOptionalPublicKey(data[12..], "upgrade authority"),
             null,

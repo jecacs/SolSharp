@@ -68,10 +68,10 @@ public sealed record TokenAccount
             || !SplLayout.TryReadCOptionPublicKey(data, 129, out var closeAuthority))
             return null;
 
-        return new TokenAccount
+        return new()
         {
-            Mint = new PublicKey(data[..PublicKey.Length]),
-            Owner = new PublicKey(data.Slice(32, PublicKey.Length)),
+            Mint = new(data[..PublicKey.Length]),
+            Owner = new(data.Slice(32, PublicKey.Length)),
             Amount = BinaryPrimitives.ReadUInt64LittleEndian(data[64..]),
             Delegate = delegateAuthority,
             State = (TokenAccountState)data[108],

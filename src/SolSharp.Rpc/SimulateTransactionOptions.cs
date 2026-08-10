@@ -13,7 +13,7 @@ public sealed record SimulateTransactionOptions
 
     /// <summary>
     /// The commitment the simulation runs at. Defaults to <see cref="Core.Primitives.Commitment.Confirmed"/>
-    /// to match <see cref="SolanaRpcClient.GetLatestBlockhashAsync(Commitment, CancellationToken)"/>: at the node default of
+    /// to match <see cref="SolanaRpcClient.GetLatestBlockhashAsync(Core.Primitives.Commitment,CancellationToken)"/>: at the node default of
     /// <c>finalized</c> a blockhash fetched at <c>confirmed</c> may not exist yet, failing the simulation
     /// with <c>BlockhashNotFound</c>. Set to <c>null</c> for the node default.
     /// </summary>

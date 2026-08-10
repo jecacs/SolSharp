@@ -13,6 +13,34 @@ public static class SolanaWsClientAccountEncodingTests
 {
     private static readonly PublicKey TokenProgram = PublicKey.Parse(SolanaProgramIds.TokenProgram);
 
+    private static async Task<string> NextRequestAsync(FakeWebSocketConnection connection)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(1);
+        while (connection.SentCount == 0 && DateTime.UtcNow < deadline)
+            await Task.Yield();
+
+        connection.SentCount.Should().BeGreaterThan(0);
+        return connection.SentSnapshot()[0];
+    }
+
+    private static async Task WaitForSentCountAsync(FakeWebSocketConnection connection, int count)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(1);
+        while (connection.SentCount < count && DateTime.UtcNow < deadline)
+            await Task.Yield();
+
+        connection.SentCount.Should().BeGreaterThanOrEqualTo(count);
+    }
+
+    private static int RequestId(string request)
+    {
+        using var document = JsonDocument.Parse(request);
+        return document.RootElement.GetProperty("id").GetInt32();
+    }
+
+    private static string Acknowledgement(int requestId, ulong subscriptionId) =>
+        $$"""{"jsonrpc":"2.0","result":{{subscriptionId}},"id":{{requestId}}}""";
+
     [TestFixture]
     public sealed class SubscribeAccountWithOptionsAsync
     {
@@ -26,12 +54,12 @@ public static class SolanaWsClientAccountEncodingTests
             // Arrange
             var fake = new FakeWebSocketConnection();
             await using var client = new SolanaWsClient(fake);
-            await client.ConnectAsync(new Uri("wss://localhost"));
+            await client.ConnectAsync(new("wss://localhost"));
 
             // Act
             var subscribe = client.SubscribeAccountWithOptionsAsync(
                 TokenProgram,
-                new AccountSubscriptionOptions
+                new()
                 {
                     Encoding = encoding,
                     Commitment = Commitment.Finalized
@@ -55,10 +83,10 @@ public static class SolanaWsClientAccountEncodingTests
             // Arrange
             var fake = new FakeWebSocketConnection();
             await using var client = new SolanaWsClient(fake);
-            await client.ConnectAsync(new Uri("wss://localhost"));
+            await client.ConnectAsync(new("wss://localhost"));
             var subscribe = client.SubscribeAccountWithOptionsAsync(
                 TokenProgram,
-                new AccountSubscriptionOptions { Encoding = RpcAccountEncoding.Base64Zstd });
+                new() { Encoding = RpcAccountEncoding.Base64Zstd });
             var request = await NextRequestAsync(fake);
             fake.PushFromServer(Acknowledgement(RequestId(request), 42));
             var reader = await subscribe;
@@ -69,7 +97,7 @@ public static class SolanaWsClientAccountEncodingTests
             var notification = await reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1));
 
             // Assert
-            notification.Context!.Slot.Should().Be(91);
+            notification.Context.Slot.Should().Be(91);
             var data = notification.Value!.Data.Should().BeOfType<RpcAccountData.Encoded>().Subject;
             data.Encoding.Should().Be(RpcAccountEncoding.Base64Zstd);
             data.EncodedData.Should().Be("KLUv/Q==");
@@ -81,10 +109,11 @@ public static class SolanaWsClientAccountEncodingTests
             // Arrange
             var fake = new FakeWebSocketConnection();
             await using var client = new SolanaWsClient(fake);
-            await client.ConnectAsync(new Uri("wss://localhost"));
+            await client.ConnectAsync(new("wss://localhost"));
 
             // Act
-            var act = async () => await client.SubscribeAccountWithOptionsAsync(TokenProgram, null!);
+            var act = client.Awaiting(static subject =>
+                subject.SubscribeAccountWithOptionsAsync(TokenProgram, null!));
 
             // Assert
             await act.Should().ThrowAsync<ArgumentNullException>();
@@ -96,10 +125,10 @@ public static class SolanaWsClientAccountEncodingTests
             // Arrange
             var fake = new FakeWebSocketConnection();
             await using var client = new SolanaWsClient(fake);
-            await client.ConnectAsync(new Uri("wss://localhost"));
+            await client.ConnectAsync(new("wss://localhost"));
             var subscribe = client.SubscribeAccountWithOptionsAsync(
                 TokenProgram,
-                new AccountSubscriptionOptions { Encoding = RpcAccountEncoding.Base64 });
+                new() { Encoding = RpcAccountEncoding.Base64 });
             var request = await NextRequestAsync(fake);
             fake.PushFromServer(Acknowledgement(RequestId(request), 44));
             var reader = await subscribe;
@@ -120,10 +149,10 @@ public static class SolanaWsClientAccountEncodingTests
             // Arrange
             var fake = new FakeWebSocketConnection();
             await using var client = new SolanaWsClient(fake);
-            await client.ConnectAsync(new Uri("wss://localhost"));
+            await client.ConnectAsync(new("wss://localhost"));
             var subscribe = client.SubscribeAccountWithOptionsAsync(
                 TokenProgram,
-                new AccountSubscriptionOptions { Encoding = RpcAccountEncoding.Binary });
+                new() { Encoding = RpcAccountEncoding.Binary });
             var request = await NextRequestAsync(fake);
             fake.PushFromServer(Acknowledgement(RequestId(request), 45));
             var reader = await subscribe;
@@ -144,10 +173,10 @@ public static class SolanaWsClientAccountEncodingTests
             // Arrange
             var fake = new FakeWebSocketConnection();
             await using var client = new SolanaWsClient(fake);
-            await client.ConnectAsync(new Uri("wss://localhost"));
+            await client.ConnectAsync(new("wss://localhost"));
             var accountSubscribe = client.SubscribeAccountWithOptionsAsync(
                 TokenProgram,
-                new AccountSubscriptionOptions { Encoding = RpcAccountEncoding.Binary });
+                new() { Encoding = RpcAccountEncoding.Binary });
             var accountRequest = await NextRequestAsync(fake);
             fake.PushFromServer(Acknowledgement(RequestId(accountRequest), 51));
             var accountReader = await accountSubscribe;
@@ -182,10 +211,10 @@ public static class SolanaWsClientAccountEncodingTests
             // Arrange
             var fake = new FakeWebSocketConnection();
             await using var client = new SolanaWsClient(fake);
-            await client.ConnectAsync(new Uri("wss://localhost"));
+            await client.ConnectAsync(new("wss://localhost"));
             var subscribe = client.SubscribeProgramWithOptionsAsync(
                 TokenProgram,
-                new ProgramSubscriptionOptions
+                new()
                 {
                     Encoding = RpcAccountEncoding.JsonParsed,
                     Commitment = Commitment.Processed,
@@ -209,7 +238,7 @@ public static class SolanaWsClientAccountEncodingTests
             var notification = await reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1));
 
             // Assert
-            notification.Context!.Slot.Should().Be(92);
+            notification.Context.Slot.Should().Be(92);
             notification.Value!.PublicKey.Should().Be(default(PublicKey));
             var data = notification.Value.Account.Data.Should().BeOfType<RpcAccountData.Parsed>().Subject;
             data.Program.Should().Be("spl-token");
@@ -223,10 +252,11 @@ public static class SolanaWsClientAccountEncodingTests
             // Arrange
             var fake = new FakeWebSocketConnection();
             await using var client = new SolanaWsClient(fake);
-            await client.ConnectAsync(new Uri("wss://localhost"));
+            await client.ConnectAsync(new("wss://localhost"));
 
             // Act
-            var act = async () => await client.SubscribeProgramWithOptionsAsync(TokenProgram, null!);
+            var act = client.Awaiting(static subject =>
+                subject.SubscribeProgramWithOptionsAsync(TokenProgram, null!));
 
             // Assert
             await act.Should().ThrowAsync<ArgumentNullException>();
@@ -238,10 +268,10 @@ public static class SolanaWsClientAccountEncodingTests
             // Arrange
             var fake = new FakeWebSocketConnection();
             await using var client = new SolanaWsClient(fake);
-            await client.ConnectAsync(new Uri("wss://localhost"));
+            await client.ConnectAsync(new("wss://localhost"));
             var programSubscribe = client.SubscribeProgramWithOptionsAsync(
                 TokenProgram,
-                new ProgramSubscriptionOptions { Encoding = RpcAccountEncoding.Base64 });
+                new() { Encoding = RpcAccountEncoding.Base64 });
             var programRequest = await NextRequestAsync(fake);
             fake.PushFromServer(Acknowledgement(RequestId(programRequest), 53));
             var programReader = await programSubscribe;
@@ -266,32 +296,4 @@ public static class SolanaWsClientAccountEncodingTests
                 .Value!.Signature.Should().Be("live");
         }
     }
-
-    private static async Task<string> NextRequestAsync(FakeWebSocketConnection connection)
-    {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(1);
-        while (connection.SentCount == 0 && DateTime.UtcNow < deadline)
-            await Task.Yield();
-
-        connection.SentCount.Should().BeGreaterThan(0);
-        return connection.SentSnapshot()[0];
-    }
-
-    private static async Task WaitForSentCountAsync(FakeWebSocketConnection connection, int count)
-    {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(1);
-        while (connection.SentCount < count && DateTime.UtcNow < deadline)
-            await Task.Yield();
-
-        connection.SentCount.Should().BeGreaterThanOrEqualTo(count);
-    }
-
-    private static int RequestId(string request)
-    {
-        using var document = JsonDocument.Parse(request);
-        return document.RootElement.GetProperty("id").GetInt32();
-    }
-
-    private static string Acknowledgement(int requestId, ulong subscriptionId) =>
-        $$"""{"jsonrpc":"2.0","result":{{subscriptionId}},"id":{{requestId}}}""";
 }

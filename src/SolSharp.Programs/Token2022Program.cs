@@ -10,6 +10,8 @@ namespace SolSharp.Programs;
 /// </summary>
 public static partial class Token2022Program
 {
+    /// <summary>The Token-2022 program address.</summary>
+    public static readonly PublicKey ProgramId = PublicKey.Parse(SolanaProgramIds.Token2022Program);
     private const byte GetAccountDataSizeDiscriminator = 21;
     private const byte InitializeMintCloseAuthorityDiscriminator = 25;
     private const byte ReallocateDiscriminator = 29;
@@ -19,9 +21,6 @@ public static partial class Token2022Program
     private const int MaxMultisigSigners = 11;
 
     private static readonly PublicKey NativeMint = PublicKey.Parse(Mints.WrappedSol);
-
-    /// <summary>The Token-2022 program address.</summary>
-    public static readonly PublicKey ProgramId = PublicKey.Parse(SolanaProgramIds.Token2022Program);
 
     /// <summary>Requests the token-account size for a mint plus additional Token-2022 extensions.</summary>
     /// <param name="mint">The mint whose existing configuration contributes required account extensions.</param>
@@ -128,7 +127,7 @@ public static partial class Token2022Program
         var data = new byte[PublicKey.Length + 1];
         data[0] = InitializePermanentDelegateDiscriminator;
         @delegate.CopyTo(data.AsSpan(1));
-        return new Instruction { ProgramId = ProgramId, Accounts = [AccountMeta.Writable(mint)], Data = data };
+        return new() { ProgramId = ProgramId, Accounts = [AccountMeta.Writable(mint)], Data = data };
     }
 
     private static Instruction WritableMintInstruction(PublicKey mint, byte discriminator)
@@ -185,6 +184,6 @@ public static partial class Token2022Program
         for (var i = 0; i < multisigSigners.Count; i++)
             accounts[instruction.Accounts.Count + i] = AccountMeta.ReadonlySigner(multisigSigners[i]);
 
-        return new Instruction { ProgramId = instruction.ProgramId, Accounts = accounts, Data = [.. instruction.Data] };
+        return new() { ProgramId = instruction.ProgramId, Accounts = accounts, Data = [.. instruction.Data] };
     }
 }

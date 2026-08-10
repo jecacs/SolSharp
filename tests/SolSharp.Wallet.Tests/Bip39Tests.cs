@@ -40,7 +40,7 @@ public static class Bip39Tests
         public void WhitespaceMnemonic_Throws()
         {
             // Act & Assert
-            Action act = () => _ = Bip39.ToSeed("   ");
+            Action act = static () => _ = Bip39.ToSeed("   ");
             act.Should().Throw<ArgumentException>();
         }
     }

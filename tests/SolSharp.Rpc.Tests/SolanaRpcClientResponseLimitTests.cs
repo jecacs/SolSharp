@@ -10,6 +10,13 @@ public static class SolanaRpcClientResponseLimitTests
 {
     private const string SlotResponse = "{\"jsonrpc\":\"2.0\",\"result\":123,\"id\":1}";
 
+    private static StreamContent UnknownLengthContent(string body)
+    {
+        var content = new StreamContent(new NonSeekableReadStream(Encoding.UTF8.GetBytes(body)));
+        content.Headers.ContentType = new("application/json");
+        return content;
+    }
+
     [TestFixture]
     public sealed class SingleRequest
     {
@@ -18,7 +25,7 @@ public static class SolanaRpcClientResponseLimitTests
         {
             var http = new HttpClient(new FakeHttpMessageHandler(SlotResponse))
             {
-                BaseAddress = new Uri("http://localhost")
+                BaseAddress = new("http://localhost")
             };
             var client = new SolanaRpcClient(http, maximumResponseContentLength: 16);
 
@@ -33,7 +40,7 @@ public static class SolanaRpcClientResponseLimitTests
         {
             var content = UnknownLengthContent(SlotResponse);
             var handler = new SequenceHandler(new HttpResponseMessage(HttpStatusCode.OK) { Content = content });
-            var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
+            var http = new HttpClient(handler) { BaseAddress = new("http://localhost") };
             var client = new SolanaRpcClient(
                 http, maximumResponseContentLength: Encoding.UTF8.GetByteCount(SlotResponse));
             content.Headers.ContentLength.Should().BeNull();
@@ -46,7 +53,7 @@ public static class SolanaRpcClientResponseLimitTests
         {
             var content = UnknownLengthContent(SlotResponse);
             var handler = new SequenceHandler(new HttpResponseMessage(HttpStatusCode.OK) { Content = content });
-            var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
+            var http = new HttpClient(handler) { BaseAddress = new("http://localhost") };
             var limit = Encoding.UTF8.GetByteCount(SlotResponse) - 1;
             var client = new SolanaRpcClient(http, maximumResponseContentLength: limit);
             content.Headers.ContentLength.Should().BeNull();
@@ -63,7 +70,7 @@ public static class SolanaRpcClientResponseLimitTests
             var paddedResponse = SlotResponse.PadRight(256 * 1024, ' ');
             var http = new HttpClient(new FakeHttpMessageHandler(paddedResponse))
             {
-                BaseAddress = new Uri("http://localhost")
+                BaseAddress = new("http://localhost")
             };
             var client = new SolanaRpcClient(http);
 
@@ -80,7 +87,7 @@ public static class SolanaRpcClientResponseLimitTests
             const string response = "[{\"jsonrpc\":\"2.0\",\"result\":123,\"id\":1}]";
             var http = new HttpClient(new FakeHttpMessageHandler(response))
             {
-                BaseAddress = new Uri("http://localhost")
+                BaseAddress = new("http://localhost")
             };
             var client = new SolanaRpcClient(http, maximumResponseContentLength: 16);
             var batch = client.CreateBatch();
@@ -102,12 +109,12 @@ public static class SolanaRpcClientResponseLimitTests
         {
             var services = new ServiceCollection();
             services
-                .AddSolanaRpc(options =>
+                .AddSolanaRpc(static options =>
                 {
                     options.Endpoint = "https://node.example";
                     options.MaximumResponseContentLength = 16;
                 })
-                .ConfigurePrimaryHttpMessageHandler(() => new FakeHttpMessageHandler(SlotResponse));
+                .ConfigurePrimaryHttpMessageHandler(static () => new FakeHttpMessageHandler(SlotResponse));
             using var provider = services.BuildServiceProvider();
             var client = provider.GetRequiredService<SolanaRpcClient>();
 
@@ -116,13 +123,6 @@ public static class SolanaRpcClientResponseLimitTests
             await act.Should().ThrowAsync<HttpRequestException>()
                 .WithMessage("*16-byte limit*");
         }
-    }
-
-    private static StreamContent UnknownLengthContent(string body)
-    {
-        var content = new StreamContent(new NonSeekableReadStream(Encoding.UTF8.GetBytes(body)));
-        content.Headers.ContentType = new("application/json");
-        return content;
     }
 
     private sealed class NonSeekableReadStream(byte[] data) : Stream
@@ -159,17 +159,17 @@ public static class SolanaRpcClientResponseLimitTests
 
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 
+        public override async ValueTask DisposeAsync()
+        {
+            await _inner.DisposeAsync();
+            await base.DisposeAsync();
+        }
+
         protected override void Dispose(bool disposing)
         {
             if (disposing)
                 _inner.Dispose();
             base.Dispose(disposing);
-        }
-
-        public override async ValueTask DisposeAsync()
-        {
-            await _inner.DisposeAsync();
-            await base.DisposeAsync();
         }
     }
 }

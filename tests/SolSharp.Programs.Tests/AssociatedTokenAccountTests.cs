@@ -6,7 +6,7 @@ namespace SolSharp.Programs.Tests;
 
 public static class AssociatedTokenAccountTests
 {
-    private static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
+    private static PublicKey Key(byte value) => new([.. Enumerable.Repeat(value, PublicKey.Length)]);
 
     [TestFixture]
     public sealed class GetAddress
@@ -43,7 +43,7 @@ public static class AssociatedTokenAccountTests
 
             // Assert
             instruction.ProgramId.Should().Be(AssociatedTokenAccount.ProgramId);
-            instruction.Data.Should().Equal((byte)0);
+            instruction.Data.Should().Equal(0);
             instruction.Accounts.Should().HaveCount(6);
 
             instruction.Accounts[0].PublicKey.Should().Be(payer);
@@ -58,7 +58,7 @@ public static class AssociatedTokenAccountTests
             instruction.Accounts[3].PublicKey.Should().Be(mint);
             instruction.Accounts[4].PublicKey.Should().Be(SystemProgram.ProgramId);
             instruction.Accounts[5].PublicKey.Should().Be(TokenProgram.ProgramId);
-            instruction.Accounts.Skip(2).Should().OnlyContain(a => !a.IsSigner && !a.IsWritable);
+            instruction.Accounts.Skip(2).Should().OnlyContain(static a => !a.IsSigner && !a.IsWritable);
         }
     }
 
@@ -80,7 +80,7 @@ public static class AssociatedTokenAccountTests
             var idempotent = AssociatedTokenAccount.CreateIdempotent(payer, owner, mint);
 
             // Assert
-            idempotent.Data.Should().Equal((byte)1);
+            idempotent.Data.Should().Equal(1);
             idempotent.ProgramId.Should().Be(create.ProgramId);
             idempotent.Accounts.Should().Equal(create.Accounts);
         }
@@ -105,8 +105,8 @@ public static class AssociatedTokenAccountTests
 
             // Assert
             instruction.ProgramId.Should().Be(AssociatedTokenAccount.ProgramId);
-            instruction.Data.Should().Equal((byte)2);
-            instruction.Accounts.Select(account => (account.PublicKey, account.IsSigner, account.IsWritable)).Should().Equal(
+            instruction.Data.Should().Equal(2);
+            instruction.Accounts.Select(static account => (account.PublicKey, account.IsSigner, account.IsWritable)).Should().Equal(
                 (nestedAssociatedAccount, false, true),
                 (nestedMint, false, false),
                 (destinationAssociatedAccount, false, true),

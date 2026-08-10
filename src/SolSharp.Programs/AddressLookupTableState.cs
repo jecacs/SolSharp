@@ -40,6 +40,11 @@ public readonly record struct AddressLookupTableStatus(
 /// <summary>Decoded Address Lookup Table metadata and stored addresses.</summary>
 public sealed class AddressLookupTableState
 {
+    /// <summary>The fixed metadata length before lookup addresses.</summary>
+    public const int MetadataLength = 56;
+
+    /// <summary>The maximum number of addresses in one table.</summary>
+    public const int MaximumAddresses = 256;
     private readonly PublicKey[] _addresses;
 
     private AddressLookupTableState(
@@ -58,12 +63,6 @@ public sealed class AddressLookupTableState
         _addresses = addresses;
         Addresses = Array.AsReadOnly(addresses);
     }
-
-    /// <summary>The fixed metadata length before lookup addresses.</summary>
-    public const int MetadataLength = 56;
-
-    /// <summary>The maximum number of addresses in one table.</summary>
-    public const int MaximumAddresses = 256;
 
     /// <summary>The decoded state variant.</summary>
     public AddressLookupTableStateKind Kind { get; }
@@ -95,6 +94,83 @@ public sealed class AddressLookupTableState
             ? ulong.MaxValue
             : deactivationSlot + SlotHashesSysvarState.MaximumEntries;
 
+    /// <summary>Decodes complete Address Lookup Table account data.</summary>
+    /// <param name="data">The account data.</param>
+    /// <returns>The decoded state.</returns>
+    /// <exception cref="ArgumentException">The data is truncated, misaligned, or contains too many addresses.</exception>
+    /// <exception cref="FormatException">The state discriminator or authority option tag is invalid.</exception>
+    public static AddressLookupTableState Parse(ReadOnlySpan<byte> data)
+    {
+        if (data.Length < sizeof(uint))
+            throw new ArgumentException("Lookup-table state requires a four-byte discriminator.", nameof(data));
+
+        var discriminator = BinaryPrimitives.ReadUInt32LittleEndian(data);
+        if (discriminator == (uint)AddressLookupTableStateKind.Uninitialized)
+        {
+            return new(
+                AddressLookupTableStateKind.Uninitialized,
+                ulong.MaxValue,
+                0,
+                0,
+                null,
+                []);
+        }
+
+        if (discriminator != (uint)AddressLookupTableStateKind.LookupTable)
+            throw new FormatException($"Unknown lookup-table state discriminator {discriminator}.");
+        if (data.Length < MetadataLength)
+            throw new ArgumentException($"Initialized lookup-table data requires at least {MetadataLength} bytes.", nameof(data));
+
+        var addressBytes = data[MetadataLength..];
+        if (addressBytes.Length % PublicKey.Length is not 0)
+            throw new ArgumentException("Lookup-table address data must be a multiple of 32 bytes.", nameof(data));
+
+        var count = addressBytes.Length / PublicKey.Length;
+        if (count > MaximumAddresses)
+            throw new ArgumentException($"A lookup table may contain at most {MaximumAddresses} addresses.", nameof(data));
+
+        var authority = data[21] switch
+        {
+            0 => (PublicKey?)null,
+            1 => new PublicKey(data.Slice(22, PublicKey.Length)),
+            var tag => throw new FormatException($"Invalid lookup-table authority option tag {tag}.")
+        };
+        var addresses = new PublicKey[count];
+        for (var i = 0; i < addresses.Length; i++)
+            addresses[i] = new(addressBytes.Slice(i * PublicKey.Length, PublicKey.Length));
+
+        return new(
+            AddressLookupTableStateKind.LookupTable,
+            BinaryPrimitives.ReadUInt64LittleEndian(data[4..]),
+            BinaryPrimitives.ReadUInt64LittleEndian(data[12..]),
+            data[20],
+            authority,
+            addresses);
+    }
+
+    /// <summary>Attempts to decode Address Lookup Table account data.</summary>
+    /// <param name="data">The account data.</param>
+    /// <param name="state">The decoded state on success; otherwise <c>null</c>.</param>
+    /// <returns><c>true</c> when the input is a valid state.</returns>
+    public static bool TryParse(ReadOnlySpan<byte> data, out AddressLookupTableState? state)
+    {
+        try
+        {
+            state = Parse(data);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            state = null;
+            return false;
+        }
+        catch (FormatException)
+        {
+            state = null;
+            return false;
+        }
+    }
+
     /// <summary>Computes the table's exact runtime activation state from the current SlotHashes state.</summary>
     /// <param name="currentSlot">The bank slot performing the lookup.</param>
     /// <param name="slotHashes">The current SlotHashes sysvar state.</param>
@@ -107,10 +183,10 @@ public sealed class AddressLookupTableState
         EnsureInitialized();
 
         if (DeactivationSlot == ulong.MaxValue)
-            return new AddressLookupTableStatus(AddressLookupTableStatusKind.Activated);
+            return new(AddressLookupTableStatusKind.Activated);
         if (DeactivationSlot == currentSlot)
         {
-            return new AddressLookupTableStatus(
+            return new(
                 AddressLookupTableStatusKind.Deactivating,
                 SlotHashesSysvarState.MaximumEntries + 1);
         }
@@ -119,13 +195,13 @@ public sealed class AddressLookupTableState
         {
             if (slotHashes.Entries[i].Slot == DeactivationSlot)
             {
-                return new AddressLookupTableStatus(
+                return new(
                     AddressLookupTableStatusKind.Deactivating,
                     SlotHashesSysvarState.MaximumEntries - i);
             }
         }
 
-        return new AddressLookupTableStatus(AddressLookupTableStatusKind.Deactivated);
+        return new(AddressLookupTableStatusKind.Deactivated);
     }
 
     /// <summary>Returns whether the table remains usable for lookups at the supplied slot.</summary>
@@ -194,83 +270,6 @@ public sealed class AddressLookupTableState
         }
 
         return resolved;
-    }
-
-    /// <summary>Decodes complete Address Lookup Table account data.</summary>
-    /// <param name="data">The account data.</param>
-    /// <returns>The decoded state.</returns>
-    /// <exception cref="ArgumentException">The data is truncated, misaligned, or contains too many addresses.</exception>
-    /// <exception cref="FormatException">The state discriminator or authority option tag is invalid.</exception>
-    public static AddressLookupTableState Parse(ReadOnlySpan<byte> data)
-    {
-        if (data.Length < sizeof(uint))
-            throw new ArgumentException("Lookup-table state requires a four-byte discriminator.", nameof(data));
-
-        var discriminator = BinaryPrimitives.ReadUInt32LittleEndian(data);
-        if (discriminator == (uint)AddressLookupTableStateKind.Uninitialized)
-        {
-            return new AddressLookupTableState(
-                AddressLookupTableStateKind.Uninitialized,
-                ulong.MaxValue,
-                0,
-                0,
-                null,
-                []);
-        }
-
-        if (discriminator != (uint)AddressLookupTableStateKind.LookupTable)
-            throw new FormatException($"Unknown lookup-table state discriminator {discriminator}.");
-        if (data.Length < MetadataLength)
-            throw new ArgumentException($"Initialized lookup-table data requires at least {MetadataLength} bytes.", nameof(data));
-
-        var addressBytes = data[MetadataLength..];
-        if (addressBytes.Length % PublicKey.Length is not 0)
-            throw new ArgumentException("Lookup-table address data must be a multiple of 32 bytes.", nameof(data));
-
-        var count = addressBytes.Length / PublicKey.Length;
-        if (count > MaximumAddresses)
-            throw new ArgumentException($"A lookup table may contain at most {MaximumAddresses} addresses.", nameof(data));
-
-        var authority = data[21] switch
-        {
-            0 => (PublicKey?)null,
-            1 => new PublicKey(data.Slice(22, PublicKey.Length)),
-            var tag => throw new FormatException($"Invalid lookup-table authority option tag {tag}.")
-        };
-        var addresses = new PublicKey[count];
-        for (var i = 0; i < addresses.Length; i++)
-            addresses[i] = new PublicKey(addressBytes.Slice(i * PublicKey.Length, PublicKey.Length));
-
-        return new AddressLookupTableState(
-            AddressLookupTableStateKind.LookupTable,
-            BinaryPrimitives.ReadUInt64LittleEndian(data[4..]),
-            BinaryPrimitives.ReadUInt64LittleEndian(data[12..]),
-            data[20],
-            authority,
-            addresses);
-    }
-
-    /// <summary>Attempts to decode Address Lookup Table account data.</summary>
-    /// <param name="data">The account data.</param>
-    /// <param name="state">The decoded state on success; otherwise <c>null</c>.</param>
-    /// <returns><c>true</c> when the input is a valid state.</returns>
-    public static bool TryParse(ReadOnlySpan<byte> data, out AddressLookupTableState? state)
-    {
-        try
-        {
-            state = Parse(data);
-            return true;
-        }
-        catch (ArgumentException)
-        {
-            state = null;
-            return false;
-        }
-        catch (FormatException)
-        {
-            state = null;
-            return false;
-        }
     }
 
     private void EnsureInitialized()

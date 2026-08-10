@@ -91,7 +91,7 @@ public static class RpcTransactionVersionTests
         public void UninitializedValue_ThrowsJsonException()
         {
             // Act
-            Action act = () => JsonSerializer.Serialize(default(RpcTransactionVersion), RpcJson.Options);
+            Action act = static () => JsonSerializer.Serialize(default(RpcTransactionVersion), RpcJson.Options);
 
             // Assert
             act.Should().Throw<JsonException>().WithMessage("*uninitialized transaction version*");
@@ -247,7 +247,7 @@ public static class TransactionResponseJsonTests
                 """{"slot":0,"blockTime":null,"transaction":["","base64"],"meta":{"err":null,"status":{"Ok":null},"fee":0,"preBalances":[],"postBalances":[],"rewards":[{"pubkey":"11111111111111111111111111111111","lamports":0,"postBalance":0,"rewardType":"Unknown"}]}}""";
 
             // Act
-            Action act = () => JsonSerializer.Deserialize<TransactionResponse>(json, RpcJson.Options);
+            Action act = static () => JsonSerializer.Deserialize<TransactionResponse>(json, RpcJson.Options);
 
             // Assert
             act.Should().Throw<JsonException>().WithMessage("*reward type*");
@@ -501,7 +501,7 @@ public static class ParsedTransactionJsonTests
                 """{"transaction":{"signatures":[],"message":{"accountKeys":[],"instructions":[],"recentBlockhash":""}}}""";
 
             // Act
-            Action act = () => JsonSerializer.Deserialize<ParsedTransaction>(json, RpcJson.Options);
+            Action act = static () => JsonSerializer.Deserialize<ParsedTransaction>(json, RpcJson.Options);
 
             // Assert
             act.Should().Throw<JsonException>().WithMessage("*metadata member*");
@@ -688,7 +688,7 @@ public static class ParsedTransactionJsonTests
                 """{"transaction":{"signatures":[],"message":{"accountKeys":[],"instructions":[{"program":"system","programId":"11111111111111111111111111111111","parsed":{},"stackHeight":4294967296}],"recentBlockhash":""}},"meta":null}""";
 
             // Act
-            Action act = () => JsonSerializer.Deserialize<ParsedTransaction>(json, RpcJson.Options);
+            Action act = static () => JsonSerializer.Deserialize<ParsedTransaction>(json, RpcJson.Options);
 
             // Assert
             act.Should().Throw<JsonException>();
@@ -702,7 +702,7 @@ public static class ParsedTransactionJsonTests
                 """{"err":{"InstructionError":[0,"Custom"]},"status":{"Ok":null},"fee":0,"preBalances":[],"postBalances":[]}""";
 
             // Act
-            Action act = () => JsonSerializer.Deserialize<ParsedTransactionMeta>(json, RpcJson.Options);
+            Action act = static () => JsonSerializer.Deserialize<ParsedTransactionMeta>(json, RpcJson.Options);
 
             // Assert
             act.Should().Throw<JsonException>();

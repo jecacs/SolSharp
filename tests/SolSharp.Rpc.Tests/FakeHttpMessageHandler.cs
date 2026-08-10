@@ -14,7 +14,7 @@ internal sealed class FakeHttpMessageHandler(string responseJson, HttpStatusCode
         if (request.Content is not null)
             CapturedRequestBody = await request.Content.ReadAsStringAsync(cancellationToken);
 
-        return new HttpResponseMessage(statusCode)
+        return new(statusCode)
         {
             Content = new StringContent(responseJson, Encoding.UTF8, "application/json")
         };

@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using SolSharp.Core.Primitives;
 
 namespace SolSharp.Rpc.Models;
 
@@ -17,10 +16,10 @@ internal sealed class AccountInfoJsonConverter : JsonConverter<AccountInfo>
 
         var bytes = DecodeBase64Tuple(root.GetProperty("data"));
 
-        return new AccountInfo
+        return new()
         {
             Lamports = root.GetProperty("lamports").GetUInt64(),
-            Owner = new PublicKey(root.GetProperty("owner").GetString()!),
+            Owner = new(root.GetProperty("owner").GetString()!),
             Executable = root.GetProperty("executable").GetBoolean(),
             RentEpoch = root.GetProperty("rentEpoch").GetUInt64(),
             Space = ReadOptionalSpace(root),

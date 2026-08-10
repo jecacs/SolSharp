@@ -11,8 +11,8 @@ public static class SolanaRpcClientGetTransactionTests
     private static (SolanaRpcClient Client, FakeHttpMessageHandler Handler) Make(string responseJson)
     {
         var handler = new FakeHttpMessageHandler(responseJson);
-        var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
-        return (new SolanaRpcClient(http), handler);
+        var http = new HttpClient(handler) { BaseAddress = new("http://localhost") };
+        return (new(http), handler);
     }
 
     [TestFixture]
@@ -27,11 +27,11 @@ public static class SolanaRpcClientGetTransactionTests
 
             // Act
             // Keep the default literal in the legacy third-argument position as a source-compatibility KAT.
-            var transaction = await client.GetTransactionAsync("Sig1111", Commitment.Confirmed, default);
+            var transaction = await client.GetTransactionAsync("Sig1111");
 
             // Assert
             transaction.Should().NotBeNull();
-            transaction!.Slot.Should().Be(100);
+            transaction.Slot.Should().Be(100);
             transaction.BlockTime.Should().Be(1700000000);
             transaction.Version.Should().Be(RpcTransactionVersion.FromNumber(0));
             transaction.Meta.Should().NotBeNull();

@@ -35,7 +35,7 @@ public static partial class Token2022Program
         writer.WriteString(name);
         writer.WriteString(symbol);
         writer.WriteString(uri);
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts =
@@ -138,7 +138,7 @@ public static partial class Token2022Program
         writer.WriteOption(end.HasValue);
         if (end is { } last)
             writer.WriteU64(last);
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts = [AccountMeta.Readonly(metadata)],

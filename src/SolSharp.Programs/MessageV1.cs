@@ -98,7 +98,7 @@ public sealed class MessageV1 : ITransactionMessage
         PublicKey feePayer,
         Hash lifetimeSpecifier,
         IReadOnlyList<Instruction> instructions)
-        => Compile(feePayer, lifetimeSpecifier, instructions, new TransactionConfigV1());
+        => Compile(feePayer, lifetimeSpecifier, instructions, new());
 
     /// <summary>Compiles instructions into a V1 message with an empty inline configuration.</summary>
     /// <param name="feePayer">The writable signer that pays the transaction fee.</param>
@@ -122,7 +122,7 @@ public sealed class MessageV1 : ITransactionMessage
         IReadOnlyList<Instruction> instructions)
     {
         ArgumentNullException.ThrowIfNull(lifetimeSpecifier);
-        return Compile(feePayer, new Hash(lifetimeSpecifier), instructions, new TransactionConfigV1());
+        return Compile(feePayer, new Hash(lifetimeSpecifier), instructions, new());
     }
 
     /// <summary>Compiles instructions and inline configuration into a V1 message.</summary>
@@ -157,7 +157,7 @@ public sealed class MessageV1 : ITransactionMessage
         void Merge(PublicKey key, bool signer, bool writable)
         {
             flags.TryGetValue(key, out var current);
-            flags[key] = new AccountFlags(current.IsSigner || signer, current.IsWritable || writable);
+            flags[key] = new(current.IsSigner || signer, current.IsWritable || writable);
         }
 
         Merge(feePayer, signer: true, writable: true);
@@ -236,7 +236,7 @@ public sealed class MessageV1 : ITransactionMessage
             for (var accountIndex = 0; accountIndex < instruction.Accounts.Count; accountIndex++)
                 accountIndexes[accountIndex] = (byte)positions[instruction.Accounts[accountIndex].PublicKey];
 
-            compiled[index] = new CompiledInstruction
+            compiled[index] = new()
             {
                 ProgramIdIndex = (byte)positions[instruction.ProgramId],
                 AccountIndexes = accountIndexes,
@@ -244,7 +244,7 @@ public sealed class MessageV1 : ITransactionMessage
             };
         }
 
-        return new MessageV1(
+        return new(
             (byte)requiredSignatures,
             (byte)readonlySigned,
             (byte)readonlyUnsigned,
@@ -277,6 +277,16 @@ public sealed class MessageV1 : ITransactionMessage
         ArgumentNullException.ThrowIfNull(lifetimeSpecifier);
         return Compile(feePayer, new Hash(lifetimeSpecifier), instructions, config);
     }
+
+    /// <summary>Parses one complete version-prefixed V1 message and applies all sanitize checks.</summary>
+    /// <param name="data">The complete V1 message bytes, beginning with <see cref="VersionPrefix"/>.</param>
+    /// <returns>The parsed V1 message.</returns>
+    /// <exception cref="FormatException">
+    /// The message is truncated, has trailing data, uses an invalid config mask, or violates a V1
+    /// sanitize constraint.
+    /// </exception>
+    public static MessageV1 Deserialize(ReadOnlySpan<byte> data)
+        => DeserializeCore(data, requireExactLength: true, out _);
 
     /// <summary>Validates all SIMD-0385 header, configuration, account, and instruction constraints.</summary>
     /// <exception cref="FormatException">The message violates a V1 sanitize constraint.</exception>
@@ -332,7 +342,8 @@ public sealed class MessageV1 : ITransactionMessage
     /// <inheritdoc/>
     public int GetSerializedLength()
     {
-        var length = 1 + FixedBodyLength
+        var length = 1
+            + FixedBodyLength
             + (AccountKeys.Count * PublicKey.Length)
             + GetConfigSerializedLength(Config)
             + (Instructions.Count * 4);
@@ -389,16 +400,6 @@ public sealed class MessageV1 : ITransactionMessage
 
         return offset;
     }
-
-    /// <summary>Parses one complete version-prefixed V1 message and applies all sanitize checks.</summary>
-    /// <param name="data">The complete V1 message bytes, beginning with <see cref="VersionPrefix"/>.</param>
-    /// <returns>The parsed V1 message.</returns>
-    /// <exception cref="FormatException">
-    /// The message is truncated, has trailing data, uses an invalid config mask, or violates a V1
-    /// sanitize constraint.
-    /// </exception>
-    public static MessageV1 Deserialize(ReadOnlySpan<byte> data)
-        => DeserializeCore(data, requireExactLength: true, out _);
 
     /// <inheritdoc/>
     public IReadOnlyList<Instruction> DecompileInstructions(IReadOnlyList<AddressLookupTableAccount> lookupTables)
@@ -461,7 +462,7 @@ public sealed class MessageV1 : ITransactionMessage
             var accountKeys = new List<PublicKey>(accountCount);
             for (var index = 0; index < accountCount; index++)
             {
-                accountKeys.Add(new PublicKey(data.Slice(offset, PublicKey.Length)));
+                accountKeys.Add(new(data.Slice(offset, PublicKey.Length)));
                 offset += PublicKey.Length;
             }
 
@@ -506,7 +507,7 @@ public sealed class MessageV1 : ITransactionMessage
                 var instructionAccountCount = data[offset++];
                 var instructionDataLength = BinaryPrimitives.ReadUInt16LittleEndian(data[offset..]);
                 offset += sizeof(ushort);
-                headers[index] = new InstructionHeader(
+                headers[index] = new(
                     programIdIndex,
                     instructionAccountCount,
                     instructionDataLength);
@@ -525,7 +526,7 @@ public sealed class MessageV1 : ITransactionMessage
                 offset += header.AccountCount;
                 var instructionData = data.Slice(offset, header.DataLength).ToArray();
                 offset += header.DataLength;
-                instructions[index] = new CompiledInstruction
+                instructions[index] = new()
                 {
                     ProgramIdIndex = header.ProgramIdIndex,
                     AccountIndexes = accountIndexes,

@@ -16,8 +16,10 @@ public sealed class BlsSignature : IEquatable<BlsSignature>
 
     private BlsSignature(ReadOnlySpan<byte> bytes)
     {
-        _bytes = bytes.ToArray();
+        _bytes = [.. bytes];
     }
+
+    internal ReadOnlySpan<byte> Bytes => _bytes;
 
     /// <summary>Parses a compressed G2 point and rejects malformed, off-curve, wrong-subgroup, and infinity encodings.</summary>
     /// <param name="compressed">The exact 96-byte compressed point.</param>
@@ -28,7 +30,7 @@ public sealed class BlsSignature : IEquatable<BlsSignature>
         if (!BlsOperations.IsValidSignature(compressed))
             throw new ArgumentException("BLS signature must be a canonical non-infinity G2 subgroup point.", nameof(compressed));
 
-        return new BlsSignature(compressed);
+        return new(compressed);
     }
 
     /// <summary>Parses the standard base64 text emitted by <see cref="ToString"/>.</summary>
@@ -67,7 +69,7 @@ public sealed class BlsSignature : IEquatable<BlsSignature>
             return false;
         }
 
-        signature = new BlsSignature(compressed);
+        signature = new(compressed);
         return true;
     }
 
@@ -91,10 +93,6 @@ public sealed class BlsSignature : IEquatable<BlsSignature>
         }
     }
 
-    /// <summary>Returns a new array containing the compressed 96-byte signature.</summary>
-    /// <returns>A defensive copy of the compressed signature.</returns>
-    public byte[] ToBytes() => [.. _bytes];
-
     /// <summary>
     /// Aggregates one or more subgroup-checked signatures with native BLS12-381 group addition.
     /// Duplicate signatures are included repeatedly, matching the pinned Solana SDK.
@@ -111,7 +109,7 @@ public sealed class BlsSignature : IEquatable<BlsSignature>
         ArgumentNullException.ThrowIfNull(signatures);
         if (signatures.Count == 0)
             throw new ArgumentException("At least one BLS signature is required for aggregation.", nameof(signatures));
-        if (signatures.Any(signature => signature is null))
+        if (signatures.Any(static signature => signature is null))
             throw new ArgumentException("BLS signature aggregation cannot contain null entries.", nameof(signatures));
 
         var aggregate = BlsOperations.AggregateSignatures(signatures);
@@ -120,6 +118,10 @@ public sealed class BlsSignature : IEquatable<BlsSignature>
 
         return FromValidated(aggregate);
     }
+
+    /// <summary>Returns a new array containing the compressed 96-byte signature.</summary>
+    /// <returns>A defensive copy of the compressed signature.</returns>
+    public byte[] ToBytes() => [.. _bytes];
 
     /// <inheritdoc/>
     public bool Equals(BlsSignature? other) => other is not null && _bytes.AsSpan().SequenceEqual(other._bytes);
@@ -133,13 +135,12 @@ public sealed class BlsSignature : IEquatable<BlsSignature>
         var hash = default(HashCode);
         foreach (var value in _bytes)
             hash.Add(value);
+
         return hash.ToHashCode();
     }
 
     /// <inheritdoc/>
     public override string ToString() => Convert.ToBase64String(_bytes);
-
-    internal ReadOnlySpan<byte> Bytes => _bytes;
 
     internal static BlsSignature FromValidated(ReadOnlySpan<byte> compressed) => new(compressed);
 }

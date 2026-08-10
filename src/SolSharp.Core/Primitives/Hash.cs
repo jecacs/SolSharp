@@ -47,6 +47,18 @@ public readonly struct Hash : IEquatable<Hash>
         _base58 = base58;
     }
 
+    /// <summary>Determines whether two hashes hold the same bytes.</summary>
+    /// <param name="left">The left hash.</param>
+    /// <param name="right">The right hash.</param>
+    /// <returns><c>true</c> if the hashes are equal.</returns>
+    public static bool operator ==(Hash left, Hash right) => left.Equals(right);
+
+    /// <summary>Determines whether two hashes hold different bytes.</summary>
+    /// <param name="left">The left hash.</param>
+    /// <param name="right">The right hash.</param>
+    /// <returns><c>true</c> if the hashes are not equal.</returns>
+    public static bool operator !=(Hash left, Hash right) => !left.Equals(right);
+
     /// <summary>Parses a hash from its base58 string form.</summary>
     /// <param name="base58">The base58-encoded hash; must decode to exactly <see cref="Length"/> bytes.</param>
     /// <returns>The parsed hash.</returns>
@@ -61,7 +73,7 @@ public readonly struct Hash : IEquatable<Hash>
     {
         if (Base58.TryDecode(base58, out var bytes) && bytes.Length == Length)
         {
-            hash = new Hash(bytes, base58);
+            hash = new(bytes, base58);
             return true;
         }
 
@@ -114,18 +126,6 @@ public readonly struct Hash : IEquatable<Hash>
         CopyTo(bytes);
         return Base58.Encode(bytes);
     }
-
-    /// <summary>Determines whether two hashes hold the same bytes.</summary>
-    /// <param name="left">The left hash.</param>
-    /// <param name="right">The right hash.</param>
-    /// <returns><c>true</c> if the hashes are equal.</returns>
-    public static bool operator ==(Hash left, Hash right) => left.Equals(right);
-
-    /// <summary>Determines whether two hashes hold different bytes.</summary>
-    /// <param name="left">The left hash.</param>
-    /// <param name="right">The right hash.</param>
-    /// <returns><c>true</c> if the hashes are not equal.</returns>
-    public static bool operator !=(Hash left, Hash right) => !left.Equals(right);
 
     private static byte[] Decode(string base58)
     {

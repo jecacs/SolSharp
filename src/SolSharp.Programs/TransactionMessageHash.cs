@@ -36,6 +36,6 @@ public static class TransactionMessageHash
         if (written != Hash.Length)
             throw new InvalidOperationException($"BLAKE3 produced {written} bytes instead of {Hash.Length}.");
 
-        return new Hash(result);
+        return new(result);
     }
 }

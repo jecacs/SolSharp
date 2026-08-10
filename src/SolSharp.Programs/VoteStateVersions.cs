@@ -15,7 +15,7 @@ public enum VoteStateVersion : uint
     V4 = 3
 }
 
-/// <summary>A vote lockout decoded from vote-account state.</summary>
+/// <summary>A vote lockout decoded from the vote-account state.</summary>
 /// <param name="Latency">The landing latency; zero for the V1.14.11 layout.</param>
 /// <param name="Slot">The voted slot.</param>
 /// <param name="ConfirmationCount">The tower confirmation count.</param>
@@ -120,7 +120,7 @@ public abstract record VoteStateVersions
         for (var i = 0; i < votes.Length; i++)
         {
             var latency = hasLatency ? reader.ReadByte() : (byte)0;
-            votes[i] = new VoteStateLockout(latency, reader.ReadUInt64(), reader.ReadUInt32());
+            votes[i] = new(latency, reader.ReadUInt64(), reader.ReadUInt32());
         }
 
         return votes;
@@ -131,7 +131,7 @@ public abstract record VoteStateVersions
         var count = reader.ReadBoundedCount(MaximumAuthorizedVoters, "Authorized voter");
         var voters = new AuthorizedVoteVoter[count];
         for (var i = 0; i < voters.Length; i++)
-            voters[i] = new AuthorizedVoteVoter(reader.ReadUInt64(), reader.ReadPublicKey());
+            voters[i] = new(reader.ReadUInt64(), reader.ReadPublicKey());
         return voters;
     }
 
@@ -142,7 +142,7 @@ public abstract record VoteStateVersions
     {
         var voters = new PriorVoteVoter[PriorVoterEntries];
         for (var i = 0; i < voters.Length; i++)
-            voters[i] = new PriorVoteVoter(reader.ReadPublicKey(), reader.ReadUInt64(), reader.ReadUInt64());
+            voters[i] = new(reader.ReadPublicKey(), reader.ReadUInt64(), reader.ReadUInt64());
 
         var rawIndex = reader.ReadUInt64();
         if (rawIndex >= PriorVoterEntries)
@@ -158,7 +158,7 @@ public abstract record VoteStateVersions
         var count = reader.ReadBoundedCount(MaximumEpochCredits, "Epoch credits");
         var credits = new VoteEpochCredits[count];
         for (var i = 0; i < credits.Length; i++)
-            credits[i] = new VoteEpochCredits(reader.ReadUInt64(), reader.ReadUInt64(), reader.ReadUInt64());
+            credits[i] = new(reader.ReadUInt64(), reader.ReadUInt64(), reader.ReadUInt64());
         return credits;
     }
 

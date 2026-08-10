@@ -158,7 +158,7 @@ public static class PublicKeyTests
         [Test]
         public void Deserialize_Invalid_Throws()
         {
-            Action act = () => JsonSerializer.Deserialize<PublicKey>("\"0\"");
+            Action act = static () => JsonSerializer.Deserialize<PublicKey>("\"0\"");
             act.Should().Throw<JsonException>();
         }
 

@@ -6,16 +6,6 @@ using static SolSharp.Programs.Tests.TransferHookTestHelpers;
 
 namespace SolSharp.Programs.Tests;
 
-internal static class TransferHookTestHelpers
-{
-    internal static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
-
-    internal static string Hex(byte[] data) => Convert.ToHexString(data).ToLowerInvariant();
-
-    internal static (PublicKey, bool, bool)[] Metas(Instruction instruction)
-        => [.. instruction.Accounts.Select(account => (account.PublicKey, account.IsSigner, account.IsWritable))];
-}
-
 public static class TransferHookProgramTests
 {
     [TestFixture]
@@ -116,7 +106,7 @@ public static class TransferHookProgramTests
 
             // Assert
             decoded.Should().ContainSingle();
-            Hex(decoded![0].Encode()).Should().Be(Hex(meta.Encode()));
+            Hex(decoded[0].Encode()).Should().Be(Hex(meta.Encode()));
         }
 
         [Test]
@@ -203,7 +193,7 @@ public static class TransferHookProgramTests
                 Resolve);
 
             // Assert
-            extras.Select(meta => (meta.PublicKey, meta.IsSigner, meta.IsWritable)).Should().Equal(
+            extras.Select(static meta => (meta.PublicKey, meta.IsSigner, meta.IsWritable)).Should().Equal(
                 (staticExtra, false, false),
                 (expectedFirstPda, false, true),
                 (expectedSecondPda, false, true));
@@ -249,7 +239,7 @@ public static class TransferHookProgramTests
                 Resolve);
 
             // Assert
-            augmented.Accounts.TakeLast(3).Select(meta => meta.PublicKey).Should().Equal(Key(6), hookProgram, validation);
+            augmented.Accounts.TakeLast(3).Select(static meta => meta.PublicKey).Should().Equal(Key(6), hookProgram, validation);
         }
     }
 }
@@ -344,11 +334,21 @@ public static class ExtraAccountMetaTests
             var seeds = meta.DecodeSeeds();
 
             // Assert
-            seeds!.Select(seed => seed.Kind).Should().Equal(
+            seeds!.Select(static seed => seed.Kind).Should().Equal(
                 ExtraAccountSeedKind.Literal,
                 ExtraAccountSeedKind.InstructionData,
                 ExtraAccountSeedKind.AccountKey,
                 ExtraAccountSeedKind.AccountData);
         }
     }
+}
+
+internal static class TransferHookTestHelpers
+{
+    internal static PublicKey Key(byte value) => new([.. Enumerable.Repeat(value, PublicKey.Length)]);
+
+    internal static string Hex(byte[] data) => Convert.ToHexString(data).ToLowerInvariant();
+
+    internal static (PublicKey, bool, bool)[] Metas(Instruction instruction)
+        => [.. instruction.Accounts.Select(static account => (account.PublicKey, account.IsSigner, account.IsWritable))];
 }

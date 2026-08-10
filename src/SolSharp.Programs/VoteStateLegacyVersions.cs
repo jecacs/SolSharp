@@ -90,7 +90,7 @@ public sealed record VoteStateV1_14_11 : VoteStateVersions
         var priorVoters = ReadPriorVoters(ref reader, out var priorVoterIndex, out var priorVotersEmpty);
         var epochCredits = ReadEpochCredits(ref reader);
         var timestamp = ReadTimestamp(ref reader);
-        return new VoteStateV1_14_11(
+        return new(
             node,
             withdrawer,
             commission,
@@ -193,7 +193,7 @@ public sealed record VoteStateV3 : VoteStateVersions
         var priorVoters = ReadPriorVoters(ref reader, out var priorVoterIndex, out var priorVotersEmpty);
         var epochCredits = ReadEpochCredits(ref reader);
         var timestamp = ReadTimestamp(ref reader);
-        return new VoteStateV3(
+        return new(
             node,
             withdrawer,
             commission,

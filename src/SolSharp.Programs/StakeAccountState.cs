@@ -53,11 +53,11 @@ public sealed class StakeAccountState
 
         var kind = (StakeAccountStateKind)kindValue;
         if (kind is StakeAccountStateKind.Uninitialized or StakeAccountStateKind.RewardsPool)
-            return new StakeAccountState(kind, null, null, 0);
+            return new(kind, null, null, 0);
 
         var metadata = ReadMetadata(data[sizeof(uint)..]);
         if (kind == StakeAccountStateKind.Initialized)
-            return new StakeAccountState(kind, metadata, null, 0);
+            return new(kind, metadata, null, 0);
 
         const int stakeOffset = sizeof(uint) + 120;
         var voter = new PublicKey(data.Slice(stakeOffset, PublicKey.Length));
@@ -68,7 +68,7 @@ public sealed class StakeAccountState
         var creditsObserved = BinaryPrimitives.ReadUInt64LittleEndian(data[(stakeOffset + 64)..]);
         var delegation = new StakeDelegation(voter, lamports, activationEpoch, deactivationEpoch, reserved);
 
-        return new StakeAccountState(
+        return new(
             kind,
             metadata,
             new StakeDelegatedData(delegation, creditsObserved),
@@ -106,9 +106,9 @@ public sealed class StakeAccountState
         var unixTimestamp = BinaryPrimitives.ReadInt64LittleEndian(data[72..]);
         var epoch = BinaryPrimitives.ReadUInt64LittleEndian(data[80..]);
         var custodian = new PublicKey(data.Slice(88, PublicKey.Length));
-        return new StakeAccountMetadata(
+        return new(
             rentExemptReserve,
-            new StakeAuthorized(staker, withdrawer),
-            new StakeLockup(unixTimestamp, epoch, custodian));
+            new(staker, withdrawer),
+            new(unixTimestamp, epoch, custodian));
     }
 }
