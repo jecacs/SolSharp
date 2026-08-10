@@ -182,10 +182,13 @@ jobs:
           NUGET_PACKAGES: ${{ runner.temp }}/solsharp-release-packages
         run: |
           package_version="${GITHUB_REF_NAME#v}"
+          # This package is produced by the current job, so refresh the isolated consumer lock.
           dotnet restore samples/SolSharp.AotSmoke \
             --runtime linux-x64 \
+            --force-evaluate \
             -p:UsePackedSolSharp=true \
             -p:SolSharpPackageVersion="${package_version}" \
+            -p:RestoreLockedMode=false \
             --source ./artifacts \
             --source https://api.nuget.org/v3/index.json \
             -p:NuGetAuditMode=all \
@@ -199,12 +202,14 @@ jobs:
             exit 1
           fi
 
+          # Publish resolves Native AOT runtime packs; lock that restore to the graph above.
           dotnet publish samples/SolSharp.AotSmoke \
             --configuration Release \
             --runtime linux-x64 \
             -warnaserror \
             -p:UsePackedSolSharp=true \
-            -p:SolSharpPackageVersion="${package_version}"
+            -p:SolSharpPackageVersion="${package_version}" \
+            -p:RestoreLockedMode=true
 
       - name: Run packed package consumer
         run: samples/SolSharp.AotSmoke/bin/Release/net10.0/linux-x64/publish/SolSharp.AotSmoke

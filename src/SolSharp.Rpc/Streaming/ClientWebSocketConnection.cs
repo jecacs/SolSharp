@@ -22,6 +22,7 @@ internal sealed class ClientWebSocketConnection : IWebSocketConnection
     private Task? _disposeTask;
     private bool _receiveActive;
     private bool _closeOwnsReceive;
+    private bool _closeOutputClaimed;
     private bool _disposed;
 
     public ClientWebSocketConnection()
@@ -57,7 +58,9 @@ internal sealed class ClientWebSocketConnection : IWebSocketConnection
     {
         lock (_lifecycleGate)
         {
-            if (_disposed || (_disposeTask is not null && _closeOwnsReceive))
+            if (_disposed ||
+                (_disposeTask is not null &&
+                 (_closeOwnsReceive || _peerCloseReceived.Task.IsCompleted)))
             {
                 return ValueTask.FromException<string?>(
                     new ObjectDisposedException(nameof(ClientWebSocketConnection)));
@@ -164,6 +167,7 @@ internal sealed class ClientWebSocketConnection : IWebSocketConnection
     {
         using var timeout = new CancellationTokenSource();
         timeout.CancelAfter(_closeTimeout);
+        Exception? cleanupException = null;
         try
         {
             switch (_socket.State)
@@ -171,8 +175,12 @@ internal sealed class ClientWebSocketConnection : IWebSocketConnection
                 case WebSocketState.Open when receiveLoopOwnsPeerRead:
                     // CloseOutputAsync only sends our half of the handshake. The already-active receive
                     // loop owns the one permitted receive and completes the other half below.
-                    await _socket.CloseOutputAsync(
-                        WebSocketCloseStatus.NormalClosure, "bye", timeout.Token);
+                    if (TryClaimCloseOutput())
+                    {
+                        await _socket.CloseOutputAsync(
+                            WebSocketCloseStatus.NormalClosure, "bye", timeout.Token);
+                    }
+
                     await _peerCloseReceived.Task.WaitAsync(timeout.Token);
                     break;
 
@@ -189,21 +197,44 @@ internal sealed class ClientWebSocketConnection : IWebSocketConnection
                     break;
 
                 case WebSocketState.CloseReceived:
-                    await _socket.CloseOutputAsync(
-                        WebSocketCloseStatus.NormalClosure, "bye", timeout.Token);
+                    if (TryClaimCloseOutput())
+                    {
+                        await _socket.CloseOutputAsync(
+                            WebSocketCloseStatus.NormalClosure, "bye", timeout.Token);
+                    }
+
                     break;
             }
         }
         catch
         {
-            _socket.Abort();
+            try
+            {
+                _socket.Abort();
+            }
+            catch (Exception exception)
+            {
+                cleanupException = exception;
+            }
         }
         finally
         {
-            _socket.Dispose();
+            try
+            {
+                _socket.Dispose();
+            }
+            catch (Exception exception)
+            {
+                cleanupException ??= exception;
+            }
+
             lock (_lifecycleGate)
                 _disposed = true;
-            completion.TrySetResult();
+
+            if (cleanupException is null)
+                completion.TrySetResult();
+            else
+                completion.TrySetException(cleanupException);
         }
     }
 
@@ -212,6 +243,9 @@ internal sealed class ClientWebSocketConnection : IWebSocketConnection
         string? description,
         CancellationToken cancellationToken)
     {
+        if (!TryClaimCloseOutput())
+            return;
+
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(_closeTimeout);
         try
@@ -221,6 +255,18 @@ internal sealed class ClientWebSocketConnection : IWebSocketConnection
         catch
         {
             _socket.Abort();
+        }
+    }
+
+    private bool TryClaimCloseOutput()
+    {
+        lock (_lifecycleGate)
+        {
+            if (_closeOutputClaimed)
+                return false;
+
+            _closeOutputClaimed = true;
+            return true;
         }
     }
 }
