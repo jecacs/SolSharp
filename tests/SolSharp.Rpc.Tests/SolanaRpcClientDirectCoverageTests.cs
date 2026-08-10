@@ -16,8 +16,8 @@ public static class SolanaRpcClientDirectCoverageTests
     {
         var handler = new FakeHttpMessageHandler(
             $$"""{"jsonrpc":"2.0","result":{{resultJson}},"id":1}""");
-        var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
-        return (new SolanaRpcClient(http), handler);
+        var http = new HttpClient(handler) { BaseAddress = new("http://localhost") };
+        return (new(http), handler);
     }
 
     [TestFixture]
@@ -32,7 +32,7 @@ public static class SolanaRpcClientDirectCoverageTests
             var options = new GetAccountInfoOptions
             {
                 Commitment = Commitment.Finalized,
-                DataSlice = new DataSlice(4, 8),
+                DataSlice = new(4, 8),
                 MinContextSlot = 42
             };
 
@@ -44,7 +44,7 @@ public static class SolanaRpcClientDirectCoverageTests
 
             // Assert
             result.Context.Should().NotBeNull();
-            result.Context!.Slot.Should().Be(51);
+            result.Context.Slot.Should().Be(51);
             result.Context.ApiVersion.Should().Be("2.0.0");
             result.Value.Should().ContainSingle();
             result.Value![0].PublicKey.Should().Be(PublicKey.Parse(Address));
@@ -89,7 +89,7 @@ public static class SolanaRpcClientDirectCoverageTests
 
             // Assert
             result.Should().NotBeNull();
-            result!.Owner.Should().Be(PublicKey.Parse(Program));
+            result.Owner.Should().Be(PublicKey.Parse(Program));
             result.Program.Should().Be("spl-token");
             result.Parsed.Should().NotBeNull();
             result.Parsed!.Info.GetProperty("mint").GetString().Should().Be(Address);
@@ -129,7 +129,7 @@ public static class SolanaRpcClientDirectCoverageTests
                 TokenAccountsFilter.ByMint(PublicKey.Parse(Address)));
 
             // Assert
-            result.Context!.Slot.Should().Be(53);
+            result.Context.Slot.Should().Be(53);
             result.Value.Should().ContainSingle();
             result.Value![0].Account.Lamports.Should().Be(2039280);
             handler.CapturedRequestBody.Should().Be(

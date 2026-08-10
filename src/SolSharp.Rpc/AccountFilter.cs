@@ -77,13 +77,13 @@ public sealed class AccountFilter
                 $"Memory-compare data cannot exceed {MaxMemoryCompareBytes} bytes.", nameof(bytes));
         }
 
-        return new AccountFilter(
+        return new(
             new RawMemcmpFilter
             {
-                Memcmp = new RawMemcmpMatch
+                Memcmp = new()
                 {
                     Offset = offset,
-                    Bytes = bytes.ToArray(),
+                    Bytes = [.. bytes],
                     Encoding = "bytes"
                 }
             });
@@ -114,7 +114,7 @@ public sealed class AccountFilter
     private static AccountFilter EncodedMemoryCompare(ulong offset, string bytes, string encoding) =>
         new(new MemcmpFilter
         {
-            Memcmp = new MemcmpMatch { Offset = offset, Bytes = bytes, Encoding = encoding }
+            Memcmp = new() { Offset = offset, Bytes = bytes, Encoding = encoding }
         });
 
     private static void ValidateBase58(string bytesBase58)

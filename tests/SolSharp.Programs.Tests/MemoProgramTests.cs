@@ -12,7 +12,7 @@ public static class MemoProgramTests
     {
         var bytes = new byte[PublicKey.Length];
         Array.Fill(bytes, value);
-        return new PublicKey(bytes);
+        return new(bytes);
     }
 
     [TestFixture]
@@ -50,7 +50,7 @@ public static class MemoProgramTests
         public void LoneSurrogate_ThrowsInsteadOfEncodingReplacementCharacter()
         {
             // Act
-            Action act = () => MemoProgram.Memo("\ud800");
+            Action act = static () => MemoProgram.Memo("\ud800");
 
             // Assert
             act.Should().Throw<ArgumentException>()
@@ -66,7 +66,7 @@ public static class MemoProgramTests
             // Assert
             instruction.Data.Should().Equal(0xff, 0x00, 0x80);
             instruction.Accounts.Should().ContainSingle();
-            instruction.Accounts[0].Should().Match<AccountMeta>(account =>
+            instruction.Accounts[0].Should().Match<AccountMeta>(static account =>
                 account.PublicKey == Pk(6) && account.IsSigner && !account.IsWritable);
         }
     }

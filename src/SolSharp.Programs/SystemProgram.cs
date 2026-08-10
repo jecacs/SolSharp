@@ -11,6 +11,9 @@ namespace SolSharp.Programs;
 /// </summary>
 public static class SystemProgram
 {
+    /// <summary>The serialized size of a durable nonce account, in bytes (80).</summary>
+    public const int NonceAccountLength = 80;
+
     /// <summary>The System program's address.</summary>
     public static readonly PublicKey ProgramId = PublicKey.Parse(SolanaProgramIds.SystemProgram);
 
@@ -30,9 +33,6 @@ public static class SystemProgram
     private const uint CreateAccountAllowPrefundDiscriminator = 13;
     private const int MaxSeedLength = 32;
 
-    /// <summary>The serialized size of a durable nonce account, in bytes (80).</summary>
-    public const int NonceAccountLength = 80;
-
     private static readonly PublicKey RentSysvar = PublicKey.Parse(Sysvars.Rent);
     private static readonly PublicKey RecentBlockhashesSysvar = PublicKey.Parse(Sysvars.RecentBlockhashes);
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
@@ -48,7 +48,7 @@ public static class SystemProgram
         BinaryPrimitives.WriteUInt32LittleEndian(data, TransferDiscriminator);
         BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(4), lamports);
 
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts = [AccountMeta.WritableSigner(from), AccountMeta.Writable(to)],
@@ -88,7 +88,7 @@ public static class SystemProgram
         BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(12), space);
         owner.CopyTo(data.AsSpan(20));
 
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts = [AccountMeta.WritableSigner(from), AccountMeta.WritableSigner(newAccount)],
@@ -130,7 +130,7 @@ public static class SystemProgram
             ? new[] { AccountMeta.WritableSigner(newAccount), AccountMeta.WritableSigner(fundingAccount) }
             : [AccountMeta.WritableSigner(newAccount)];
 
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts = accounts,
@@ -188,7 +188,12 @@ public static class SystemProgram
         if (baseAccount != from)
             accounts.Add(AccountMeta.ReadonlySigner(baseAccount));
 
-        return new Instruction { ProgramId = ProgramId, Accounts = accounts, Data = buffer.ToArray() };
+        return new()
+        {
+            ProgramId = ProgramId,
+            Accounts = accounts,
+            Data = buffer.ToArray()
+        };
     }
 
     /// <summary>Assigns a new owner program to an existing (system-owned) account.</summary>
@@ -201,7 +206,7 @@ public static class SystemProgram
         BinaryPrimitives.WriteUInt32LittleEndian(data, AssignDiscriminator);
         owner.CopyTo(data.AsSpan(4));
 
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts = [AccountMeta.WritableSigner(account)],
@@ -219,7 +224,7 @@ public static class SystemProgram
         BinaryPrimitives.WriteUInt32LittleEndian(data, AllocateDiscriminator);
         BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(4), space);
 
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts = [AccountMeta.WritableSigner(account)],
@@ -258,7 +263,7 @@ public static class SystemProgram
         buffer.Write(word);
         buffer.Write(owner.ToBytes());
 
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts = [AccountMeta.Writable(account), AccountMeta.ReadonlySigner(baseAccount)],
@@ -294,7 +299,7 @@ public static class SystemProgram
         buffer.Write(seedBytes);
         buffer.Write(owner.ToBytes());
 
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts = [AccountMeta.Writable(account), AccountMeta.ReadonlySigner(baseAccount)],
@@ -339,7 +344,7 @@ public static class SystemProgram
         buffer.Write(seedBytes);
         buffer.Write(owner.ToBytes());
 
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts =
@@ -415,7 +420,7 @@ public static class SystemProgram
         BinaryPrimitives.WriteUInt32LittleEndian(data, InitializeNonceAccountDiscriminator);
         authority.CopyTo(data.AsSpan(4));
 
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts =
@@ -437,7 +442,7 @@ public static class SystemProgram
         var data = new byte[4];
         BinaryPrimitives.WriteUInt32LittleEndian(data, AdvanceNonceAccountDiscriminator);
 
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts =
@@ -462,7 +467,7 @@ public static class SystemProgram
         BinaryPrimitives.WriteUInt32LittleEndian(data, WithdrawNonceAccountDiscriminator);
         BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(4), lamports);
 
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts =
@@ -488,7 +493,7 @@ public static class SystemProgram
         BinaryPrimitives.WriteUInt32LittleEndian(data, AuthorizeNonceAccountDiscriminator);
         newAuthority.CopyTo(data.AsSpan(4));
 
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts = [AccountMeta.Writable(nonceAccount), AccountMeta.ReadonlySigner(authority)],
@@ -504,7 +509,7 @@ public static class SystemProgram
         var data = new byte[sizeof(uint)];
         BinaryPrimitives.WriteUInt32LittleEndian(data, UpgradeNonceAccountDiscriminator);
 
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts = [AccountMeta.Writable(nonceAccount)],

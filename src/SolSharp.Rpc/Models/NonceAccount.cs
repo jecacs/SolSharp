@@ -44,10 +44,10 @@ public sealed record NonceAccount
         if (version > 1 || state != 1)
             return null;
 
-        return new NonceAccount
+        return new()
         {
             Version = version,
-            Authority = new PublicKey(data.Slice(8, PublicKey.Length)),
+            Authority = new(data.Slice(8, PublicKey.Length)),
             Nonce = Base58.Encode(data.Slice(40, 32)),
             LamportsPerSignature = BinaryPrimitives.ReadUInt64LittleEndian(data[72..])
         };

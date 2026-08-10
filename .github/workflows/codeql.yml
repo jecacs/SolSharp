@@ -30,18 +30,18 @@ jobs:
           languages: csharp
           queries: security-extended
 
-      - name: Set up .NET 8
+      - name: Set up .NET 10
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: 10.0.x
           dotnet-quality: ga
 
-      - name: Verify .NET 8 SDK selection
+      - name: Verify .NET 10 SDK selection
         shell: bash
         run: |
           selected_version="$(dotnet --version)"
-          if [[ "${selected_version}" != 8.* ]]; then
-            echo "Expected a .NET 8 SDK, but dotnet selected ${selected_version}."
+          if [[ "${selected_version}" != 10.* ]]; then
+            echo "Expected a .NET 10 SDK, but dotnet selected ${selected_version}."
             dotnet --info
             exit 1
           fi

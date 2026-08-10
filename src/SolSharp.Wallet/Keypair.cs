@@ -18,7 +18,7 @@ public sealed partial class Keypair : ISigner, IDisposable
     /// <summary>Length in bytes of a Solana secret key: the 32-byte seed followed by the 32-byte public key.</summary>
     public const int SecretKeyLength = 64;
 
-    private readonly object _secretGate = new();
+    private readonly Lock _secretGate = new();
     private readonly byte[] _seed;
     private bool _disposed;
 
@@ -28,7 +28,16 @@ public sealed partial class Keypair : ISigner, IDisposable
 
         Span<byte> publicKey = stackalloc byte[Ed25519.PublicKeySize];
         Ed25519.GeneratePublicKey(seed, publicKey);
-        PublicKey = new PublicKey(publicKey);
+        PublicKey = new(publicKey);
+    }
+
+    /// <summary>
+    /// Backstop for a caller that forgets to dispose: the seed is still zeroed when the keypair is
+    /// finalized. Deterministic <see cref="Dispose"/> is preferred (and suppresses this).
+    /// </summary>
+    ~Keypair()
+    {
+        ClearSecret();
     }
 
     /// <inheritdoc/>
@@ -48,7 +57,7 @@ public sealed partial class Keypair : ISigner, IDisposable
         if (seed.Length != SeedLength)
             throw new ArgumentException($"Seed must be {SeedLength} bytes, got {seed.Length}.", nameof(seed));
 
-        return new Keypair(seed.ToArray());
+        return new([.. seed]);
     }
 
     /// <summary>
@@ -107,7 +116,7 @@ public sealed partial class Keypair : ISigner, IDisposable
 
             Span<byte> signature = stackalloc byte[Signature.Length];
             Ed25519.Sign(_seed, message, signature);
-            return new Signature(signature);
+            return new(signature);
         }
     }
 
@@ -173,15 +182,6 @@ public sealed partial class Keypair : ISigner, IDisposable
     {
         ClearSecret();
         GC.SuppressFinalize(this);
-    }
-
-    /// <summary>
-    /// Backstop for a caller that forgets to dispose: the seed is still zeroed when the keypair is
-    /// finalized. Deterministic <see cref="Dispose"/> is preferred (and suppresses this).
-    /// </summary>
-    ~Keypair()
-    {
-        ClearSecret();
     }
 
     private void ClearSecret()

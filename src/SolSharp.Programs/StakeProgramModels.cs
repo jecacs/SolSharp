@@ -12,6 +12,22 @@ public enum StakeAuthorityType : uint
     Withdrawer = 1
 }
 
+/// <summary>The serialized stake-account state variant.</summary>
+public enum StakeAccountStateKind : uint
+{
+    /// <summary>The account has not been initialized.</summary>
+    Uninitialized = 0,
+
+    /// <summary>The account has authorities and a lockup but no delegation.</summary>
+    Initialized = 1,
+
+    /// <summary>The account contains a stake delegation.</summary>
+    Stake = 2,
+
+    /// <summary>The legacy rewards-pool variant.</summary>
+    RewardsPool = 3
+}
+
 /// <summary>The two authorities stored in an initialized stake account.</summary>
 /// <param name="Staker">The stake-management authority.</param>
 /// <param name="Withdrawer">The withdrawal authority.</param>
@@ -34,22 +50,6 @@ public readonly record struct StakeLockup(long UnixTimestamp, ulong Epoch, Publi
 /// <param name="Epoch">A replacement epoch, or <c>null</c> to preserve it.</param>
 /// <param name="Custodian">A replacement custodian, or <c>null</c> to preserve it.</param>
 public readonly record struct StakeLockupArguments(long? UnixTimestamp, ulong? Epoch, PublicKey? Custodian);
-
-/// <summary>The serialized stake-account state variant.</summary>
-public enum StakeAccountStateKind : uint
-{
-    /// <summary>The account has not been initialized.</summary>
-    Uninitialized = 0,
-
-    /// <summary>The account has authorities and a lockup but no delegation.</summary>
-    Initialized = 1,
-
-    /// <summary>The account contains a stake delegation.</summary>
-    Stake = 2,
-
-    /// <summary>The legacy rewards-pool variant.</summary>
-    RewardsPool = 3
-}
 
 /// <summary>Initialization metadata stored in a stake account.</summary>
 /// <param name="RentExemptReserve">The historical rent-exempt reserve captured at initialization.</param>

@@ -6,21 +6,6 @@ using static SolSharp.Programs.Tests.Token2022ConfidentialTestHelpers;
 
 namespace SolSharp.Programs.Tests;
 
-internal static class Token2022ConfidentialTestHelpers
-{
-    internal static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
-
-    internal static byte[] Pod(byte value, int length) => [.. Enumerable.Repeat(value, length)];
-
-    internal static string Hex(Instruction instruction) => Convert.ToHexString(instruction.Data).ToLowerInvariant();
-
-    internal static string RepeatedHex(byte value, int length)
-        => string.Concat(Enumerable.Repeat(value.ToString("x2"), length));
-
-    internal static (PublicKey, bool, bool)[] Metas(Instruction instruction)
-        => [.. instruction.Accounts.Select(account => (account.PublicKey, account.IsSigner, account.IsWritable))];
-}
-
 public static class Token2022ConfidentialInstructionTests
 {
     [TestFixture]
@@ -405,7 +390,7 @@ public static class ElGamalProofProgramTests
             // Assert
             instruction.Data.Should().HaveCount(97);
             instruction.Data[0].Should().Be(4);
-            instruction.Data.AsSpan(1).ToArray().Should().OnlyContain(value => value == 3);
+            instruction.Data.AsSpan(1).ToArray().Should().OnlyContain(static value => value == 3);
             Metas(instruction).Should().Equal((Key(4), false, true), (Key(5), false, false));
         }
     }
@@ -502,8 +487,23 @@ public static class ElGamalRegistryProgramTests
 
             // Assert
             state.Should().NotBeNull();
-            state!.Owner.Should().Be(Key(3));
+            state.Owner.Should().Be(Key(3));
             state.ElGamalPublicKey.ToArray().Should().Equal(Pod(4, 32));
         }
     }
+}
+
+internal static class Token2022ConfidentialTestHelpers
+{
+    internal static PublicKey Key(byte value) => new([.. Enumerable.Repeat(value, PublicKey.Length)]);
+
+    internal static byte[] Pod(byte value, int length) => [.. Enumerable.Repeat(value, length)];
+
+    internal static string Hex(Instruction instruction) => Convert.ToHexString(instruction.Data).ToLowerInvariant();
+
+    internal static string RepeatedHex(byte value, int length)
+        => string.Concat(Enumerable.Repeat(value.ToString("x2"), length));
+
+    internal static (PublicKey, bool, bool)[] Metas(Instruction instruction)
+        => [.. instruction.Accounts.Select(static account => (account.PublicKey, account.IsSigner, account.IsWritable))];
 }

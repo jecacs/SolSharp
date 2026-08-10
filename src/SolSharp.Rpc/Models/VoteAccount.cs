@@ -8,16 +8,13 @@ namespace SolSharp.Rpc.Models;
 /// <seealso href="https://solana.com/docs/rpc/http/getvoteaccounts">getVoteAccounts</seealso>
 public sealed record VoteAccounts
 {
-    private IReadOnlyList<VoteAccount>? _current;
-    private IReadOnlyList<VoteAccount>? _delinquent;
-
     /// <summary>Vote accounts that have voted recently enough to be considered active.</summary>
     [JsonPropertyName("current")]
     [JsonRequired]
     public IReadOnlyList<VoteAccount> Current
     {
-        get => _current!;
-        init => _current = RequireVoteAccounts(value, "current");
+        get => field!;
+        init => field = RequireVoteAccounts(value, "current");
     }
 
     /// <summary>Vote accounts that have not voted recently enough (delinquent).</summary>
@@ -25,8 +22,8 @@ public sealed record VoteAccounts
     [JsonRequired]
     public IReadOnlyList<VoteAccount> Delinquent
     {
-        get => _delinquent!;
-        init => _delinquent = RequireVoteAccounts(value, "delinquent");
+        get => field!;
+        init => field = RequireVoteAccounts(value, "delinquent");
     }
 
     private static IReadOnlyList<VoteAccount> RequireVoteAccounts(
@@ -44,8 +41,6 @@ public sealed record VoteAccounts
 /// <seealso href="https://solana.com/docs/rpc/http/getvoteaccounts">getVoteAccounts</seealso>
 public sealed record VoteAccount
 {
-    private IReadOnlyList<VoteEpochCredit>? _epochCredits;
-
     /// <summary>The vote account address.</summary>
     [JsonPropertyName("votePubkey")]
     [JsonRequired]
@@ -92,7 +87,7 @@ public sealed record VoteAccount
     [JsonRequired]
     public IReadOnlyList<VoteEpochCredit> EpochCredits
     {
-        get => _epochCredits!;
-        init => _epochCredits = value ?? throw new JsonException("A vote account must carry epoch credits.");
+        get => field!;
+        init => field = value ?? throw new JsonException("A vote account must carry epoch credits.");
     }
 }

@@ -2,6 +2,41 @@ using SolSharp.Core.Primitives;
 
 namespace SolSharp.Rpc;
 
+/// <summary>The transaction encoding requested from <c>getBlock</c>, <c>getTransaction</c>, or <c>blockSubscribe</c>.</summary>
+public enum RpcTransactionEncoding
+{
+    /// <summary>The legacy <c>binary</c> alias for base58 encoding.</summary>
+    Binary,
+
+    /// <summary>Base64-encoded transaction wire bytes.</summary>
+    Base64,
+
+    /// <summary>Base58-encoded transaction wire bytes.</summary>
+    Base58,
+
+    /// <summary>JSON transaction objects with compiled instructions.</summary>
+    Json,
+
+    /// <summary>JSON transaction objects with recognized instructions parsed by the node.</summary>
+    JsonParsed
+}
+
+/// <summary>The amount of transaction information requested for a block.</summary>
+public enum RpcTransactionDetails
+{
+    /// <summary>Full transactions and execution metadata.</summary>
+    Full,
+
+    /// <summary>Transaction signatures only.</summary>
+    Signatures,
+
+    /// <summary>No transaction data.</summary>
+    None,
+
+    /// <summary>Transaction signatures and account-key metadata without instructions.</summary>
+    Accounts
+}
+
 /// <summary>Options for <see cref="SolanaRpcClient.RequestAirdropWithOptionsAsync(PublicKey, ulong, RequestAirdropOptions, CancellationToken)"/>.</summary>
 public sealed record RequestAirdropOptions
 {
@@ -80,41 +115,6 @@ public sealed record GetInflationRewardOptions
     public ulong? MinContextSlot { get; init; }
 }
 
-/// <summary>The transaction encoding requested from <c>getBlock</c>, <c>getTransaction</c>, or <c>blockSubscribe</c>.</summary>
-public enum RpcTransactionEncoding
-{
-    /// <summary>The legacy <c>binary</c> alias for base58 encoding.</summary>
-    Binary,
-
-    /// <summary>Base64-encoded transaction wire bytes.</summary>
-    Base64,
-
-    /// <summary>Base58-encoded transaction wire bytes.</summary>
-    Base58,
-
-    /// <summary>JSON transaction objects with compiled instructions.</summary>
-    Json,
-
-    /// <summary>JSON transaction objects with recognized instructions parsed by the node.</summary>
-    JsonParsed
-}
-
-/// <summary>The amount of transaction information requested for a block.</summary>
-public enum RpcTransactionDetails
-{
-    /// <summary>Full transactions and execution metadata.</summary>
-    Full,
-
-    /// <summary>Transaction signatures only.</summary>
-    Signatures,
-
-    /// <summary>No transaction data.</summary>
-    None,
-
-    /// <summary>Transaction signatures and account-key metadata without instructions.</summary>
-    Accounts
-}
-
 /// <summary>
 /// Exact upstream <c>getBlock</c> configuration. The configured response shape depends on
 /// <see cref="Encoding"/> and <see cref="TransactionDetails"/> and is therefore returned as JSON.
@@ -155,15 +155,43 @@ public sealed record GetTransactionOptions
 
 internal static class RpcWireNames
 {
-    public static string AccountEncoding(RpcAccountEncoding value) => value switch
+    extension(RpcAccountEncoding value)
     {
-        RpcAccountEncoding.Binary => "binary",
-        RpcAccountEncoding.Base58 => "base58",
-        RpcAccountEncoding.Base64 => "base64",
-        RpcAccountEncoding.JsonParsed => "jsonParsed",
-        RpcAccountEncoding.Base64Zstd => "base64+zstd",
-        _ => throw new ArgumentOutOfRangeException(nameof(value), value, "Unknown account encoding.")
-    };
+        public string WireName => value switch
+        {
+            RpcAccountEncoding.Binary => "binary",
+            RpcAccountEncoding.Base58 => "base58",
+            RpcAccountEncoding.Base64 => "base64",
+            RpcAccountEncoding.JsonParsed => "jsonParsed",
+            RpcAccountEncoding.Base64Zstd => "base64+zstd",
+            _ => throw new ArgumentOutOfRangeException(nameof(value), value, "Unknown account encoding.")
+        };
+    }
+
+    extension(RpcTransactionEncoding value)
+    {
+        public string WireName => value switch
+        {
+            RpcTransactionEncoding.Binary => "binary",
+            RpcTransactionEncoding.Base64 => "base64",
+            RpcTransactionEncoding.Base58 => "base58",
+            RpcTransactionEncoding.Json => "json",
+            RpcTransactionEncoding.JsonParsed => "jsonParsed",
+            _ => throw new ArgumentOutOfRangeException(nameof(value), value, "Unknown transaction encoding.")
+        };
+    }
+
+    extension(RpcTransactionDetails value)
+    {
+        public string WireName => value switch
+        {
+            RpcTransactionDetails.Full => "full",
+            RpcTransactionDetails.Signatures => "signatures",
+            RpcTransactionDetails.None => "none",
+            RpcTransactionDetails.Accounts => "accounts",
+            _ => throw new ArgumentOutOfRangeException(nameof(value), value, "Unknown transaction detail level.")
+        };
+    }
 
     public static bool TryAccountEncoding(string? value, out RpcAccountEncoding encoding)
     {
@@ -179,23 +207,4 @@ internal static class RpcWireNames
 
         return value is "binary" or "base58" or "base64" or "jsonParsed" or "base64+zstd";
     }
-
-    public static string TransactionEncoding(RpcTransactionEncoding value) => value switch
-    {
-        RpcTransactionEncoding.Binary => "binary",
-        RpcTransactionEncoding.Base64 => "base64",
-        RpcTransactionEncoding.Base58 => "base58",
-        RpcTransactionEncoding.Json => "json",
-        RpcTransactionEncoding.JsonParsed => "jsonParsed",
-        _ => throw new ArgumentOutOfRangeException(nameof(value), value, "Unknown transaction encoding.")
-    };
-
-    public static string TransactionDetails(RpcTransactionDetails value) => value switch
-    {
-        RpcTransactionDetails.Full => "full",
-        RpcTransactionDetails.Signatures => "signatures",
-        RpcTransactionDetails.None => "none",
-        RpcTransactionDetails.Accounts => "accounts",
-        _ => throw new ArgumentOutOfRangeException(nameof(value), value, "Unknown transaction detail level.")
-    };
 }

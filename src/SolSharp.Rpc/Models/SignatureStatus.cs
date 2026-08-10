@@ -7,8 +7,6 @@ namespace SolSharp.Rpc.Models;
 /// <seealso href="https://solana.com/docs/rpc/http/getsignaturestatuses">getSignatureStatuses</seealso>
 public sealed record SignatureStatus : IJsonOnDeserialized
 {
-    private string? _confirmationStatus;
-    private JsonElement? _status;
     private bool _statusIndicatesError;
 
     /// <summary>The slot the transaction was processed in.</summary>
@@ -34,7 +32,7 @@ public sealed record SignatureStatus : IJsonOnDeserialized
     [JsonRequired]
     public JsonElement? Status
     {
-        get => _status;
+        get;
         init
         {
             if (value is not { ValueKind: JsonValueKind.Object } status)
@@ -52,7 +50,7 @@ public sealed record SignatureStatus : IJsonOnDeserialized
                 throw new JsonException("A signature status must carry exactly one canonical Result branch, Ok or Err.");
             }
 
-            _status = value;
+            field = value;
             _statusIndicatesError = hasError;
         }
     }
@@ -61,13 +59,13 @@ public sealed record SignatureStatus : IJsonOnDeserialized
     [JsonPropertyName("confirmationStatus")]
     public string? ConfirmationStatus
     {
-        get => _confirmationStatus;
+        get;
         init
         {
             if (value is not null and not ("processed" or "confirmed" or "finalized"))
                 throw new JsonException($"Unknown transaction confirmation status '{value}'.");
 
-            _confirmationStatus = value;
+            field = value;
         }
     }
 

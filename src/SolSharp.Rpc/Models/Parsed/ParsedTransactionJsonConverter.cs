@@ -89,7 +89,7 @@ internal sealed class ParsedTransactionJsonConverter : JsonConverter<ParsedTrans
             parsedTransactionIndex = transactionIndexValue;
         }
 
-        return new ParsedTransaction
+        return new()
         {
             Signatures = parsedSignatures,
             Message = parsedMessage,

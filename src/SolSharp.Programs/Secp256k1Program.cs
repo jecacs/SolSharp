@@ -45,7 +45,7 @@ public static class Secp256k1Program
         data[0] = 1;
         WriteOffsets(
             data.AsSpan(1),
-            new Secp256k1SignatureOffsets(
+            new(
                 signatureOffset,
                 0,
                 addressOffset,
@@ -57,7 +57,7 @@ public static class Secp256k1Program
         signature.CopyTo(data.AsSpan(signatureOffset, SignatureLength));
         data[signatureOffset + SignatureLength] = recoveryId;
         message.CopyTo(data.AsSpan(messageOffset));
-        return new Instruction { ProgramId = ProgramId, Accounts = [], Data = data };
+        return new() { ProgramId = ProgramId, Accounts = [], Data = data };
     }
 
     /// <summary>Builds an offsets-only instruction for data stored in this or other instructions.</summary>
@@ -73,7 +73,7 @@ public static class Secp256k1Program
         data[0] = (byte)offsets.Count;
         for (var i = 0; i < offsets.Count; i++)
             WriteOffsets(data.AsSpan(1 + (i * SignatureOffsetsLength)), offsets[i]);
-        return new Instruction { ProgramId = ProgramId, Accounts = [], Data = data };
+        return new() { ProgramId = ProgramId, Accounts = [], Data = data };
     }
 
     /// <summary>Decodes the offsets table at the start of Secp256k1 instruction data.</summary>
@@ -96,7 +96,7 @@ public static class Secp256k1Program
         for (var i = 0; i < offsets.Length; i++)
         {
             var record = data[(1 + (i * SignatureOffsetsLength))..];
-            offsets[i] = new Secp256k1SignatureOffsets(
+            offsets[i] = new(
                 ReadUInt16(record, 0),
                 record[2],
                 ReadUInt16(record, 3),

@@ -64,7 +64,7 @@ public static class KeypairParsingTests
         public void NotBase58_Throws()
         {
             // Act
-            Action act = () => _ = Keypair.FromBase58String("O0Il");
+            Action act = static () => _ = Keypair.FromBase58String("O0Il");
 
             // Assert
             act.Should().Throw<FormatException>();
@@ -75,7 +75,7 @@ public static class KeypairParsingTests
         {
             // "1111111111" is base58 for ten zero bytes - a valid string of the wrong length.
             // Act
-            Action act = () => _ = Keypair.FromBase58String("1111111111");
+            Action act = static () => _ = Keypair.FromBase58String("1111111111");
 
             // Assert
             act.Should().Throw<FormatException>();
@@ -123,7 +123,7 @@ public static class KeypairParsingTests
         public void WrongLength_Throws()
         {
             // Act
-            Action act = () => _ = Keypair.FromJsonArray("[1,2,3]");
+            Action act = static () => _ = Keypair.FromJsonArray("[1,2,3]");
 
             // Assert
             act.Should().Throw<FormatException>();
@@ -157,14 +157,14 @@ public static class KeypairParsingTests
         [Test]
         public void NotHex_Throws()
         {
-            Action act = () => _ = Keypair.FromHexString("zzzz");
+            Action act = static () => _ = Keypair.FromHexString("zzzz");
             act.Should().Throw<FormatException>();
         }
 
         [Test]
         public void WrongDecodedLength_Throws()
         {
-            Action act = () => _ = Keypair.FromHexString("00010203");
+            Action act = static () => _ = Keypair.FromHexString("00010203");
             act.Should().Throw<FormatException>();
         }
     }
@@ -202,7 +202,7 @@ public static class KeypairParsingTests
         public void NotBase64_Throws()
         {
             // Act
-            Action act = () => _ = Keypair.FromBase64String("!!!!");
+            Action act = static () => _ = Keypair.FromBase64String("!!!!");
 
             // Assert
             act.Should().Throw<FormatException>();
@@ -213,7 +213,7 @@ public static class KeypairParsingTests
         {
             // "AQID" is base64 for the three bytes [1, 2, 3].
             // Act
-            Action act = () => _ = Keypair.FromBase64String("AQID");
+            Action act = static () => _ = Keypair.FromBase64String("AQID");
 
             // Assert
             act.Should().Throw<FormatException>();

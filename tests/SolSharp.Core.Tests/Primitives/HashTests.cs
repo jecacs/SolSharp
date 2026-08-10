@@ -208,7 +208,7 @@ public static class HashTests
         public void Deserialize_Invalid_Throws()
         {
             // Act
-            Action act = () => JsonSerializer.Deserialize<Hash>("\"0\"");
+            Action act = static () => JsonSerializer.Deserialize<Hash>("\"0\"");
 
             // Assert
             act.Should().Throw<JsonException>();

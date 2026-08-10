@@ -39,7 +39,7 @@ public sealed record Mint
             || !SplLayout.TryReadCOptionPublicKey(data, 46, out var freezeAuthority))
             return null;
 
-        return new Mint
+        return new()
         {
             MintAuthority = mintAuthority,
             Supply = BinaryPrimitives.ReadUInt64LittleEndian(data[36..]),

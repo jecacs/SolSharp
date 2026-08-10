@@ -43,7 +43,7 @@ public static class Ed25519Program
         BinaryPrimitives.WriteUInt16LittleEndian(data, 1);
         WriteOffsets(
             data.AsSpan(2),
-            new Ed25519SignatureOffsets(
+            new(
                 signatureOffset,
                 ushort.MaxValue,
                 publicKeyOffset,
@@ -54,7 +54,7 @@ public static class Ed25519Program
         publicKey.CopyTo(data.AsSpan(publicKeyOffset, PublicKeyLength));
         signature.CopyTo(data.AsSpan(signatureOffset, SignatureLength));
         message.CopyTo(data.AsSpan(messageOffset));
-        return new Instruction { ProgramId = ProgramId, Accounts = [], Data = data };
+        return new() { ProgramId = ProgramId, Accounts = [], Data = data };
     }
 
     /// <summary>Builds an offsets-only instruction for data stored in this or other instructions.</summary>
@@ -71,7 +71,7 @@ public static class Ed25519Program
         data[0] = (byte)offsets.Count;
         for (var i = 0; i < offsets.Count; i++)
             WriteOffsets(data.AsSpan(2 + (i * SignatureOffsetsLength)), offsets[i]);
-        return new Instruction { ProgramId = ProgramId, Accounts = [], Data = data };
+        return new() { ProgramId = ProgramId, Accounts = [], Data = data };
     }
 
     /// <summary>Decodes the offsets table at the start of Ed25519 instruction data.</summary>
@@ -94,7 +94,7 @@ public static class Ed25519Program
         for (var i = 0; i < offsets.Length; i++)
         {
             var record = data[(2 + (i * SignatureOffsetsLength))..];
-            offsets[i] = new Ed25519SignatureOffsets(
+            offsets[i] = new(
                 ReadUInt16(record, 0),
                 ReadUInt16(record, 2),
                 ReadUInt16(record, 4),

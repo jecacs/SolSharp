@@ -3,6 +3,16 @@ using System.Text.Json.Serialization;
 
 namespace SolSharp.Rpc.Streaming;
 
+/// <summary>The two wire variants emitted by <c>signatureSubscribe</c>.</summary>
+public enum SignatureNotificationKind
+{
+    /// <summary>The final <c>{ err }</c> processed-signature result.</summary>
+    Processed,
+
+    /// <summary>The early <c>"receivedSignature"</c> event.</summary>
+    Received
+}
+
 /// <summary>
 /// A <c>signatureSubscribe</c> notification: normally the final processed result, with an optional earlier
 /// received event when requested. The node unsubscribes automatically after the final result.
@@ -30,16 +40,6 @@ public sealed record SignatureNotification
     public bool IsError => IsFinal && Err is { ValueKind: not JsonValueKind.Null };
 }
 
-/// <summary>The two wire variants emitted by <c>signatureSubscribe</c>.</summary>
-public enum SignatureNotificationKind
-{
-    /// <summary>The final <c>{ err }</c> processed-signature result.</summary>
-    Processed,
-
-    /// <summary>The early <c>"receivedSignature"</c> event.</summary>
-    Received
-}
-
 /// <summary>Converts the untagged string-or-object signature notification union.</summary>
 public sealed class SignatureNotificationJsonConverter : JsonConverter<SignatureNotification>
 {
@@ -59,13 +59,13 @@ public sealed class SignatureNotificationJsonConverter : JsonConverter<Signature
             if (root.GetString() != "receivedSignature")
                 throw new JsonException("Expected the receivedSignature event.");
 
-            return new SignatureNotification { Kind = SignatureNotificationKind.Received };
+            return new() { Kind = SignatureNotificationKind.Received };
         }
 
         if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("err", out var error))
             throw new JsonException("Expected a receivedSignature string or a processed { err } object.");
 
-        return new SignatureNotification
+        return new()
         {
             Kind = SignatureNotificationKind.Processed,
             Err = error.Clone()

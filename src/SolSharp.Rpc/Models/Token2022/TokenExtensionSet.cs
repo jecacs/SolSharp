@@ -24,23 +24,6 @@ public sealed record TokenExtensionSet
     /// <summary>Every TLV entry present, in on-chain order, including types this library has no typed view for.</summary>
     public required IReadOnlyList<TokenExtension> Extensions { get; init; }
 
-    /// <summary>Whether an extension of <paramref name="type"/> is present.</summary>
-    /// <param name="type">The extension type to look for.</param>
-    /// <returns><c>true</c> when present.</returns>
-    public bool Has(ExtensionType type) => Find(type) is not null;
-
-    /// <summary>Returns the raw value bytes of the first extension of <paramref name="type"/>, or <c>null</c> if absent.</summary>
-    /// <param name="type">The extension type to look for.</param>
-    /// <returns>The extension's value bytes, or <c>null</c>.</returns>
-    public byte[]? Find(ExtensionType type)
-    {
-        foreach (var extension in Extensions)
-            if (extension.Type == type)
-                return extension.Data;
-
-        return null;
-    }
-
     /// <summary>Decodes the extension section of a Token-2022 mint account.</summary>
     /// <param name="data">The mint account's raw data.</param>
     /// <returns>
@@ -58,6 +41,23 @@ public sealed record TokenExtensionSet
     /// </returns>
     public static TokenExtensionSet? DecodeAccount(ReadOnlySpan<byte> data)
         => Decode(data, TokenAccount.Length, TokenAccountType);
+
+    /// <summary>Whether an extension of <paramref name="type"/> is present.</summary>
+    /// <param name="type">The extension type to look for.</param>
+    /// <returns><c>true</c> when present.</returns>
+    public bool Has(ExtensionType type) => Find(type) is not null;
+
+    /// <summary>Returns the raw value bytes of the first extension of <paramref name="type"/>, or <c>null</c> if absent.</summary>
+    /// <param name="type">The extension type to look for.</param>
+    /// <returns>The extension's value bytes, or <c>null</c>.</returns>
+    public byte[]? Find(ExtensionType type)
+    {
+        foreach (var extension in Extensions)
+            if (extension.Type == type)
+                return extension.Data;
+
+        return null;
+    }
 
     /// <summary>The mint's transfer-fee schedule and authorities, or <c>null</c> when the extension is absent.</summary>
     /// <returns>The decoded <see cref="Token2022.TransferFeeConfig"/>, or <c>null</c>.</returns>
@@ -138,7 +138,7 @@ public sealed record TokenExtensionSet
 
         // A bare (non-extended) account is exactly the base length and has no extension section.
         if (data.Length == baseLength)
-            return new TokenExtensionSet { Extensions = [] };
+            return new() { Extensions = [] };
 
         if (data.Length < TlvStartIndex
             || data[AccountTypeIndex] != expectedAccountType
@@ -150,11 +150,11 @@ public sealed record TokenExtensionSet
         while (offset < data.Length)
         {
             if (data.Length - offset < sizeof(ushort))
-                return new TokenExtensionSet { Extensions = extensions };
+                return new() { Extensions = extensions };
 
             var type = BinaryPrimitives.ReadUInt16LittleEndian(data[offset..]);
             if (type == (ushort)ExtensionType.Uninitialized)
-                return new TokenExtensionSet { Extensions = extensions };
+                return new() { Extensions = extensions };
 
             if (data.Length - offset < 4)
                 return null;
@@ -164,14 +164,14 @@ public sealed record TokenExtensionSet
             if (valueStart + length > data.Length)
                 return null;
 
-            extensions.Add(new TokenExtension
+            extensions.Add(new()
             {
                 Type = (ExtensionType)type,
-                Data = data.Slice(valueStart, length).ToArray()
+                Data = [.. data.Slice(valueStart, length)]
             });
             offset = valueStart + length;
         }
 
-        return new TokenExtensionSet { Extensions = extensions };
+        return new() { Extensions = extensions };
     }
 }

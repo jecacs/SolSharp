@@ -65,7 +65,7 @@ public sealed class OffchainMessage : IEquatable<OffchainMessage>
     private OffchainMessage(OffchainMessageFormat format, ReadOnlySpan<byte> message)
     {
         Format = format;
-        _message = message.ToArray();
+        _message = [.. message];
     }
 
     /// <summary>The off-chain message version.</summary>
@@ -113,7 +113,7 @@ public sealed class OffchainMessage : IEquatable<OffchainMessage>
         else
             throw new ArgumentException("An off-chain message must contain valid UTF-8.", nameof(message));
 
-        return new OffchainMessage(format, message);
+        return new(format, message);
     }
 
     /// <summary>Creates a version-0 off-chain message from valid .NET text.</summary>
@@ -134,24 +134,6 @@ public sealed class OffchainMessage : IEquatable<OffchainMessage>
         {
             throw new ArgumentException("An off-chain message must contain valid Unicode text.", nameof(message), exception);
         }
-    }
-
-    /// <summary>Returns a defensive copy of the payload bytes, without the wire header.</summary>
-    /// <returns>A new byte array containing the message payload.</returns>
-    public byte[] ToMessageBytes() => [.. _message];
-
-    /// <summary>Returns the exact domain-separated bytes that are hashed and signed.</summary>
-    /// <returns>The complete serialized message.</returns>
-    public byte[] Serialize()
-    {
-        var bytes = new byte[HeaderLength + VersionHeaderLength + _message.Length];
-        SigningDomain.CopyTo(bytes, 0);
-        bytes[SigningDomain.Length] = CurrentVersion;
-        bytes[HeaderLength] = (byte)Format;
-        bytes[HeaderLength + 1] = (byte)_message.Length;
-        bytes[HeaderLength + 2] = (byte)(_message.Length >> 8);
-        _message.CopyTo(bytes, HeaderLength + VersionHeaderLength);
-        return bytes;
     }
 
     /// <summary>Parses and validates a complete domain-separated off-chain message.</summary>
@@ -189,7 +171,25 @@ public sealed class OffchainMessage : IEquatable<OffchainMessage>
         if (!valid)
             throw new FormatException("Off-chain message payload does not satisfy its declared format.");
 
-        return new OffchainMessage(format, message);
+        return new(format, message);
+    }
+
+    /// <summary>Returns a defensive copy of the payload bytes, without the wire header.</summary>
+    /// <returns>A new byte array containing the message payload.</returns>
+    public byte[] ToMessageBytes() => [.. _message];
+
+    /// <summary>Returns the exact domain-separated bytes that are hashed and signed.</summary>
+    /// <returns>The complete serialized message.</returns>
+    public byte[] Serialize()
+    {
+        var bytes = new byte[HeaderLength + VersionHeaderLength + _message.Length];
+        SigningDomain.CopyTo(bytes, 0);
+        bytes[SigningDomain.Length] = CurrentVersion;
+        bytes[HeaderLength] = (byte)Format;
+        bytes[HeaderLength + 1] = (byte)_message.Length;
+        bytes[HeaderLength + 2] = (byte)(_message.Length >> 8);
+        _message.CopyTo(bytes, HeaderLength + VersionHeaderLength);
+        return bytes;
     }
 
     /// <summary>Computes the SHA-256 hash of the exact serialized message.</summary>
@@ -204,7 +204,7 @@ public sealed class OffchainMessage : IEquatable<OffchainMessage>
     public Signature Sign(ISigner signer)
     {
         ArgumentNullException.ThrowIfNull(signer);
-        return new Signature(signer.Sign(Serialize()));
+        return new(signer.Sign(Serialize()));
     }
 
     /// <summary>Verifies a signature over the exact serialized message.</summary>

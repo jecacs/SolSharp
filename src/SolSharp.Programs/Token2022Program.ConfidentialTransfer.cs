@@ -38,7 +38,7 @@ public static partial class Token2022Program
             auditorElGamalPublicKey,
             ElGamalPublicKeyLength,
             nameof(auditorElGamalPublicKey));
-        return new Instruction { ProgramId = ProgramId, Accounts = [AccountMeta.Writable(mint)], Data = data };
+        return new() { ProgramId = ProgramId, Accounts = [AccountMeta.Writable(mint)], Data = data };
     }
 
     /// <summary>Updates confidential-transfer configuration on a Token-2022 mint.</summary>
@@ -93,7 +93,7 @@ public static partial class Token2022Program
         CopyExactPod(data.AsSpan(2, DecryptableBalanceLength), decryptableZeroBalance, nameof(decryptableZeroBalance));
         BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(2 + DecryptableBalanceLength), maximumPendingBalanceCreditCounter);
         data[^1] = unchecked((byte)offset);
-        return new Instruction { ProgramId = ProgramId, Accounts = accounts, Data = data };
+        return new() { ProgramId = ProgramId, Accounts = accounts, Data = data };
     }
 
     /// <summary>Approves a configured confidential-transfer token account.</summary>
@@ -130,7 +130,7 @@ public static partial class Token2022Program
         AppendAuthority(accounts, authority, multisigSigners);
         var data = ConfidentialData(innerDiscriminator: 4, payloadLength: 1);
         data[2] = unchecked((byte)offset);
-        return new Instruction { ProgramId = ProgramId, Accounts = accounts, Data = data };
+        return new() { ProgramId = ProgramId, Accounts = accounts, Data = data };
     }
 
     /// <summary>Deposits non-confidential tokens into a confidential pending balance.</summary>
@@ -193,7 +193,7 @@ public static partial class Token2022Program
             nameof(newDecryptableAvailableBalance));
         data[^2] = unchecked((byte)offsets[0]);
         data[^1] = unchecked((byte)offsets[1]);
-        return new Instruction { ProgramId = ProgramId, Accounts = accounts, Data = data };
+        return new() { ProgramId = ProgramId, Accounts = accounts, Data = data };
     }
 
     /// <summary>Transfers confidential tokens using caller-generated ciphertexts and split proofs.</summary>
@@ -241,7 +241,7 @@ public static partial class Token2022Program
             auditorCiphertextHigh,
             offsets,
             expectedProofCount: 3);
-        return new Instruction { ProgramId = ProgramId, Accounts = accounts, Data = data };
+        return new() { ProgramId = ProgramId, Accounts = accounts, Data = data };
     }
 
     /// <summary>Applies pending confidential credits to the available balance.</summary>
@@ -366,7 +366,7 @@ public static partial class Token2022Program
             auditorCiphertextHigh,
             offsets,
             expectedProofCount: 5);
-        return new Instruction { ProgramId = ProgramId, Accounts = accounts, Data = data };
+        return new() { ProgramId = ProgramId, Accounts = accounts, Data = data };
     }
 
     /// <summary>Configures a confidential-transfer account from a wallet's SPL ElGamal registry.</summary>
@@ -393,7 +393,7 @@ public static partial class Token2022Program
             accounts.Add(AccountMeta.Readonly(SystemProgram.ProgramId));
         }
 
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts = accounts,
@@ -421,7 +421,7 @@ public static partial class Token2022Program
         var accounts = new List<AccountMeta>(initialAccounts.Count + 1 + (multisigSigners?.Count ?? 0));
         accounts.AddRange(initialAccounts);
         AppendAuthority(accounts, authority, multisigSigners);
-        return new Instruction { ProgramId = ProgramId, Accounts = accounts, Data = data };
+        return new() { ProgramId = ProgramId, Accounts = accounts, Data = data };
     }
 
     private static byte[] ConfidentialData(byte innerDiscriminator, int payloadLength = 0)
@@ -469,7 +469,7 @@ public static partial class Token2022Program
         for (var i = 0; i < proofLocations.Length; i++)
             ArgumentNullException.ThrowIfNull(proofLocations[i], nameof(proofLocations));
 
-        if (proofLocations.Any(location => location.IsInstructionOffset))
+        if (proofLocations.Any(static location => location.IsInstructionOffset))
             accounts.Add(AccountMeta.Readonly(InstructionsSysvar));
 
         var offsets = new sbyte[proofLocations.Length];

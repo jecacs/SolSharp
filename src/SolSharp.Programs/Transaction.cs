@@ -85,7 +85,7 @@ public sealed class Transaction
     public static Transaction Create(ITransactionMessage message)
     {
         ArgumentNullException.ThrowIfNull(message);
-        return new Transaction(message);
+        return new(message);
     }
 
     /// <summary>
@@ -182,7 +182,7 @@ public sealed class Transaction
                     $"A signer must return a {SignatureLength}-byte Ed25519 signature, got {signature?.Length ?? 0} bytes.",
                     nameof(signers));
 
-            pending[i].Signature = new Signature(signature);
+            pending[i].Signature = new(signature);
         }
 
         for (var i = 0; i < pending.Length; i++)
@@ -373,7 +373,7 @@ public sealed class Transaction
         var signatures = new Signature[signatureCount];
         for (var index = 0; index < signatureCount; index++)
         {
-            signatures[index] = new Signature(data.Slice(offset, SignatureLength));
+            signatures[index] = new(data.Slice(offset, SignatureLength));
             offset += SignatureLength;
         }
 
@@ -399,7 +399,7 @@ public sealed class Transaction
             throw new FormatException(
                 $"The transaction carries {signatureCount} signature slot(s) but its message requires {message.RequiredSignatures}.");
 
-        return new Transaction(message, signatures, messageBytes.ToArray());
+        return new(message, signatures, [.. messageBytes]);
     }
 
     private static Transaction DeserializeV1(ReadOnlySpan<byte> data)
@@ -415,11 +415,29 @@ public sealed class Transaction
         var offset = messageLength;
         for (var index = 0; index < signatures.Length; index++)
         {
-            signatures[index] = new Signature(data.Slice(offset, SignatureLength));
+            signatures[index] = new(data.Slice(offset, SignatureLength));
             offset += SignatureLength;
         }
 
-        return new Transaction(message, signatures, data[..messageLength].ToArray());
+        return new(message, signatures, [.. data[..messageLength]]);
+    }
+
+    private static PublicKey[] CopyRequiredSignerKeys(ITransactionMessage message)
+    {
+        var keys = new PublicKey[message.RequiredSignatures];
+        for (var i = 0; i < keys.Length; i++)
+            keys[i] = message.AccountKeys[i];
+
+        return keys;
+    }
+
+    private static int RequiredSignerIndex(PublicKey[] requiredSignerKeys, PublicKey key)
+    {
+        for (var i = 0; i < requiredSignerKeys.Length; i++)
+            if (requiredSignerKeys[i] == key)
+                return i;
+
+        return -1;
     }
 
     private int SerializeMessage(Span<byte> destination)
@@ -441,23 +459,5 @@ public sealed class Transaction
         }
 
         return offset;
-    }
-
-    private static PublicKey[] CopyRequiredSignerKeys(ITransactionMessage message)
-    {
-        var keys = new PublicKey[message.RequiredSignatures];
-        for (var i = 0; i < keys.Length; i++)
-            keys[i] = message.AccountKeys[i];
-
-        return keys;
-    }
-
-    private static int RequiredSignerIndex(PublicKey[] requiredSignerKeys, PublicKey key)
-    {
-        for (var i = 0; i < requiredSignerKeys.Length; i++)
-            if (requiredSignerKeys[i] == key)
-                return i;
-
-        return -1;
     }
 }

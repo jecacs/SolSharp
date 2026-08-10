@@ -193,7 +193,7 @@ public static partial class TokenProgram
         var data = new byte[encoded.Length + 1];
         data[0] = UiAmountToAmountDiscriminator;
         encoded.CopyTo(data.AsSpan(1));
-        return new Instruction
+        return new()
         {
             ProgramId = tokenProgram ?? ProgramId,
             Accounts = [AccountMeta.Readonly(mint)],
@@ -319,7 +319,7 @@ public static partial class TokenProgram
             accounts.AddRange(instruction.Accounts);
         }
 
-        return new Instruction { ProgramId = program, Accounts = accounts, Data = [.. data] };
+        return new() { ProgramId = program, Accounts = accounts, Data = [.. data] };
     }
 
     private static Instruction InitializeMultisigCore(
@@ -351,7 +351,7 @@ public static partial class TokenProgram
         for (var i = 0; i < signerAccounts.Count; i++)
             accounts.Add(AccountMeta.Readonly(signerAccounts[i]));
 
-        return new Instruction
+        return new()
         {
             ProgramId = tokenProgram ?? ProgramId,
             Accounts = accounts,

@@ -60,7 +60,7 @@ internal static class IntegrationEnvironmentTests
         public void CanonicalDevnetHash_DoesNotThrow()
         {
             // Act
-            var act = () => IntegrationEnvironment.ValidateDevnetGenesisHash(
+            var act = static () => IntegrationEnvironment.ValidateDevnetGenesisHash(
                 IntegrationEnvironment.DevnetGenesisHash);
 
             // Assert

@@ -14,6 +14,8 @@ public sealed class BlsPopVerifiedPublicKey
     /// <summary>The underlying canonical, subgroup-checked public key.</summary>
     public BlsPublicKey PublicKey { get; }
 
+    internal ReadOnlySpan<byte> Bytes => PublicKey.Bytes;
+
     /// <summary>
     /// Verifies a minimal-public-key-size BLS signature with the exact pinned Solana signature DST.
     /// Signature verification is exposed only after proof-of-possession provenance is established.
@@ -27,6 +29,4 @@ public sealed class BlsPopVerifiedPublicKey
         ArgumentNullException.ThrowIfNull(signature);
         return BlsOperations.VerifySignature(Bytes, signature.Bytes, message);
     }
-
-    internal ReadOnlySpan<byte> Bytes => PublicKey.Bytes;
 }

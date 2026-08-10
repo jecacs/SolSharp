@@ -59,7 +59,7 @@ public static class ShortVec
     {
         Span<byte> buffer = stackalloc byte[MaxEncodedLength];
         var written = Encode(value, buffer);
-        return buffer[..written].ToArray();
+        return [.. buffer[..written]];
     }
 
     /// <summary>Reads one compact-u16 value from the start of <paramref name="source"/>.</summary>

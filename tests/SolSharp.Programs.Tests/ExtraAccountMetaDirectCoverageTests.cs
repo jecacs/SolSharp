@@ -22,8 +22,8 @@ public static class ExtraAccountSeedDirectCoverageTests
 
             // Assert
             seeds.Should().HaveCount(4);
-            seeds![0].Kind.Should().Be(ExtraAccountSeedKind.Literal);
-            seeds[0].LiteralBytes.ToArray().Should().Equal("ab"u8.ToArray());
+            seeds[0].Kind.Should().Be(ExtraAccountSeedKind.Literal);
+            seeds[0].LiteralBytes.ToArray().Should().Equal([.. "ab"u8]);
             seeds[1].Kind.Should().Be(ExtraAccountSeedKind.InstructionData);
             seeds[1].Index.Should().Be(8);
             seeds[1].Length.Should().Be(4);
@@ -56,7 +56,7 @@ public static class ExtraAccountSeedDirectCoverageTests
 
 public static class ExtraAccountMetaDirectCoverageTests
 {
-    private static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
+    private static PublicKey Key(byte value) => new([.. Enumerable.Repeat(value, PublicKey.Length)]);
 
     [TestFixture]
     public sealed class FromExternalProgramDerivedAddress
@@ -86,7 +86,7 @@ public static class ExtraAccountMetaDirectCoverageTests
             meta.IsWritable.Should().BeFalse();
             meta.Encode().Should().Equal([0x87, .. expectedConfiguration, 1, 0]);
             decodedSeeds.Should().HaveCount(2);
-            decodedSeeds![0].LiteralBytes.ToArray().Should().Equal("ab"u8.ToArray());
+            decodedSeeds[0].LiteralBytes.ToArray().Should().Equal([.. "ab"u8]);
             decodedSeeds[1].AccountIndex.Should().Be(1);
             decodedSeeds[1].DataIndex.Should().Be(3);
             decodedSeeds[1].Length.Should().Be(4);
@@ -98,7 +98,7 @@ public static class ExtraAccountMetaDirectCoverageTests
             // Act
             var maximum = ExtraAccountMeta.FromExternalProgramDerivedAddress(
                 127, [], isSigner: false, isWritable: false);
-            Action beyondMaximum = () => _ = ExtraAccountMeta.FromExternalProgramDerivedAddress(
+            Action beyondMaximum = static () => _ = ExtraAccountMeta.FromExternalProgramDerivedAddress(
                 128, [], isSigner: false, isWritable: false);
 
             // Assert

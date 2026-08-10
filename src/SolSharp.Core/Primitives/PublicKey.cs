@@ -48,6 +48,18 @@ public readonly struct PublicKey : IEquatable<PublicKey>
         _base58 = base58;
     }
 
+    /// <summary>Determines whether two keys hold the same bytes.</summary>
+    /// <param name="left">The left key.</param>
+    /// <param name="right">The right key.</param>
+    /// <returns><c>true</c> if the keys are equal.</returns>
+    public static bool operator ==(PublicKey left, PublicKey right) => left.Equals(right);
+
+    /// <summary>Determines whether two keys hold different bytes.</summary>
+    /// <param name="left">The left key.</param>
+    /// <param name="right">The right key.</param>
+    /// <returns><c>true</c> if the keys are not equal.</returns>
+    public static bool operator !=(PublicKey left, PublicKey right) => !left.Equals(right);
+
     /// <summary>Parses a public key from its base58 string form.</summary>
     /// <param name="base58">The base58-encoded key; must decode to exactly <see cref="Length"/> bytes.</param>
     /// <returns>The parsed key.</returns>
@@ -62,7 +74,7 @@ public readonly struct PublicKey : IEquatable<PublicKey>
     {
         if (Base58.TryDecode(base58, out var bytes) && bytes.Length == Length)
         {
-            key = new PublicKey(bytes, base58);
+            key = new(bytes, base58);
             return true;
         }
 
@@ -115,18 +127,6 @@ public readonly struct PublicKey : IEquatable<PublicKey>
         CopyTo(bytes);
         return Base58.Encode(bytes);
     }
-
-    /// <summary>Determines whether two keys hold the same bytes.</summary>
-    /// <param name="left">The left key.</param>
-    /// <param name="right">The right key.</param>
-    /// <returns><c>true</c> if the keys are equal.</returns>
-    public static bool operator ==(PublicKey left, PublicKey right) => left.Equals(right);
-
-    /// <summary>Determines whether two keys hold different bytes.</summary>
-    /// <param name="left">The left key.</param>
-    /// <param name="right">The right key.</param>
-    /// <returns><c>true</c> if the keys are not equal.</returns>
-    public static bool operator !=(PublicKey left, PublicKey right) => !left.Equals(right);
 
     private static byte[] Decode(string base58)
     {

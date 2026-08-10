@@ -53,6 +53,18 @@ public readonly struct Signature : IEquatable<Signature>
         _base58 = base58;
     }
 
+    /// <summary>Determines whether two signatures hold the same bytes.</summary>
+    /// <param name="left">The left signature.</param>
+    /// <param name="right">The right signature.</param>
+    /// <returns><c>true</c> if the signatures are equal.</returns>
+    public static bool operator ==(Signature left, Signature right) => left.Equals(right);
+
+    /// <summary>Determines whether two signatures hold different bytes.</summary>
+    /// <param name="left">The left signature.</param>
+    /// <param name="right">The right signature.</param>
+    /// <returns><c>true</c> if the signatures are not equal.</returns>
+    public static bool operator !=(Signature left, Signature right) => !left.Equals(right);
+
     /// <summary>Parses a signature from its base58 string form.</summary>
     /// <param name="base58">The base58-encoded signature; must decode to exactly <see cref="Length"/> bytes.</param>
     /// <returns>The parsed signature.</returns>
@@ -67,7 +79,7 @@ public readonly struct Signature : IEquatable<Signature>
     {
         if (Base58.TryDecode(base58, out var bytes) && bytes.Length == Length)
         {
-            signature = new Signature(bytes, base58);
+            signature = new(bytes, base58);
             return true;
         }
 
@@ -153,18 +165,6 @@ public readonly struct Signature : IEquatable<Signature>
         CopyTo(bytes);
         return Base58.Encode(bytes);
     }
-
-    /// <summary>Determines whether two signatures hold the same bytes.</summary>
-    /// <param name="left">The left signature.</param>
-    /// <param name="right">The right signature.</param>
-    /// <returns><c>true</c> if the signatures are equal.</returns>
-    public static bool operator ==(Signature left, Signature right) => left.Equals(right);
-
-    /// <summary>Determines whether two signatures hold different bytes.</summary>
-    /// <param name="left">The left signature.</param>
-    /// <param name="right">The right signature.</param>
-    /// <returns><c>true</c> if the signatures are not equal.</returns>
-    public static bool operator !=(Signature left, Signature right) => !left.Equals(right);
 
     private static byte[] Decode(string base58)
     {

@@ -19,7 +19,7 @@ internal static class MessageWire
         var keys = new PublicKey[count];
         for (var i = 0; i < count; i++)
         {
-            keys[i] = new PublicKey(data.Slice(offset, PublicKey.Length));
+            keys[i] = new(data.Slice(offset, PublicKey.Length));
             offset += PublicKey.Length;
         }
 
@@ -50,7 +50,7 @@ internal static class MessageWire
             var instructionData = data.Slice(offset, dataLength).ToArray();
             offset += dataLength;
 
-            instructions[i] = new CompiledInstruction
+            instructions[i] = new()
             {
                 ProgramIdIndex = programIdIndex,
                 AccountIndexes = accountIndexes,
@@ -59,14 +59,6 @@ internal static class MessageWire
         }
 
         return instructions;
-    }
-
-    private static void EnsureMinimumBytes(int remainingBytes, int count, int minimumElementBytes, string elementName)
-    {
-        var minimumBytes = (long)count * minimumElementBytes;
-        if (minimumBytes > remainingBytes)
-            throw new FormatException(
-                $"The wire data declares {count} {elementName}(s), which need at least {minimumBytes} byte(s), but only {remainingBytes} byte(s) remain.");
     }
 
     /// <summary>
@@ -109,5 +101,13 @@ internal static class MessageWire
                     throw new FormatException(
                         $"Instruction account index {index} is out of range: the message addresses {addressableAccountCount} account(s).");
         }
+    }
+
+    private static void EnsureMinimumBytes(int remainingBytes, int count, int minimumElementBytes, string elementName)
+    {
+        var minimumBytes = (long)count * minimumElementBytes;
+        if (minimumBytes > remainingBytes)
+            throw new FormatException(
+                $"The wire data declares {count} {elementName}(s), which need at least {minimumBytes} byte(s), but only {remainingBytes} byte(s) remain.");
     }
 }

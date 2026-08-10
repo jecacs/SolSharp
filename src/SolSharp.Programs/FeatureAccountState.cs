@@ -32,8 +32,8 @@ public sealed record FeatureAccountState
 
         return data[0] switch
         {
-            0 => new FeatureAccountState((ulong?)null),
-            1 => new FeatureAccountState(BinaryPrimitives.ReadUInt64LittleEndian(data[1..])),
+            0 => new((ulong?)null),
+            1 => new(BinaryPrimitives.ReadUInt64LittleEndian(data[1..])),
             _ => throw new ArgumentException("Feature activation option tag must be 0 or 1.", nameof(data))
         };
     }

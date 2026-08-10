@@ -6,7 +6,7 @@ namespace SolSharp.Programs.Tests;
 
 public static class VoteInitializeV2DirectCoverageTests
 {
-    private static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
+    private static PublicKey Key(byte value) => new([.. Enumerable.Repeat(value, PublicKey.Length)]);
 
     [TestFixture]
     public sealed class Constructor

@@ -78,7 +78,7 @@ public static class AssociatedTokenAccount
         var destinationAssociatedAccount = GetAddress(wallet, nestedMint, program);
         var nestedAssociatedAccount = GetAddress(ownerAssociatedAccount, nestedMint, program);
 
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts =
@@ -101,7 +101,7 @@ public static class AssociatedTokenAccount
         var program = tokenProgram ?? DefaultTokenProgram;
         var address = GetAddress(owner, mint, program);
 
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts =

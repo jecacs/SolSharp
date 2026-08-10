@@ -41,7 +41,7 @@ public sealed class RpcAccountDataJsonConverter : JsonConverter<RpcAccountData>
             case RpcAccountData.Encoded encoded:
                 writer.WriteStartArray();
                 writer.WriteStringValue(encoded.EncodedData);
-                writer.WriteStringValue(RpcWireNames.AccountEncoding(encoded.Encoding));
+                writer.WriteStringValue(encoded.Encoding.WireName);
                 writer.WriteEndArray();
                 return;
             case RpcAccountData.Parsed parsed:
@@ -70,7 +70,7 @@ public sealed class RpcAccountDataJsonConverter : JsonConverter<RpcAccountData>
         if (!RpcWireNames.TryAccountEncoding(wireEncoding, out var encoding))
             throw new JsonException($"Unknown account data encoding '{wireEncoding}'.");
 
-        return new RpcAccountData.Encoded(data[0].GetString()!, encoding);
+        return new(data[0].GetString()!, encoding);
     }
 
     private static RpcAccountData.Parsed ReadParsed(JsonElement data)
@@ -83,6 +83,6 @@ public sealed class RpcAccountDataJsonConverter : JsonConverter<RpcAccountData>
             throw new JsonException("Expected parsed account data with program, parsed, and unsigned space fields.");
         }
 
-        return new RpcAccountData.Parsed(program.GetString()!, parsed.Clone(), parsedSpace);
+        return new(program.GetString()!, parsed.Clone(), parsedSpace);
     }
 }

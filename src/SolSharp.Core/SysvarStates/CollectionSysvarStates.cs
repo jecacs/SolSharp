@@ -7,6 +7,17 @@ namespace SolSharp.Core.SysvarStates;
 /// <param name="Hash">The slot's block hash.</param>
 public readonly record struct SlotHashEntry(ulong Slot, Hash Hash);
 
+/// <summary>Stake activation totals recorded for one epoch.</summary>
+/// <param name="Effective">The effective stake.</param>
+/// <param name="Activating">The stake still activating.</param>
+/// <param name="Deactivating">The stake still deactivating.</param>
+public readonly record struct StakeHistoryEntry(ulong Effective, ulong Activating, ulong Deactivating);
+
+/// <summary>An epoch and its stake activation totals.</summary>
+/// <param name="Epoch">The epoch.</param>
+/// <param name="Entry">The stake totals.</param>
+public readonly record struct StakeHistoryEpoch(ulong Epoch, StakeHistoryEntry Entry);
+
 /// <summary>The bounded bincode state of the slot-hashes sysvar.</summary>
 public sealed record SlotHashesSysvarState
 {
@@ -34,22 +45,11 @@ public sealed record SlotHashesSysvarState
         var count = reader.ReadBoundedCount(MaximumEntries, "Slot hashes");
         var entries = new SlotHashEntry[count];
         for (var i = 0; i < entries.Length; i++)
-            entries[i] = new SlotHashEntry(reader.ReadUInt64(), reader.ReadHash());
+            entries[i] = new(reader.ReadUInt64(), reader.ReadHash());
         reader.EnsureEnd();
-        return new SlotHashesSysvarState(entries);
+        return new(entries);
     }
 }
-
-/// <summary>Stake activation totals recorded for one epoch.</summary>
-/// <param name="Effective">The effective stake.</param>
-/// <param name="Activating">The stake still activating.</param>
-/// <param name="Deactivating">The stake still deactivating.</param>
-public readonly record struct StakeHistoryEntry(ulong Effective, ulong Activating, ulong Deactivating);
-
-/// <summary>An epoch and its stake activation totals.</summary>
-/// <param name="Epoch">The epoch.</param>
-/// <param name="Entry">The stake totals.</param>
-public readonly record struct StakeHistoryEpoch(ulong Epoch, StakeHistoryEntry Entry);
 
 /// <summary>The bounded bincode state of the stake-history sysvar.</summary>
 public sealed record StakeHistorySysvarState
@@ -81,10 +81,10 @@ public sealed record StakeHistorySysvarState
         {
             var epoch = reader.ReadUInt64();
             var entry = new StakeHistoryEntry(reader.ReadUInt64(), reader.ReadUInt64(), reader.ReadUInt64());
-            entries[i] = new StakeHistoryEpoch(epoch, entry);
+            entries[i] = new(epoch, entry);
         }
 
         reader.EnsureEnd();
-        return new StakeHistorySysvarState(entries);
+        return new(entries);
     }
 }

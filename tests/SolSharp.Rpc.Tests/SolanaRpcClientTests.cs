@@ -13,9 +13,9 @@ public static class SolanaRpcClientTests
     {
         var http = new HttpClient(new FakeHttpMessageHandler(responseJson, statusCode))
         {
-            BaseAddress = new Uri("http://localhost")
+            BaseAddress = new("http://localhost")
         };
-        return new SolanaRpcClient(http);
+        return new(http);
     }
 
     [TestFixture]

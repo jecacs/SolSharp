@@ -11,8 +11,8 @@ public static class SolanaRpcClientSignaturesTests
     private static (SolanaRpcClient Client, FakeHttpMessageHandler Handler) Make(string responseJson)
     {
         var handler = new FakeHttpMessageHandler(responseJson);
-        var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
-        return (new SolanaRpcClient(http), handler);
+        var http = new HttpClient(handler) { BaseAddress = new("http://localhost") };
+        return (new(http), handler);
     }
 
     [TestFixture]

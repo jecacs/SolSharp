@@ -47,10 +47,11 @@ public static class TransactionBuilderTests
             // Arrange
             using var payer = Keypair.FromSeed(Fill(1));
             var builder = new TransactionBuilder()
-                .AddInstruction(SystemProgram.Transfer(payer.PublicKey, new PublicKey(Fill(2)), 1));
+                .AddInstruction(SystemProgram.Transfer(payer.PublicKey, new(Fill(2)), 1));
+            ISigner[] signers = [payer];
 
             // Act
-            Action act = () => builder.Build(payer);
+            Action act = () => builder.Build(signers);
 
             // Assert
             act.Should().Throw<InvalidOperationException>();
@@ -62,9 +63,10 @@ public static class TransactionBuilderTests
             // Arrange
             using var payer = Keypair.FromSeed(Fill(1));
             var builder = new TransactionBuilder().SetRecentBlockhash(Blockhash);
+            ISigner[] signers = [payer];
 
             // Act
-            Action act = () => builder.Build(payer);
+            Action act = () => builder.Build(signers);
 
             // Assert
             act.Should().Throw<InvalidOperationException>();
@@ -76,7 +78,7 @@ public static class TransactionBuilderTests
             // Arrange
             var builder = new TransactionBuilder()
                 .SetRecentBlockhash(Blockhash)
-                .AddInstruction(SystemProgram.Transfer(new PublicKey(Fill(1)), new PublicKey(Fill(2)), 1));
+                .AddInstruction(SystemProgram.Transfer(new(Fill(1)), new(Fill(2)), 1));
 
             // Act
             Action act = () => builder.Build();
@@ -91,7 +93,7 @@ public static class TransactionBuilderTests
             // Arrange
             var builder = new TransactionBuilder()
                 .SetRecentBlockhash(Blockhash)
-                .AddInstruction(SystemProgram.Transfer(new PublicKey(Fill(1)), new PublicKey(Fill(2)), 1));
+                .AddInstruction(SystemProgram.Transfer(new(Fill(1)), new(Fill(2)), 1));
 
             // Act
             Action act = () => builder.Build(null!);
@@ -115,7 +117,7 @@ public static class TransactionBuilderTests
             // Arrange
             using var payer = Keypair.FromSeed(Fill(1));
             var recipient = new PublicKey(Fill(2));
-            var table = new AddressLookupTableAccount(new PublicKey(Fill(5)), [recipient, new PublicKey(Fill(7))]);
+            var table = new AddressLookupTableAccount(new(Fill(5)), [recipient, new(Fill(7))]);
 
             // Act
             var transaction = new TransactionBuilder()
@@ -137,8 +139,8 @@ public static class TransactionBuilderTests
         {
             // Arrange
             using var payer = Keypair.FromSeed(Fill(1));
-            var first = SystemProgram.Transfer(payer.PublicKey, new PublicKey(Fill(2)), 1);
-            var second = SystemProgram.Transfer(payer.PublicKey, new PublicKey(Fill(3)), 2);
+            var first = SystemProgram.Transfer(payer.PublicKey, new(Fill(2)), 1);
+            var second = SystemProgram.Transfer(payer.PublicKey, new(Fill(3)), 2);
 
             // Act
             var message = new TransactionBuilder()
@@ -182,7 +184,7 @@ public static class TransactionBuilderTests
             var message = new TransactionBuilder()
                 .SetFeePayer(payer.PublicKey)
                 .SetRecentBlockhash(new Hash(Blockhash))
-                .AddInstruction(SystemProgram.Transfer(payer.PublicKey, new PublicKey(Fill(2)), 1))
+                .AddInstruction(SystemProgram.Transfer(payer.PublicKey, new(Fill(2)), 1))
                 .BuildMessage();
 
             // Assert
@@ -236,7 +238,7 @@ public static class TransactionBuilderTests
             // Arrange
             using var payer = Keypair.FromSeed(Fill(1));
             var recipient = new PublicKey(Fill(2));
-            var table = new AddressLookupTableAccount(new PublicKey(Fill(5)), [recipient, new PublicKey(Fill(7))]);
+            var table = new AddressLookupTableAccount(new(Fill(5)), [recipient, new(Fill(7))]);
 
             // Act
             var message = new TransactionBuilder()

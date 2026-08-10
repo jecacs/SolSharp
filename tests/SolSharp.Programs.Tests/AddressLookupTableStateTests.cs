@@ -8,7 +8,7 @@ namespace SolSharp.Programs.Tests;
 
 public static class AddressLookupTableStateTests
 {
-    private static PublicKey Pk(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
+    private static PublicKey Pk(byte value) => new([.. Enumerable.Repeat(value, PublicKey.Length)]);
 
     private static AddressLookupTableState Table(
         ulong deactivationSlot = ulong.MaxValue,
@@ -137,7 +137,7 @@ public static class AddressLookupTableStateTests
             // Assert
             validResult.Should().BeTrue();
             state.Should().NotBeNull();
-            state!.Kind.Should().Be(AddressLookupTableStateKind.LookupTable);
+            state.Kind.Should().Be(AddressLookupTableStateKind.LookupTable);
             malformedResult.Should().BeFalse();
             malformedState.Should().BeNull();
         }
@@ -187,11 +187,11 @@ public static class AddressLookupTableStateTests
             // Arrange
             var retainedSlots = Enumerable.Range(1, SlotHashesSysvarState.MaximumEntries)
                 .Reverse()
-                .Select(slot => (ulong)slot)
+                .Select(static slot => (ulong)slot)
                 .ToArray();
             var afterEviction = Enumerable.Range(2, SlotHashesSysvarState.MaximumEntries)
                 .Reverse()
-                .Select(slot => (ulong)slot)
+                .Select(static slot => (ulong)slot)
                 .ToArray();
             var table = Table(deactivationSlot: 1);
 

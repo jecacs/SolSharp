@@ -7,8 +7,6 @@ namespace SolSharp.Rpc.Models;
 /// <summary>A reward or debit recorded in transaction or block metadata.</summary>
 public sealed record Reward
 {
-    private string? _rewardType;
-
     /// <summary>The rewarded account.</summary>
     [JsonPropertyName("pubkey")]
     [JsonRequired]
@@ -31,13 +29,13 @@ public sealed record Reward
     [JsonPropertyName("rewardType")]
     public string? RewardType
     {
-        get => _rewardType;
+        get;
         init
         {
             if (value is not null and not "Fee" and not "Rent" and not "Staking" and not "Voting" and not "DeactivatedStake")
                 throw new JsonException("Unknown reward type.");
 
-            _rewardType = value;
+            field = value;
         }
     }
 

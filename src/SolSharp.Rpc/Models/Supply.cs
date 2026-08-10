@@ -8,8 +8,6 @@ namespace SolSharp.Rpc.Models;
 /// <seealso href="https://solana.com/docs/rpc/http/getsupply">getSupply</seealso>
 public sealed record Supply
 {
-    private IReadOnlyList<PublicKey>? _nonCirculatingAccounts;
-
     /// <summary>The total supply.</summary>
     [JsonPropertyName("total")]
     [JsonRequired]
@@ -33,9 +31,9 @@ public sealed record Supply
     [JsonRequired]
     public IReadOnlyList<PublicKey> NonCirculatingAccounts
     {
-        get => _nonCirculatingAccounts ??
+        get => field ??
             throw new InvalidOperationException("The non-circulating account list has not been initialized.");
-        init => _nonCirculatingAccounts = value
+        init => field = value
             ?? throw new JsonException("A supply result must carry its non-circulating account list.");
     }
 }

@@ -62,6 +62,8 @@ internal ref struct VoteStateBincodeReader(ReadOnlySpan<byte> data)
         return (int)count;
     }
 
+    private static ArgumentException Invalid(string message) => new(message);
+
     private ReadOnlySpan<byte> ReadBytes(int length)
     {
         if (length > _data.Length - _offset)
@@ -71,6 +73,4 @@ internal ref struct VoteStateBincodeReader(ReadOnlySpan<byte> data)
         _offset += length;
         return result;
     }
-
-    private static ArgumentException Invalid(string message) => new(message);
 }

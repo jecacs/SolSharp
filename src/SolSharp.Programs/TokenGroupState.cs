@@ -30,10 +30,10 @@ public sealed record TokenGroupState
             return null;
 
         var authority = new PublicKey(data[..PublicKey.Length]);
-        return new TokenGroupState
+        return new()
         {
             UpdateAuthority = authority == default ? null : authority,
-            Mint = new PublicKey(data.Slice(PublicKey.Length, PublicKey.Length)),
+            Mint = new(data.Slice(PublicKey.Length, PublicKey.Length)),
             Size = BinaryPrimitives.ReadUInt64LittleEndian(data[(PublicKey.Length * 2)..]),
             MaximumSize = BinaryPrimitives.ReadUInt64LittleEndian(data[((PublicKey.Length * 2) + sizeof(ulong))..])
         };
@@ -63,10 +63,10 @@ public sealed record TokenGroupMemberState
         if (data.Length != Length)
             return null;
 
-        return new TokenGroupMemberState
+        return new()
         {
-            Mint = new PublicKey(data[..PublicKey.Length]),
-            Group = new PublicKey(data.Slice(PublicKey.Length, PublicKey.Length)),
+            Mint = new(data[..PublicKey.Length]),
+            Group = new(data.Slice(PublicKey.Length, PublicKey.Length)),
             MemberNumber = BinaryPrimitives.ReadUInt64LittleEndian(data[(PublicKey.Length * 2)..])
         };
     }

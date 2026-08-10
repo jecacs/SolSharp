@@ -16,7 +16,9 @@ namespace SolSharp.IntegrationTests;
 /// </summary>
 public static class RpcReadIntegrationTests
 {
-    private static readonly TokenBucketRateLimiter RequestLimiter = new(new TokenBucketRateLimiterOptions
+    // A standard 165-byte SPL token account; only its size matters for the rent-exemption query.
+    private const long TokenAccountSize = 165;
+    private static readonly TokenBucketRateLimiter RequestLimiter = new(new()
     {
         TokenLimit = 1,
         QueueLimit = 128,
@@ -30,16 +32,13 @@ public static class RpcReadIntegrationTests
     private static readonly PublicKey UsdcMint = PublicKey.Parse("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
     private static readonly PublicKey TokenProgram = PublicKey.Parse("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
-    // A standard 165-byte SPL token account; only its size matters for the rent-exemption query.
-    private const long TokenAccountSize = 165;
-
     private static ServiceProvider CreateProvider()
     {
         var services = new ServiceCollection();
         services.AddSolanaRpc(
-            options => options.Endpoint = IntegrationEnvironment.HttpEndpoint,
-            resilience => resilience.RateLimiter.RateLimiter =
-                arguments => RequestLimiter.AcquireAsync(1, arguments.Context.CancellationToken));
+            static options => options.Endpoint = IntegrationEnvironment.HttpEndpoint,
+            static resilience => resilience.RateLimiter.RateLimiter =
+                static arguments => RequestLimiter.AcquireAsync(1, arguments.Context.CancellationToken));
         return services.BuildServiceProvider();
     }
 
@@ -103,10 +102,10 @@ public static class RpcReadIntegrationTests
 
             // Assert
             parsed.Should().NotBeNull();
-            parsed!.Message.AccountKeys.Should().NotBeEmpty();
+            parsed.Message.AccountKeys.Should().NotBeEmpty();
             parsed.Message.Instructions.Should().NotBeEmpty();
             // Each instruction is either node-parsed or kept raw - never both null, never dropped.
-            parsed.Message.Instructions.Should().OnlyContain(ix => ix.Parsed != null || ix.Accounts != null);
+            parsed.Message.Instructions.Should().OnlyContain(static ix => ix.Parsed != null || ix.Accounts != null);
         }
     }
 
@@ -126,7 +125,7 @@ public static class RpcReadIntegrationTests
 
             // Assert
             account.Should().NotBeNull();
-            account!.Program.Should().Be("spl-token");
+            account.Program.Should().Be("spl-token");
             account.Parsed.Should().NotBeNull();
             account.Parsed!.Type.Should().Be("mint");
         }
@@ -265,7 +264,7 @@ public static class RpcReadIntegrationTests
 
             // Assert
             account.Should().NotBeNull();
-            account!.Owner.Should().Be(TokenProgram);
+            account.Owner.Should().Be(TokenProgram);
             account.Data.Length.Should().Be(Mint.Length);
         }
     }
@@ -286,7 +285,7 @@ public static class RpcReadIntegrationTests
 
             // Assert
             mint.Should().NotBeNull();
-            mint!.Decimals.Should().Be(6);
+            mint.Decimals.Should().Be(6);
             mint.IsInitialized.Should().BeTrue();
             mint.Supply.Should().BeGreaterThan(0);
         }
@@ -346,7 +345,7 @@ public static class RpcReadIntegrationTests
 
             // Act
             var signatures = await IntegrationEnvironment.CallAsync(
-                () => client.GetSignaturesForAddressAsync(UsdcMint, new GetSignaturesForAddressOptions { Limit = 5 }));
+                () => client.GetSignaturesForAddressAsync(UsdcMint, new() { Limit = 5 }));
 
             if (signatures.Count == 0)
                 Assert.Inconclusive("The endpoint returned no recent signatures for the account.");
@@ -360,7 +359,7 @@ public static class RpcReadIntegrationTests
                 Assert.Inconclusive("The referenced transaction was not available from the endpoint.");
 
             // Assert
-            transaction!.Slot.Should().BeGreaterThan(0);
+            transaction.Slot.Should().BeGreaterThan(0);
         }
     }
 
@@ -390,7 +389,7 @@ public static class RpcReadIntegrationTests
                 Assert.Inconclusive("No recent block was available from the endpoint.");
 
             // Assert
-            block!.Blockhash.Should().NotBeNullOrEmpty();
+            block.Blockhash.Should().NotBeNullOrEmpty();
             block.ParentSlot.Should().BeGreaterThan(0);
         }
     }
@@ -414,9 +413,9 @@ public static class RpcReadIntegrationTests
 
             // Assert
             account.Should().NotBeNull();
-            var extensions = TokenExtensionSet.DecodeMint(account!.Data);
+            var extensions = TokenExtensionSet.DecodeMint(account.Data);
             extensions.Should().NotBeNull("PYUSD is an extended Token-2022 mint");
-            extensions!.Has(ExtensionType.MetadataPointer).Should().BeTrue();
+            extensions.Has(ExtensionType.MetadataPointer).Should().BeTrue();
             extensions.GetMetadataPointer()!.MetadataAddress.Should().Be(PyusdMint, "PYUSD points its metadata at the mint itself");
             // Soft assertion by design: if the in-mint metadata is ever moved, the pointer checks above still hold.
             extensions.GetTokenMetadata()?.Symbol.Should().Be("PYUSD");

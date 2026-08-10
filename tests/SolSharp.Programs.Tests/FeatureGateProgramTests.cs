@@ -6,8 +6,15 @@ namespace SolSharp.Programs.Tests;
 
 public static class FeatureGateProgramTests
 {
-    private static readonly PublicKey Feature = new(Enumerable.Repeat((byte)1, 32).ToArray());
-    private static readonly PublicKey Funder = new(Enumerable.Repeat((byte)2, 32).ToArray());
+    private static readonly PublicKey Feature = new([.. Enumerable.Repeat((byte)1, 32)]);
+    private static readonly PublicKey Funder = new([.. Enumerable.Repeat((byte)2, 32)]);
+
+    private static void AssertMeta(AccountMeta meta, PublicKey key, bool isSigner, bool isWritable)
+    {
+        meta.PublicKey.Should().Be(key);
+        meta.IsSigner.Should().Be(isSigner);
+        meta.IsWritable.Should().Be(isWritable);
+    }
 
     [TestFixture]
     public sealed class ActivateWithLamports
@@ -23,8 +30,8 @@ public static class FeatureGateProgramTests
 
             // Assert
             instructions.Should().HaveCount(3);
-            instructions.Select(instruction => instruction.ProgramId).Should().OnlyContain(id => id == SystemProgram.ProgramId);
-            instructions.Select(instruction => Convert.ToHexString(instruction.Data)).Should().Equal(
+            instructions.Select(static instruction => instruction.ProgramId).Should().OnlyContain(static id => id == SystemProgram.ProgramId);
+            instructions.Select(static instruction => Convert.ToHexString(instruction.Data)).Should().Equal(
                 "020000000102030405060708",
                 "080000000900000000000000",
                 "01000000" + Convert.ToHexString(FeatureGateProgram.ProgramId.ToBytes()));
@@ -55,12 +62,5 @@ public static class FeatureGateProgramTests
             FeatureGateProgram.IncineratorId.ToString().Should()
                 .Be("1nc1nerator11111111111111111111111111111111");
         }
-    }
-
-    private static void AssertMeta(AccountMeta meta, PublicKey key, bool isSigner, bool isWritable)
-    {
-        meta.PublicKey.Should().Be(key);
-        meta.IsSigner.Should().Be(isSigner);
-        meta.IsWritable.Should().Be(isWritable);
     }
 }

@@ -30,7 +30,7 @@ public static class BorshWriterTests
         public void RoundTripsThroughBorshReader()
         {
             // Arrange
-            var pubkey = new PublicKey(Enumerable.Repeat((byte)9, PublicKey.Length).ToArray());
+            var pubkey = new PublicKey([.. Enumerable.Repeat((byte)9, PublicKey.Length)]);
 
             // Act
             var writer = new BorshWriter();

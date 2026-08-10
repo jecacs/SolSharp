@@ -10,17 +10,13 @@ namespace SolSharp.Rpc.Models;
 /// <seealso href="https://solana.com/docs/rpc/http/getblock">getBlock</seealso>
 public sealed record Block
 {
-    private string? _blockhash;
-    private string? _previousBlockhash;
-    private IReadOnlyList<string>? _signatures;
-
     /// <summary>The block's blockhash (base58).</summary>
     [JsonPropertyName("blockhash")]
     [JsonRequired]
     public string Blockhash
     {
-        get => _blockhash ?? throw new InvalidOperationException("The blockhash has not been initialized.");
-        init => _blockhash = value ?? throw new JsonException("A block must carry its blockhash.");
+        get => field ?? throw new InvalidOperationException("The blockhash has not been initialized.");
+        init => field = value ?? throw new JsonException("A block must carry its blockhash.");
     }
 
     /// <summary>The blockhash of this block's parent (base58).</summary>
@@ -28,8 +24,8 @@ public sealed record Block
     [JsonRequired]
     public string PreviousBlockhash
     {
-        get => _previousBlockhash ?? throw new InvalidOperationException("The previous blockhash has not been initialized.");
-        init => _previousBlockhash = value ?? throw new JsonException("A block must carry its previous blockhash.");
+        get => field ?? throw new InvalidOperationException("The previous blockhash has not been initialized.");
+        init => field = value ?? throw new JsonException("A block must carry its previous blockhash.");
     }
 
     /// <summary>The slot of this block's parent.</summary>
@@ -56,13 +52,13 @@ public sealed record Block
     [JsonRequired]
     public IReadOnlyList<string> Signatures
     {
-        get => _signatures ?? throw new InvalidOperationException("The block signatures have not been initialized.");
+        get => field ?? throw new InvalidOperationException("The block signatures have not been initialized.");
         init
         {
             if (value is null || value.Any(static signature => signature is null))
                 throw new JsonException("A signatures-only block must carry only non-null signatures.");
 
-            _signatures = value;
+            field = value;
         }
     }
 }

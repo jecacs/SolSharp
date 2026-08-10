@@ -418,7 +418,12 @@ public static partial class Token2022Program
     }
 
     private static Instruction MintExtensionInstruction(PublicKey mint, byte[] data)
-        => new() { ProgramId = ProgramId, Accounts = [AccountMeta.Writable(mint)], Data = data };
+        => new()
+        {
+            ProgramId = ProgramId,
+            Accounts = [AccountMeta.Writable(mint)],
+            Data = data
+        };
 
     private static void WriteMaybeNullPublicKey(Span<byte> destination, PublicKey? publicKey, string parameterName)
     {

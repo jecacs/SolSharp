@@ -66,7 +66,7 @@ public static class ProgramDerivedAddress
 
         Span<byte> hash = stackalloc byte[PublicKey.Length];
         SHA256.HashData(input, hash);
-        return new PublicKey(hash);
+        return new(hash);
     }
 
     /// <summary>

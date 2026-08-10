@@ -28,7 +28,7 @@ public static class AddressLookupTableProgram
         Span<byte> slotBytes = stackalloc byte[sizeof(ulong)];
         BinaryPrimitives.WriteUInt64LittleEndian(slotBytes, recentSlot);
         var (lookupTable, bump) = ProgramDerivedAddress
-            .FindProgramAddress([authority.ToBytes(), slotBytes.ToArray()], ProgramId);
+            .FindProgramAddress([authority.ToBytes(), [.. slotBytes]], ProgramId);
 
         // Instruction 0 (CreateLookupTable): u32 discriminant, u64 recent slot, u8 bump seed.
         var data = new byte[sizeof(uint) + sizeof(ulong) + 1];
@@ -85,7 +85,7 @@ public static class AddressLookupTableProgram
             accounts.Add(AccountMeta.Readonly(SystemProgram.ProgramId));
         }
 
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts = accounts,

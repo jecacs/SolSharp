@@ -6,15 +6,14 @@ namespace SolSharp.Wallet.Tests;
 
 public static class OffchainMessageTests
 {
+    private const string UpstreamAsciiHash = "HG5JydBGjtjTfD3sSn21ys5NTWPpXzmqifiGC2BVUjkD";
+    private const string UpstreamUtf8Hash = "6GXTveatZQLexkX4WeTpJ3E7uk1UojRXpKp43c4ArSun";
     private static readonly byte[] UpstreamAsciiWire = Convert.FromHexString(
         "FF736F6C616E61206F6666636861696E00000C0054657374204D657373616765");
 
     private static readonly byte[] UpstreamUtf8Wire = Convert.FromHexString(
         "FF736F6C616E61206F6666636861696E00012300D0A2D0B5D181D182D0BED0B2"
         + "D0BED0B520D181D0BED0BED0B1D189D0B5D0BDD0B8D0B5");
-
-    private const string UpstreamAsciiHash = "HG5JydBGjtjTfD3sSn21ys5NTWPpXzmqifiGC2BVUjkD";
-    private const string UpstreamUtf8Hash = "6GXTveatZQLexkX4WeTpJ3E7uk1UojRXpKp43c4ArSun";
 
     [TestFixture]
     public sealed class Create
@@ -63,8 +62,8 @@ public static class OffchainMessageTests
         public void EmptyOrInvalidUtf8_Throws()
         {
             // Act
-            var empty = () => _ = OffchainMessage.Create((byte[])[]);
-            var invalid = () => _ = OffchainMessage.Create([0xFF]);
+            var empty = static () => _ = OffchainMessage.Create((byte[])[]);
+            var invalid = static () => _ = OffchainMessage.Create([0xFF]);
 
             // Assert
             empty.Should().Throw<ArgumentException>();
@@ -75,8 +74,8 @@ public static class OffchainMessageTests
         public void UnsupportedVersionOrOversizedPayload_Throws()
         {
             // Act
-            var version = () => _ = OffchainMessage.Create(1, "x"u8);
-            var oversized = () => _ = OffchainMessage.Create(new byte[OffchainMessage.MaxMessageLength + 1]);
+            var version = static () => _ = OffchainMessage.Create(1, "x"u8);
+            var oversized = static () => _ = OffchainMessage.Create(new byte[OffchainMessage.MaxMessageLength + 1]);
 
             // Assert
             version.Should().Throw<ArgumentOutOfRangeException>();
@@ -97,7 +96,7 @@ public static class OffchainMessageTests
 
             // Assert
             message.Serialize().Should().Equal(UpstreamAsciiWire);
-            message.ToMessageBytes().Should().Equal("Test Message"u8.ToArray());
+            message.ToMessageBytes().Should().Equal([.. "Test Message"u8]);
             message.Should().Be(OffchainMessage.Create("Test Message"));
         }
 

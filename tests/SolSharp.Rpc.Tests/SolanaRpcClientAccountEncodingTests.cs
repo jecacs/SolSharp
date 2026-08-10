@@ -17,8 +17,8 @@ public static class SolanaRpcClientAccountEncodingTests
     {
         var handler = new FakeHttpMessageHandler(
             $$"""{"jsonrpc":"2.0","result":{{resultJson}},"id":1}""");
-        var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
-        return (new SolanaRpcClient(http), handler);
+        var http = new HttpClient(handler) { BaseAddress = new("http://localhost") };
+        return (new(http), handler);
     }
 
     private static string Account(string data) =>
@@ -47,10 +47,10 @@ public static class SolanaRpcClientAccountEncodingTests
             // Act
             var result = await client.GetAccountInfoWithOptionsAndContextAsync(
                 PublicKey.Parse(Address),
-                new RpcAccountInfoOptions { Encoding = RpcAccountEncoding.Base64, MinContextSlot = 6 });
+                new() { Encoding = RpcAccountEncoding.Base64, MinContextSlot = 6 });
 
             // Assert
-            result.Context!.Slot.Should().Be(7);
+            result.Context.Slot.Should().Be(7);
             result.Value!.Data.Should().BeOfType<RpcAccountData.Encoded>();
             handler.CapturedRequestBody.Should().Be(
                 """{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["11111111111111111111111111111111",{"encoding":"base64","minContextSlot":6}]}""");
@@ -69,7 +69,7 @@ public static class SolanaRpcClientAccountEncodingTests
             // Act
             var account = await client.GetAccountInfoWithOptionsAsync(
                 PublicKey.Parse(Address),
-                new RpcAccountInfoOptions { Encoding = RpcAccountEncoding.Binary });
+                new() { Encoding = RpcAccountEncoding.Binary });
 
             // Assert
             account!.Data.Should().BeOfType<RpcAccountData.LegacyBinary>()
@@ -92,7 +92,7 @@ public static class SolanaRpcClientAccountEncodingTests
             // Act
             var account = await client.GetAccountInfoWithOptionsAsync(
                 PublicKey.Parse(Address),
-                new RpcAccountInfoOptions { Encoding = requestedEncoding });
+                new() { Encoding = requestedEncoding });
 
             // Assert
             var data = account!.Data.Should().BeOfType<RpcAccountData.Encoded>().Which;
@@ -113,11 +113,11 @@ public static class SolanaRpcClientAccountEncodingTests
             // Act
             var account = await client.GetAccountInfoWithOptionsAsync(
                 PublicKey.Parse(Address),
-                new RpcAccountInfoOptions
+                new()
                 {
                     Encoding = RpcAccountEncoding.JsonParsed,
                     Commitment = Commitment.Finalized,
-                    DataSlice = new DataSlice(0, 8),
+                    DataSlice = new(0, 8),
                     MinContextSlot = 6
                 });
 
@@ -139,7 +139,7 @@ public static class SolanaRpcClientAccountEncodingTests
             // Act
             var account = await client.GetAccountInfoWithOptionsAsync(
                 PublicKey.Parse(Address),
-                new RpcAccountInfoOptions { Encoding = RpcAccountEncoding.JsonParsed });
+                new() { Encoding = RpcAccountEncoding.JsonParsed });
 
             // Assert
             var data = account!.Data.Should().BeOfType<RpcAccountData.Encoded>().Which;
@@ -156,7 +156,7 @@ public static class SolanaRpcClientAccountEncodingTests
             // Act
             var account = await client.GetAccountInfoWithOptionsAsync(
                 PublicKey.Parse(Address),
-                new RpcAccountInfoOptions { MinContextSlot = 6 });
+                new() { MinContextSlot = 6 });
 
             // Assert
             account!.Data.Should().BeOfType<RpcAccountData.LegacyBinary>();
@@ -194,7 +194,7 @@ public static class SolanaRpcClientAccountEncodingTests
 
             // Act
             var act = async () => await client.GetAccountInfoWithOptionsAsync(
-                PublicKey.Parse(Address), new RpcAccountInfoOptions());
+                PublicKey.Parse(Address), new());
 
             // Assert
             await act.Should().ThrowAsync<JsonException>();
@@ -217,7 +217,7 @@ public static class SolanaRpcClientAccountEncodingTests
             // Act
             var act = async () => await client.GetAccountInfoWithOptionsAsync(
                 PublicKey.Parse(Address),
-                new RpcAccountInfoOptions { Encoding = RpcAccountEncoding.Base64 });
+                new() { Encoding = RpcAccountEncoding.Base64 });
 
             // Assert
             await act.Should().ThrowAsync<JsonException>().WithMessage($"*{omittedField}*");
@@ -234,11 +234,11 @@ public static class SolanaRpcClientAccountEncodingTests
             // Act
             var account = await client.GetAccountInfoWithOptionsAsync(
                 PublicKey.Parse(Address),
-                new RpcAccountInfoOptions { Encoding = RpcAccountEncoding.Base64 });
+                new() { Encoding = RpcAccountEncoding.Base64 });
 
             // Assert
             account.Should().NotBeNull();
-            account!.Lamports.Should().Be(42);
+            account.Lamports.Should().Be(42);
             account.Owner.Should().Be(PublicKey.Parse(Address));
             account.Executable.Should().BeFalse();
             account.RentEpoch.Should().Be(9);
@@ -260,10 +260,10 @@ public static class SolanaRpcClientAccountEncodingTests
             // Act
             var result = await client.GetMultipleAccountsWithOptionsAndContextAsync(
                 [PublicKey.Parse(Address), PublicKey.Parse(Address)],
-                new RpcAccountInfoOptions { Encoding = RpcAccountEncoding.Base64 });
+                new() { Encoding = RpcAccountEncoding.Base64 });
 
             // Assert
-            result.Context!.Slot.Should().Be(7);
+            result.Context.Slot.Should().Be(7);
             result.Value.Should().HaveCount(2);
             result.Value![0].Should().BeNull();
             handler.CapturedRequestBody.Should().Contain("\"encoding\":\"base64\"");
@@ -283,7 +283,7 @@ public static class SolanaRpcClientAccountEncodingTests
             // Act
             var accounts = await client.GetMultipleAccountsWithOptionsAsync(
                 [PublicKey.Parse(Address), PublicKey.Parse(Address)],
-                new RpcAccountInfoOptions { Encoding = RpcAccountEncoding.Base64 });
+                new() { Encoding = RpcAccountEncoding.Base64 });
 
             // Assert
             accounts.Should().HaveCount(2);
@@ -307,10 +307,10 @@ public static class SolanaRpcClientAccountEncodingTests
             // Act
             var result = await client.GetProgramAccountsWithOptionsAndContextAsync(
                 PublicKey.Parse(TokenProgram),
-                new RpcProgramAccountsOptions { Encoding = RpcAccountEncoding.Base64, WithContext = false });
+                new() { Encoding = RpcAccountEncoding.Base64, WithContext = false });
 
             // Assert
-            result.Context!.Slot.Should().Be(9);
+            result.Context.Slot.Should().Be(9);
             result.Value.Should().ContainSingle();
             handler.CapturedRequestBody.Should().Contain("\"withContext\":true");
             handler.CapturedRequestBody.Should().Contain("\"encoding\":\"base64\"");
@@ -331,12 +331,12 @@ public static class SolanaRpcClientAccountEncodingTests
             // Act
             var accounts = await client.GetProgramAccountsWithOptionsAsync(
                 PublicKey.Parse(TokenProgram),
-                new RpcProgramAccountsOptions
+                new()
                 {
                     Encoding = RpcAccountEncoding.JsonParsed,
                     Commitment = Commitment.Finalized,
                     Filters = [AccountFilter.DataSize(82)],
-                    DataSlice = new DataSlice(0, 8),
+                    DataSlice = new(0, 8),
                     MinContextSlot = 8,
                     WithContext = true,
                     SortResults = false
@@ -359,7 +359,7 @@ public static class SolanaRpcClientAccountEncodingTests
             // Act
             var accounts = await client.GetProgramAccountsWithOptionsAsync(
                 PublicKey.Parse(TokenProgram),
-                new RpcProgramAccountsOptions { Encoding = RpcAccountEncoding.Base58 });
+                new() { Encoding = RpcAccountEncoding.Base58 });
 
             // Assert
             accounts.Should().ContainSingle();
@@ -377,7 +377,7 @@ public static class SolanaRpcClientAccountEncodingTests
             // Act
             var act = async () => await client.GetProgramAccountsWithOptionsAsync(
                 PublicKey.Parse(TokenProgram),
-                new RpcProgramAccountsOptions { Encoding = RpcAccountEncoding.Base64 });
+                new() { Encoding = RpcAccountEncoding.Base64 });
 
             // Assert
             await act.Should().ThrowAsync<JsonException>().WithMessage("*non-null account*");
@@ -392,7 +392,7 @@ public static class SolanaRpcClientAccountEncodingTests
             // Act
             var act = async () => await client.GetProgramAccountsWithOptionsAsync(
                 PublicKey.Parse(TokenProgram),
-                new RpcProgramAccountsOptions { Encoding = RpcAccountEncoding.Base64 });
+                new() { Encoding = RpcAccountEncoding.Base64 });
 
             // Assert
             await act.Should().ThrowAsync<JsonException>().WithMessage("*cannot contain null entries*");
@@ -413,10 +413,10 @@ public static class SolanaRpcClientAccountEncodingTests
             var result = await client.GetTokenAccountsByOwnerWithOptionsAndContextAsync(
                 PublicKey.Parse(Address),
                 TokenAccountsFilter.ByProgramId(PublicKey.Parse(TokenProgram)),
-                new RpcAccountInfoOptions { Encoding = RpcAccountEncoding.Base64 });
+                new() { Encoding = RpcAccountEncoding.Base64 });
 
             // Assert
-            result.Context!.Slot.Should().Be(9);
+            result.Context.Slot.Should().Be(9);
             result.Value.Should().ContainSingle();
             handler.CapturedRequestBody.Should().Contain("\"programId\":\"Tokenkeg");
             handler.CapturedRequestBody.Should().Contain("\"encoding\":\"base64\"");
@@ -437,10 +437,10 @@ public static class SolanaRpcClientAccountEncodingTests
             var result = await client.GetTokenAccountsByDelegateWithOptionsAndContextAsync(
                 PublicKey.Parse(Address),
                 TokenAccountsFilter.ByMint(PublicKey.Parse(Address)),
-                new RpcAccountInfoOptions { Encoding = RpcAccountEncoding.Base58 });
+                new() { Encoding = RpcAccountEncoding.Base58 });
 
             // Assert
-            result.Context!.Slot.Should().Be(10);
+            result.Context.Slot.Should().Be(10);
             result.Value.Should().ContainSingle();
             handler.CapturedRequestBody.Should().Contain("\"mint\":\"11111111111111111111111111111111\"");
             handler.CapturedRequestBody.Should().Contain("\"encoding\":\"base58\"");
@@ -461,7 +461,7 @@ public static class SolanaRpcClientAccountEncodingTests
             var accounts = await client.GetTokenAccountsByOwnerWithOptionsAsync(
                 PublicKey.Parse(Address),
                 TokenAccountsFilter.ByProgramId(PublicKey.Parse(TokenProgram)),
-                new RpcAccountInfoOptions { Encoding = RpcAccountEncoding.Base64Zstd });
+                new() { Encoding = RpcAccountEncoding.Base64Zstd });
 
             // Assert
             accounts.Should().ContainSingle();
@@ -486,7 +486,7 @@ public static class SolanaRpcClientAccountEncodingTests
             var accounts = await client.GetTokenAccountsByDelegateWithOptionsAsync(
                 PublicKey.Parse(Address),
                 TokenAccountsFilter.ByMint(PublicKey.Parse(Address)),
-                new RpcAccountInfoOptions { Encoding = RpcAccountEncoding.Binary });
+                new() { Encoding = RpcAccountEncoding.Binary });
 
             // Assert
             accounts.Should().ContainSingle();
@@ -510,7 +510,7 @@ public static class RpcAccountDataJsonConverterTests
         public void NullBranch_ThrowsJsonExceptionWhenWritten()
         {
             // Act
-            var act = () => JsonSerializer.Serialize<RpcAccountData>(null!, RpcJson.Options);
+            var act = static () => JsonSerializer.Serialize<RpcAccountData>(null!, RpcJson.Options);
 
             // Assert
             act.Should().Throw<JsonException>().WithMessage("Account data cannot be null.");

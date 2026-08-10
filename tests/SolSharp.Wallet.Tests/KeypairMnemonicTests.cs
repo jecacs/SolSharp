@@ -61,7 +61,7 @@ public static class KeypairMnemonicTests
         public void InvalidPath_Throws()
         {
             // Act & Assert
-            Action act = () => _ = Keypair.FromMnemonicAtPath(Mnemonic, "m/44/501");
+            Action act = static () => _ = Keypair.FromMnemonicAtPath(Mnemonic, "m/44/501");
             act.Should().Throw<FormatException>();
         }
     }

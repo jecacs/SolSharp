@@ -16,8 +16,8 @@ public static class SolanaRpcClientAccountTests
     private static (SolanaRpcClient Client, FakeHttpMessageHandler Handler) Make(string responseJson)
     {
         var handler = new FakeHttpMessageHandler(responseJson);
-        var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
-        return (new SolanaRpcClient(http), handler);
+        var http = new HttpClient(handler) { BaseAddress = new("http://localhost") };
+        return (new(http), handler);
     }
 
     private static string ContextEnvelope(string valueJson) =>
@@ -38,7 +38,7 @@ public static class SolanaRpcClientAccountTests
             // Assert
             byte[] expectedData = [1, 2, 3];
             info.Should().NotBeNull();
-            info!.Lamports.Should().Be(2039280);
+            info.Lamports.Should().Be(2039280);
             info.Owner.Should().Be(PublicKey.Parse(OwnerBase58));
             info.Executable.Should().BeFalse();
             info.RentEpoch.Should().Be(ulong.MaxValue);
@@ -70,7 +70,7 @@ public static class SolanaRpcClientAccountTests
             var (client, handler) = Make(ContextEnvelope(AccountValueJson));
 
             // Act
-            await client.GetAccountInfoAsync(PublicKey.Parse(OwnerBase58), dataSlice: new DataSlice(8, 32));
+            await client.GetAccountInfoAsync(PublicKey.Parse(OwnerBase58), dataSlice: new(8, 32));
 
             // Assert
             handler.CapturedRequestBody.Should().Contain("\"dataSlice\":{\"offset\":8,\"length\":32}");

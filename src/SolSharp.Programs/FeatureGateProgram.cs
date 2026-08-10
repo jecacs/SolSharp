@@ -10,8 +10,7 @@ public static class FeatureGateProgram
     public static readonly PublicKey ProgramId = PublicKey.Parse(SolanaProgramIds.FeatureProgram);
 
     /// <summary>The incinerator account that receives lamports from revoked pending activations.</summary>
-    public static readonly PublicKey IncineratorId =
-        PublicKey.Parse("1nc1nerator11111111111111111111111111111111");
+    public static readonly PublicKey IncineratorId = PublicKey.Parse("1nc1nerator11111111111111111111111111111111");
 
     /// <summary>
     /// Builds the pinned three-instruction activation sequence: transfer funding, allocate nine bytes, then assign

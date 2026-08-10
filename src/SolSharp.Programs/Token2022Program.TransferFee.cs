@@ -131,7 +131,7 @@ public static partial class Token2022Program
         for (var i = 0; i < sources.Count; i++)
             accounts.Add(AccountMeta.Writable(sources[i]));
 
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts = accounts,
@@ -151,7 +151,7 @@ public static partial class Token2022Program
         accounts[0] = AccountMeta.Writable(mint);
         for (var i = 0; i < sources.Count; i++)
             accounts[i + 1] = AccountMeta.Writable(sources[i]);
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts = accounts,

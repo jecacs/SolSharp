@@ -70,7 +70,7 @@ public static class SolanaJsonSerializerTests
             // fallback is RequiresDynamicCode and would break the Native AOT claim), so an unregistered
             // type must fail loudly rather than quietly resolve through reflection.
             // Act
-            Action act = () => JsonSerializer.Serialize(new Unregistered(), SolanaJsonSerializer.Options);
+            Action act = static () => JsonSerializer.Serialize(new Unregistered(), SolanaJsonSerializer.Options);
 
             // Assert
             act.Should().Throw<NotSupportedException>();

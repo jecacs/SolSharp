@@ -7,6 +7,17 @@ namespace SolSharp.Core.Tests.SysvarStates;
 
 public static class SlotHistorySysvarStateTests
 {
+    private static byte[] BuildVector(ulong firstBlock, ulong nextSlot)
+    {
+        var data = new byte[SlotHistorySysvarState.DataLength];
+        data[0] = 1;
+        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(1), SlotHistorySysvarState.BlockCount);
+        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(9), firstBlock);
+        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(131_081), SlotHistorySysvarState.MaximumEntries);
+        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(131_089), nextSlot);
+        return data;
+    }
+
     [TestFixture]
     public sealed class Parse
     {
@@ -83,16 +94,5 @@ public static class SlotHistorySysvarStateTests
             missing.Should().Be(SlotHistoryCheck.NotFound);
             future.Should().Be(SlotHistoryCheck.Future);
         }
-    }
-
-    private static byte[] BuildVector(ulong firstBlock, ulong nextSlot)
-    {
-        var data = new byte[SlotHistorySysvarState.DataLength];
-        data[0] = 1;
-        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(1), SlotHistorySysvarState.BlockCount);
-        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(9), firstBlock);
-        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(131_081), SlotHistorySysvarState.MaximumEntries);
-        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(131_089), nextSlot);
-        return data;
     }
 }

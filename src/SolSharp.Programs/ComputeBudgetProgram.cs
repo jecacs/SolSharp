@@ -27,7 +27,7 @@ public static class ComputeBudgetProgram
         data[0] = SetComputeUnitLimitDiscriminator;
         BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(1), units);
 
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts = [],
@@ -44,7 +44,7 @@ public static class ComputeBudgetProgram
         data[0] = SetComputeUnitPriceDiscriminator;
         BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(1), microLamports);
 
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts = [],
@@ -74,7 +74,7 @@ public static class ComputeBudgetProgram
         data[0] = RequestHeapFrameDiscriminator;
         BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(1), bytes);
 
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts = [],
@@ -94,7 +94,7 @@ public static class ComputeBudgetProgram
         data[0] = SetLoadedAccountsDataSizeLimitDiscriminator;
         BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(1), bytes);
 
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts = [],

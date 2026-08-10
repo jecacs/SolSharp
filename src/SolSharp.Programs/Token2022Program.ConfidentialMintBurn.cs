@@ -24,7 +24,7 @@ public static partial class Token2022Program
             data.AsSpan(2 + ElGamalPublicKeyLength, DecryptableBalanceLength),
             decryptableSupply,
             nameof(decryptableSupply));
-        return new Instruction { ProgramId = ProgramId, Accounts = [AccountMeta.Writable(mint)], Data = data };
+        return new() { ProgramId = ProgramId, Accounts = [AccountMeta.Writable(mint)], Data = data };
     }
 
     /// <summary>Rotates the confidential-supply ElGamal public key using a precomputed equality proof.</summary>
@@ -47,7 +47,7 @@ public static partial class Token2022Program
         var data = ConfidentialMintBurnData(innerDiscriminator: 1, payloadLength: ElGamalPublicKeyLength + 1);
         CopyExactPod(data.AsSpan(2, ElGamalPublicKeyLength), newSupplyElGamalPublicKey, nameof(newSupplyElGamalPublicKey));
         data[^1] = unchecked((byte)offset);
-        return new Instruction { ProgramId = ProgramId, Accounts = accounts, Data = data };
+        return new() { ProgramId = ProgramId, Accounts = accounts, Data = data };
     }
 
     /// <summary>Updates the mint's decryptable confidential supply.</summary>
@@ -186,7 +186,7 @@ public static partial class Token2022Program
         cursor += ElGamalCiphertextLength;
         for (var i = 0; i < offsets.Length; i++)
             data[cursor + i] = unchecked((byte)offsets[i]);
-        return new Instruction { ProgramId = ProgramId, Accounts = accounts, Data = data };
+        return new() { ProgramId = ProgramId, Accounts = accounts, Data = data };
     }
 
     private static byte[] ConfidentialMintBurnData(byte innerDiscriminator, int payloadLength = 0)

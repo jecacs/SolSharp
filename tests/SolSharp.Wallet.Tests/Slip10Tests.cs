@@ -47,7 +47,7 @@ public static class Slip10Tests
         public void NonHardenedSegment_Throws()
         {
             // Act & Assert
-            Action act = () => _ = Slip10.DeriveEd25519(new byte[16], "m/44'/501'/0'/0");
+            Action act = static () => _ = Slip10.DeriveEd25519(new byte[16], "m/44'/501'/0'/0");
             act.Should().Throw<FormatException>();
         }
 
@@ -65,7 +65,7 @@ public static class Slip10Tests
         public void PathNotStartingWithMaster_Throws()
         {
             // Act & Assert
-            Action act = () => _ = Slip10.DeriveEd25519(new byte[16], "44'/501'");
+            Action act = static () => _ = Slip10.DeriveEd25519(new byte[16], "44'/501'");
             act.Should().Throw<FormatException>();
         }
 
@@ -73,7 +73,7 @@ public static class Slip10Tests
         public void EmptySeed_Throws()
         {
             // Act & Assert
-            Action act = () => _ = Slip10.DeriveEd25519([], "m/0'");
+            Action act = static () => _ = Slip10.DeriveEd25519([], "m/0'");
             act.Should().Throw<ArgumentException>();
         }
     }

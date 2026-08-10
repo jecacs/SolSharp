@@ -7,11 +7,6 @@ using static SolSharp.Programs.Tests.VoteProgramBlsTestHelpers;
 
 namespace SolSharp.Programs.Tests;
 
-internal static class VoteProgramBlsTestHelpers
-{
-    internal static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
-}
-
 public static class VoteProgramBlsTests
 {
     [TestFixture]
@@ -21,7 +16,7 @@ public static class VoteProgramBlsTests
         public void TypedAuthorization_PreservesExistingWireEncoding()
         {
             // Arrange
-            using var keypair = BlsKeypair.Derive(Enumerable.Range(0, 32).Select(value => (byte)value).ToArray());
+            using var keypair = BlsKeypair.Derive([.. Enumerable.Range(0, 32).Select(static value => (byte)value)]);
             var proof = keypair.CreateVoteProofOfPossession(Key(1));
             var typed = VoteAuthorization.VoterWithBls(keypair.PublicKey, proof);
             var raw = VoteAuthorization.VoterWithBls(keypair.PublicKey.ToBytes(), proof.ToBytes());
@@ -38,7 +33,7 @@ public static class VoteProgramBlsTests
         public void DefensiveCredentialCopies_CannotMutateTypedAuthorizationWire()
         {
             // Arrange
-            using var keypair = BlsKeypair.Derive(Enumerable.Range(0, 32).Select(value => (byte)value).ToArray());
+            using var keypair = BlsKeypair.Derive([.. Enumerable.Range(0, 32).Select(static value => (byte)value)]);
             var proof = keypair.CreateVoteProofOfPossession(Key(1));
             var typed = VoteAuthorization.VoterWithBls(keypair.PublicKey, proof);
             var expectedPublicKey = keypair.PublicKey.ToBytes();
@@ -68,8 +63,8 @@ public static class VoteProgramBlsTests
         public void TypedAuthorization_MismatchedVoteAccountOrBlsKeyIsRejected()
         {
             // Arrange
-            using var keypair = BlsKeypair.Derive(Enumerable.Range(0, 32).Select(value => (byte)value).ToArray());
-            using var otherKeypair = BlsKeypair.Derive(Enumerable.Range(1, 32).Select(value => (byte)value).ToArray());
+            using var keypair = BlsKeypair.Derive([.. Enumerable.Range(0, 32).Select(static value => (byte)value)]);
+            using var otherKeypair = BlsKeypair.Derive([.. Enumerable.Range(1, 32).Select(static value => (byte)value)]);
             var proof = keypair.CreateVoteProofOfPossession(Key(9));
             var typed = VoteAuthorization.VoterWithBls(keypair.PublicKey, proof);
             var wrongKey = VoteAuthorization.VoterWithBls(otherKeypair.PublicKey, proof);
@@ -94,7 +89,7 @@ public static class VoteProgramBlsTests
         public void TypedAuthorization_MismatchedVoteAccountIsRejected()
         {
             // Arrange
-            using var keypair = BlsKeypair.Derive(Enumerable.Range(0, 32).Select(value => (byte)value).ToArray());
+            using var keypair = BlsKeypair.Derive([.. Enumerable.Range(0, 32).Select(static value => (byte)value)]);
             var proof = keypair.CreateVoteProofOfPossession(Key(9));
             var typed = VoteAuthorization.VoterWithBls(keypair.PublicKey, proof);
 
@@ -113,7 +108,7 @@ public static class VoteProgramBlsTests
         public void TypedAuthorization_MismatchedVoteAccountIsRejected()
         {
             // Arrange
-            using var keypair = BlsKeypair.Derive(Enumerable.Range(0, 32).Select(value => (byte)value).ToArray());
+            using var keypair = BlsKeypair.Derive([.. Enumerable.Range(0, 32).Select(static value => (byte)value)]);
             var proof = keypair.CreateVoteProofOfPossession(Key(9));
             var typed = VoteAuthorization.VoterWithBls(keypair.PublicKey, proof);
 
@@ -132,7 +127,7 @@ public static class VoteProgramBlsTests
         public void TypedAuthorization_MismatchedVoteAccountIsRejected()
         {
             // Arrange
-            using var keypair = BlsKeypair.Derive(Enumerable.Range(0, 32).Select(value => (byte)value).ToArray());
+            using var keypair = BlsKeypair.Derive([.. Enumerable.Range(0, 32).Select(static value => (byte)value)]);
             var proof = keypair.CreateVoteProofOfPossession(Key(9));
             var typed = VoteAuthorization.VoterWithBls(keypair.PublicKey, proof);
 
@@ -152,7 +147,7 @@ public static class VoteProgramBlsTests
         public void TypedInitialize_PreservesExistingWireEncoding()
         {
             // Arrange
-            using var keypair = BlsKeypair.Derive(Enumerable.Range(0, 32).Select(value => (byte)value).ToArray());
+            using var keypair = BlsKeypair.Derive([.. Enumerable.Range(0, 32).Select(static value => (byte)value)]);
             var proof = keypair.CreateVoteProofOfPossession(Key(9));
             var typed = new VoteInitializeV2(Key(1), Key(2), keypair.PublicKey, proof, Key(3), 25, 75);
             var raw = new VoteInitializeV2(
@@ -178,7 +173,7 @@ public static class VoteProgramBlsTests
         public void DefensiveCredentialCopies_CannotMutateTypedInitializeWire()
         {
             // Arrange
-            using var keypair = BlsKeypair.Derive(Enumerable.Range(0, 32).Select(value => (byte)value).ToArray());
+            using var keypair = BlsKeypair.Derive([.. Enumerable.Range(0, 32).Select(static value => (byte)value)]);
             var proof = keypair.CreateVoteProofOfPossession(Key(9));
             var typed = new VoteInitializeV2(Key(1), Key(2), keypair.PublicKey, proof, Key(3), 25, 75);
             var expectedPublicKey = keypair.PublicKey.ToBytes();
@@ -208,7 +203,7 @@ public static class VoteProgramBlsTests
         public void TypedInitialize_MismatchedVoteAccountIsRejected()
         {
             // Arrange
-            using var keypair = BlsKeypair.Derive(Enumerable.Range(0, 32).Select(value => (byte)value).ToArray());
+            using var keypair = BlsKeypair.Derive([.. Enumerable.Range(0, 32).Select(static value => (byte)value)]);
             var proof = keypair.CreateVoteProofOfPossession(Key(9));
             var typed = new VoteInitializeV2(Key(1), Key(2), keypair.PublicKey, proof, Key(3), 25, 75);
 
@@ -227,7 +222,7 @@ public static class VoteProgramBlsTests
         public void TypedInitialize_MismatchedVoteAccountIsRejected()
         {
             // Arrange
-            using var keypair = BlsKeypair.Derive(Enumerable.Range(0, 32).Select(value => (byte)value).ToArray());
+            using var keypair = BlsKeypair.Derive([.. Enumerable.Range(0, 32).Select(static value => (byte)value)]);
             var proof = keypair.CreateVoteProofOfPossession(Key(9));
             var typed = new VoteInitializeV2(Key(1), Key(2), keypair.PublicKey, proof, Key(3), 25, 75);
 
@@ -246,7 +241,7 @@ public static class VoteProgramBlsTests
         public void TypedInitialize_MismatchedVoteAccountIsRejected()
         {
             // Arrange
-            using var keypair = BlsKeypair.Derive(Enumerable.Range(0, 32).Select(value => (byte)value).ToArray());
+            using var keypair = BlsKeypair.Derive([.. Enumerable.Range(0, 32).Select(static value => (byte)value)]);
             var proof = keypair.CreateVoteProofOfPossession(Key(9));
             var typed = new VoteInitializeV2(Key(1), Key(2), keypair.PublicKey, proof, Key(3), 25, 75);
 
@@ -258,4 +253,9 @@ public static class VoteProgramBlsTests
             act.Should().Throw<ArgumentException>().WithMessage("*vote account*");
         }
     }
+}
+
+internal static class VoteProgramBlsTestHelpers
+{
+    internal static PublicKey Key(byte value) => new([.. Enumerable.Repeat(value, PublicKey.Length)]);
 }

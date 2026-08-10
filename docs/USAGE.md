@@ -3,7 +3,7 @@
 A task-oriented tour of SolSharp with copy-pasteable C# examples. For the high-level overview and design
 notes see the [README](../README.md); for conventions and architecture see [CLAUDE.md](../CLAUDE.md).
 
-Every snippet targets **.NET 8** and uses the single `SolSharp` NuGet package, which bundles four
+Every snippet targets **.NET 10** and uses the single `SolSharp` NuGet package, which bundles four
 functional assemblies plus a minimal packaging facade — the namespaces `SolSharp.Core.*`, `SolSharp.Rpc`,
 `SolSharp.Wallet`, and `SolSharp.Programs`.
 Unless a snippet shows a narrower import list, start with this common preamble:
@@ -60,7 +60,7 @@ dotnet add package SolSharp
 ```
 
 That single reference brings in every namespace — `SolSharp.Core.*`, `SolSharp.Rpc`, `SolSharp.Wallet`, and
-`SolSharp.Programs` — so there's no juggling which project to add. Requires .NET 8 or later.
+`SolSharp.Programs` — so there's no juggling which project to add. Requires .NET 10 or later.
 
 ## Creating a client
 
@@ -1677,8 +1677,8 @@ be unsubscribed; once the cap is reached, further subscriptions fail before they
 connection drop frees space.
 
 `ReceiveTimeout` (off by default) treats a connection with no complete message for the given interval as
-dropped, so auto-reconnect can replace a silently half-open socket. Only data messages reset the timer —
-.NET 8 exposes no ping/pong liveness signal — so enable it only when the subscribed traffic is guaranteed
+dropped, so auto-reconnect can replace a silently half-open socket. Only data messages surfaced to the
+receive loop reset the timer; protocol ping/pong frames do not. Enable it only when subscribed traffic is guaranteed
 to be frequent (slot subscriptions, busy programs): on a legitimately quiet subscription, such as an
 account that rarely changes, it would force a reconnect cycle — and a notification gap — every interval.
 

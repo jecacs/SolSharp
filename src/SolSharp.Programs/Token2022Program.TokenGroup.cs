@@ -31,7 +31,7 @@ public static partial class Token2022Program
         InitializeTokenGroupDiscriminator.CopyTo(data, 0);
         WriteMaybeNullPublicKey(data.AsSpan(8), updateAuthority, nameof(updateAuthority));
         BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(8 + PublicKey.Length), maximumSize);
-        return new Instruction
+        return new()
         {
             ProgramId = programId ?? ProgramId,
             Accounts =

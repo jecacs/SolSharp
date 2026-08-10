@@ -35,7 +35,7 @@ public static class ServiceCollectionExtensionsTests
         {
             // Arrange
             var services = new ServiceCollection();
-            services.AddSolanaRpc(options => options.Endpoint = "https://node.example/rpc");
+            services.AddSolanaRpc(static options => options.Endpoint = "https://node.example/rpc");
             var provider = services.BuildServiceProvider();
 
             // Act & Assert
@@ -52,7 +52,7 @@ public static class ServiceCollectionExtensionsTests
         {
             // Arrange: no logging registered on purpose - the client must tolerate its absence.
             var services = new ServiceCollection();
-            services.AddSolanaWs(new SolanaWsClientOptions { AutoReconnect = false });
+            services.AddSolanaWs(new() { AutoReconnect = false });
             var provider = services.BuildServiceProvider();
 
             // Act
@@ -122,7 +122,7 @@ public static class ServiceCollectionExtensionsTests
         public void RejectsNonPositiveResponseLimit()
         {
             var services = new ServiceCollection();
-            services.AddSolanaRpc(options =>
+            services.AddSolanaRpc(static options =>
             {
                 options.Endpoint = "https://api.devnet.solana.com";
                 options.MaximumResponseContentLength = 0;
@@ -156,8 +156,8 @@ public static class ServiceCollectionExtensionsTests
             var services = new ServiceCollection();
             services
                 .AddSolanaRpc(
-                    options => options.Endpoint = "https://node.example",
-                    resilience =>
+                    static options => options.Endpoint = "https://node.example",
+                    static resilience =>
                     {
                         resilience.Retry.MaxRetryAttempts = 1;
                         resilience.Retry.Delay = TimeSpan.Zero;
@@ -184,8 +184,8 @@ public static class ServiceCollectionExtensionsTests
             var services = new ServiceCollection();
             services
                 .AddSolanaRpc(
-                    options => options.Endpoint = "https://node.example",
-                    resilience =>
+                    static options => options.Endpoint = "https://node.example",
+                    static resilience =>
                     {
                         resilience.Retry.MaxRetryAttempts = 1;
                         resilience.Retry.Delay = TimeSpan.Zero;

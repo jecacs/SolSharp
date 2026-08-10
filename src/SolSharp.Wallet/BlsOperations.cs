@@ -3,17 +3,33 @@ using Backend = Nethermind.Crypto.Bls;
 
 namespace SolSharp.Wallet;
 
+internal enum BlsPointValidationResult
+{
+    /// <summary>The point is valid.</summary>
+    Valid,
+
+    /// <summary>The byte representation cannot be decoded.</summary>
+    BadEncoding,
+
+    /// <summary>The decoded point is not on the curve.</summary>
+    NotOnCurve,
+
+    /// <summary>The decoded point is outside the prime-order subgroup.</summary>
+    NotInGroup,
+
+    /// <summary>The decoded point is the point at infinity.</summary>
+    Infinity
+}
+
 internal static class BlsOperations
 {
     internal const int SecretKeyLength = 32;
     internal const int PublicKeyLength = 48;
     internal const int SignatureLength = 96;
 
-    private static ReadOnlySpan<byte> SignatureDomain =>
-        "BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_"u8;
+    private static ReadOnlySpan<byte> SignatureDomain => "BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_"u8;
 
-    private static ReadOnlySpan<byte> ProofOfPossessionDomain =>
-        "BLS_POP_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_"u8;
+    private static ReadOnlySpan<byte> ProofOfPossessionDomain => "BLS_POP_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_"u8;
 
     internal static bool TryDecodeCanonicalBase64(ReadOnlySpan<char> base64, Span<byte> destination)
     {
@@ -42,7 +58,8 @@ internal static class BlsOperations
         var result = new byte[SecretKeyLength];
         try
         {
-            var secretKey = new Backend.SecretKey(result);
+            // C# 14 otherwise binds byte[] to the read-only decoding overload instead of the writable buffer.
+            var secretKey = new Backend.SecretKey(result.AsSpan());
             secretKey.Keygen(inputKeyMaterial);
             return result;
         }
@@ -331,22 +348,4 @@ internal static class BlsOperations
             >= 'a' and <= 'z' or
             >= '0' and <= '9' or
             '+' or '/';
-}
-
-internal enum BlsPointValidationResult
-{
-    /// <summary>The point is valid.</summary>
-    Valid,
-
-    /// <summary>The byte representation cannot be decoded.</summary>
-    BadEncoding,
-
-    /// <summary>The decoded point is not on the curve.</summary>
-    NotOnCurve,
-
-    /// <summary>The decoded point is outside the prime-order subgroup.</summary>
-    NotInGroup,
-
-    /// <summary>The decoded point is the point at infinity.</summary>
-    Infinity
 }

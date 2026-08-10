@@ -13,7 +13,7 @@ public static class SolanaRpcClientNonceTests
     {
         var bytes = new byte[PublicKey.Length];
         Array.Fill(bytes, value);
-        return new PublicKey(bytes);
+        return new(bytes);
     }
 
     // The 80-byte bincode layout the System program stores (agave nonce state): u32 Versions tag
@@ -40,7 +40,7 @@ public static class SolanaRpcClientNonceTests
 
             // Assert
             nonce.Should().NotBeNull();
-            nonce!.Version.Should().Be(1u);
+            nonce.Version.Should().Be(1u);
             nonce.Authority.Should().Be(Pk(3));
             nonce.Nonce.Should().Be(Pk(8).ToString());
             nonce.LamportsPerSignature.Should().Be(5000ul);
@@ -84,7 +84,7 @@ public static class SolanaRpcClientNonceTests
                 """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"data":["__DATA__","base64"],"executable":false,"lamports":1447680,"owner":"11111111111111111111111111111111","rentEpoch":0,"space":80}},"id":1}"""
                     .Replace("__DATA__", Convert.ToBase64String(NonceData()));
             var handler = new FakeHttpMessageHandler(envelope);
-            var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
+            var http = new HttpClient(handler) { BaseAddress = new("http://localhost") };
             var client = new SolanaRpcClient(http);
 
             // Act
@@ -92,7 +92,7 @@ public static class SolanaRpcClientNonceTests
 
             // Assert
             nonce.Should().NotBeNull();
-            nonce!.Authority.Should().Be(Pk(3));
+            nonce.Authority.Should().Be(Pk(3));
             nonce.Nonce.Should().Be(Pk(8).ToString());
             handler.CapturedRequestBody.Should().Contain("getAccountInfo");
         }
@@ -102,7 +102,7 @@ public static class SolanaRpcClientNonceTests
         {
             // Arrange
             const string envelope = """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":null},"id":1}""";
-            var http = new HttpClient(new FakeHttpMessageHandler(envelope)) { BaseAddress = new Uri("http://localhost") };
+            var http = new HttpClient(new FakeHttpMessageHandler(envelope)) { BaseAddress = new("http://localhost") };
             var client = new SolanaRpcClient(http);
 
             // Act & Assert
@@ -116,7 +116,7 @@ public static class SolanaRpcClientNonceTests
                 """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"data":["__DATA__","base64"],"executable":false,"lamports":1,"owner":"__OWNER__","rentEpoch":0,"space":80}},"id":1}"""
                     .Replace("__DATA__", Convert.ToBase64String(NonceData()))
                     .Replace("__OWNER__", SolanaProgramIds.TokenProgram);
-            var http = new HttpClient(new FakeHttpMessageHandler(envelope)) { BaseAddress = new Uri("http://localhost") };
+            var http = new HttpClient(new FakeHttpMessageHandler(envelope)) { BaseAddress = new("http://localhost") };
             var client = new SolanaRpcClient(http);
 
             (await client.GetNonceAccountAsync(Pk(2))).Should().BeNull();

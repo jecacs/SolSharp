@@ -10,10 +10,6 @@ namespace SolSharp.Rpc.Models.Parsed;
 /// <seealso href="https://solana.com/docs/rpc/http/gettransaction">getTransaction</seealso>
 public sealed record ParsedTransactionMeta : IJsonOnDeserialized
 {
-    private JsonElement _status;
-    private IReadOnlyList<ulong>? _preBalances;
-    private IReadOnlyList<ulong>? _postBalances;
-
     /// <summary>The transaction error, or <c>null</c> if it succeeded.</summary>
     [JsonPropertyName("err")]
     [JsonRequired]
@@ -27,8 +23,8 @@ public sealed record ParsedTransactionMeta : IJsonOnDeserialized
     [JsonRequired]
     public JsonElement Status
     {
-        get => _status;
-        init => _status = value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
+        get;
+        init => field = value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
             ? throw new JsonException("Parsed transaction metadata must carry a non-null status.")
             : value;
     }
@@ -43,8 +39,8 @@ public sealed record ParsedTransactionMeta : IJsonOnDeserialized
     [JsonRequired]
     public IReadOnlyList<ulong> PreBalances
     {
-        get => _preBalances!;
-        init => _preBalances = value ?? throw new JsonException("Parsed transaction metadata must carry pre-balances.");
+        get => field!;
+        init => field = value ?? throw new JsonException("Parsed transaction metadata must carry pre-balances.");
     }
 
     /// <summary>Account lamport balances after the transaction, indexed by the message's account list.</summary>
@@ -52,8 +48,8 @@ public sealed record ParsedTransactionMeta : IJsonOnDeserialized
     [JsonRequired]
     public IReadOnlyList<ulong> PostBalances
     {
-        get => _postBalances!;
-        init => _postBalances = value ?? throw new JsonException("Parsed transaction metadata must carry post-balances.");
+        get => field!;
+        init => field = value ?? throw new JsonException("Parsed transaction metadata must carry post-balances.");
     }
 
     /// <summary>The inner (CPI) instructions invoked, grouped by their top-level instruction; <c>null</c> if the node omitted them.</summary>

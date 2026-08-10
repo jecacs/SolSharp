@@ -10,7 +10,7 @@ public static class MessageV0Tests
     {
         var bytes = new byte[PublicKey.Length];
         Array.Fill(bytes, value);
-        return new PublicKey(bytes);
+        return new(bytes);
     }
 
     private static PublicKey UniqueKey(int value)
@@ -18,7 +18,7 @@ public static class MessageV0Tests
         var bytes = new byte[PublicKey.Length];
         bytes[0] = (byte)value;
         bytes[1] = (byte)(value >> 8);
-        return new PublicKey(bytes);
+        return new(bytes);
     }
 
     // 32 bytes encode to the same base58 whether they represent a key or a blockhash.
@@ -27,18 +27,6 @@ public static class MessageV0Tests
     [TestFixture]
     public sealed class Compile
     {
-        private static Instruction AllSigners(int count, out PublicKey payer)
-        {
-            var keys = Enumerable.Range(0, count).Select(UniqueKey).ToArray();
-            payer = keys[0];
-            return new Instruction
-            {
-                ProgramId = keys[^1],
-                Accounts = [.. keys.Skip(1).Select(AccountMeta.ReadonlySigner)],
-                Data = []
-            };
-        }
-
         // KAT vs solders: MessageV0.try_compile(payer=[1], [ix], [alt], blockhash=[8]) -> to_bytes_versioned.
         // ix(program=[9], data=0102): A[2] writable, B[3] readonly, C[4] writable, D[6] writable signer.
         // alt=[5] holds [A, B, [7]] -> A drains writable (index 0), B drains readonly (index 1).
@@ -119,7 +107,7 @@ public static class MessageV0Tests
                 var bytes = new byte[PublicKey.Length];
                 bytes[0] = (byte)i;
                 bytes[1] = (byte)(i >> 8);
-                addresses[i] = new PublicKey(bytes);
+                addresses[i] = new(bytes);
             }
 
             var instruction = new Instruction { ProgramId = Pk(9), Accounts = [AccountMeta.Writable(Pk(2))], Data = [] };
@@ -229,6 +217,18 @@ public static class MessageV0Tests
             // Assert
             message.Instructions[0].Data.Should().Equal(7);
         }
+
+        private static Instruction AllSigners(int count, out PublicKey payer)
+        {
+            var keys = Enumerable.Range(0, count).Select(UniqueKey).ToArray();
+            payer = keys[0];
+            return new()
+            {
+                ProgramId = keys[^1],
+                Accounts = [.. keys.Skip(1).Select(AccountMeta.ReadonlySigner)],
+                Data = []
+            };
+        }
     }
 
     [TestFixture]
@@ -239,25 +239,6 @@ public static class MessageV0Tests
         // indexes at 136 (the payer) and 137 (the recipient). The final byte is the lookup count (0).
         private const int ProgramIdIndexOffset = 134;
         private const int SecondAccountIndexOffset = 137;
-
-        // Appends a lookup that loads one writable account from table Pk(5), making 4 addressable
-        // accounts: the 3 static keys plus one lookup-loaded key at index 3.
-        private static byte[] WithSingleAccountLookup(byte[] data)
-        {
-            data[^1] = 1;
-            return [.. data, .. Pk(5).ToBytes(), 1, 0, 0];
-        }
-
-        private static byte[] SerializedV0()
-        {
-            var instruction = new Instruction
-            {
-                ProgramId = Pk(9),
-                Accounts = [AccountMeta.WritableSigner(Pk(1)), AccountMeta.Writable(Pk(2))],
-                Data = [1, 2, 3]
-            };
-            return MessageV0.Compile(Pk(1), Blockhash(8), [instruction], []).Serialize();
-        }
 
         [Test]
         public void UnsupportedVersion_Throws()
@@ -514,6 +495,25 @@ public static class MessageV0Tests
 
             // Assert
             act.Should().Throw<FormatException>().WithMessage("*1 trailing byte(s)*");
+        }
+
+        // Appends a lookup that loads one writable account from table Pk(5), making 4 addressable
+        // accounts: the 3 static keys plus one lookup-loaded key at index 3.
+        private static byte[] WithSingleAccountLookup(byte[] data)
+        {
+            data[^1] = 1;
+            return [.. data, .. Pk(5).ToBytes(), 1, 0, 0];
+        }
+
+        private static byte[] SerializedV0()
+        {
+            var instruction = new Instruction
+            {
+                ProgramId = Pk(9),
+                Accounts = [AccountMeta.WritableSigner(Pk(1)), AccountMeta.Writable(Pk(2))],
+                Data = [1, 2, 3]
+            };
+            return MessageV0.Compile(Pk(1), Blockhash(8), [instruction], []).Serialize();
         }
     }
 }
