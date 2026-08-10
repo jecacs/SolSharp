@@ -13,10 +13,10 @@ public static class SystemProgramTests
 
     private static byte[] Hex(string hex) => Convert.FromHexString(hex);
 
-    private static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
+    private static PublicKey Key(byte value) => new([.. Enumerable.Repeat(value, PublicKey.Length)]);
 
     private static (PublicKey, bool, bool)[] Metas(Instruction instruction)
-        => [.. instruction.Accounts.Select(a => (a.PublicKey, a.IsSigner, a.IsWritable))];
+        => [.. instruction.Accounts.Select(static a => (a.PublicKey, a.IsSigner, a.IsWritable))];
 
     [TestFixture]
     public sealed class Transfer
@@ -70,7 +70,7 @@ public static class SystemProgramTests
         public void NullInput_Throws()
         {
             // Act
-            Action act = () => _ = SystemProgram.TransferMany(Key(1), null!);
+            Action act = static () => _ = SystemProgram.TransferMany(Key(1), null!);
 
             // Assert
             act.Should().Throw<ArgumentNullException>().WithParameterName("transfers");
@@ -141,7 +141,7 @@ public static class SystemProgramTests
         public void AdditionalLamportsWithoutPayer_ThrowsArgumentException()
         {
             // Act
-            Action act = () => _ = SystemProgram.CreateAccountAllowPrefund(Key(2), 165, Key(9), lamports: 1);
+            Action act = static () => _ = SystemProgram.CreateAccountAllowPrefund(Key(2), 165, Key(9), lamports: 1);
 
             // Assert
             act.Should().Throw<ArgumentException>().WithParameterName("payer");
@@ -415,8 +415,8 @@ public static class SystemProgramTests
         public void ThirtyTwoUtf8Bytes_IsAccepted()
         {
             // Act
-            Action act = () => _ = SystemProgram.CreateAccountWithSeed(
-                Key(1), Key(2), Key(3), new string('a', 32), 1, 1, Key(9));
+            Action act = static () => _ = SystemProgram.CreateAccountWithSeed(
+                Key(1), Key(2), Key(3), new('a', 32), 1, 1, Key(9));
 
             // Assert
             act.Should().NotThrow();
@@ -442,7 +442,7 @@ public static class SystemProgramTests
             const string seed = "\uD800";
 
             // Act
-            Action act = () => _ = SystemProgram.AssignWithSeed(Key(2), Key(3), seed, Key(9));
+            Action act = static () => _ = SystemProgram.AssignWithSeed(Key(2), Key(3), seed, Key(9));
 
             // Assert
             act.Should().Throw<ArgumentException>()

@@ -27,11 +27,9 @@ internal static class BlsOperations
     internal const int PublicKeyLength = 48;
     internal const int SignatureLength = 96;
 
-    private static ReadOnlySpan<byte> SignatureDomain =>
-        "BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_"u8;
+    private static ReadOnlySpan<byte> SignatureDomain => "BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_"u8;
 
-    private static ReadOnlySpan<byte> ProofOfPossessionDomain =>
-        "BLS_POP_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_"u8;
+    private static ReadOnlySpan<byte> ProofOfPossessionDomain => "BLS_POP_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_"u8;
 
     internal static bool TryDecodeCanonicalBase64(ReadOnlySpan<char> base64, Span<byte> destination)
     {

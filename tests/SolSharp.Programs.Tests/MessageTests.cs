@@ -9,14 +9,14 @@ public static class MessageTests
 {
     private static byte[] Hex(string hex) => Convert.FromHexString(hex);
 
-    private static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
+    private static PublicKey Key(byte value) => new([.. Enumerable.Repeat(value, PublicKey.Length)]);
 
     private static PublicKey UniqueKey(int value)
     {
         var bytes = new byte[PublicKey.Length];
         bytes[0] = (byte)value;
         bytes[1] = (byte)(value >> 8);
-        return new PublicKey(bytes);
+        return new(bytes);
     }
 
     [TestFixture]
@@ -168,7 +168,7 @@ public static class MessageTests
         {
             var keys = Enumerable.Range(0, count).Select(UniqueKey).ToArray();
             payer = keys[0];
-            return new Instruction
+            return new()
             {
                 ProgramId = keys[^1],
                 Accounts = [.. keys.Skip(1).Select(AccountMeta.ReadonlySigner)],

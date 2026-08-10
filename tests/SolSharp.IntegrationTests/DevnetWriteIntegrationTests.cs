@@ -17,7 +17,7 @@ namespace SolSharp.IntegrationTests;
 public static class DevnetWriteIntegrationTests
 {
     private static readonly TimeSpan ConfirmTimeout = TimeSpan.FromSeconds(60);
-    private static readonly TokenBucketRateLimiter RequestLimiter = new(new TokenBucketRateLimiterOptions
+    private static readonly TokenBucketRateLimiter RequestLimiter = new(new()
     {
         TokenLimit = 1,
         QueueLimit = 128,
@@ -31,9 +31,9 @@ public static class DevnetWriteIntegrationTests
     {
         var services = new ServiceCollection();
         services.AddSolanaRpc(
-            options => options.Endpoint = IntegrationEnvironment.DevnetHttpEndpoint,
-            resilience => resilience.RateLimiter.RateLimiter =
-                arguments => RequestLimiter.AcquireAsync(1, arguments.Context.CancellationToken));
+            static options => options.Endpoint = IntegrationEnvironment.DevnetHttpEndpoint,
+            static resilience => resilience.RateLimiter.RateLimiter =
+                static arguments => RequestLimiter.AcquireAsync(1, arguments.Context.CancellationToken));
         return services.BuildServiceProvider();
     }
 
@@ -116,7 +116,7 @@ public static class DevnetWriteIntegrationTests
 
                 var nonce = await client.GetNonceAccountAsync(nonceKeypair.PublicKey);
                 nonce.Should().NotBeNull("the nonce account was just created and initialized");
-                nonce!.Authority.Should().Be(payer.PublicKey);
+                nonce.Authority.Should().Be(payer.PublicKey);
 
                 // Act: a transfer anchored to the durable nonce instead of a recent blockhash.
                 var transaction = new TransactionBuilder()
@@ -129,7 +129,7 @@ public static class DevnetWriteIntegrationTests
                 (await client.GetBalanceAsync(recipient.PublicKey)).Should().Be(1_000);
                 var advanced = await client.GetNonceAccountAsync(nonceKeypair.PublicKey);
                 advanced.Should().NotBeNull();
-                advanced!.Nonce.Should().NotBe(nonce.Nonce);
+                advanced.Nonce.Should().NotBe(nonce.Nonce);
             }
             catch (Exception exception)
             {

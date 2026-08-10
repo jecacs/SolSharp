@@ -45,7 +45,7 @@ public static class UpgradeableBpfLoaderProgram
         ulong lamports,
         ulong programLength)
     {
-        var space = checked((ulong)UpgradeableBpfLoaderState.BufferMetadataLength + programLength);
+        var space = checked(UpgradeableBpfLoaderState.BufferMetadataLength + programLength);
         return
         [
             SystemProgram.CreateAccount(payer, buffer, lamports, space, ProgramId),

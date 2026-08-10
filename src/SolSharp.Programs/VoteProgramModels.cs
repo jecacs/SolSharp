@@ -59,7 +59,7 @@ public sealed class VoteAuthorization
         VoteAuthorizationKind kind,
         ReadOnlySpan<byte> blsPublicKey,
         ReadOnlySpan<byte> blsProofOfPossession)
-        : this(kind, blsPublicKey.ToArray(), blsProofOfPossession.ToArray(), null, null)
+        : this(kind, [.. blsPublicKey], [.. blsProofOfPossession], null, null)
     {
     }
 
@@ -114,7 +114,7 @@ public sealed class VoteAuthorization
     {
         ValidateLength(blsPublicKey, BlsPublicKeyLength, nameof(blsPublicKey));
         ValidateLength(blsProofOfPossession, BlsProofOfPossessionLength, nameof(blsProofOfPossession));
-        return new VoteAuthorization(VoteAuthorizationKind.VoterWithBls, blsPublicKey, blsProofOfPossession);
+        return new(VoteAuthorizationKind.VoterWithBls, blsPublicKey, blsProofOfPossession);
     }
 
     /// <summary>
@@ -130,7 +130,7 @@ public sealed class VoteAuthorization
     {
         ArgumentNullException.ThrowIfNull(blsPublicKey);
         ArgumentNullException.ThrowIfNull(blsProofOfPossession);
-        return new VoteAuthorization(
+        return new(
             VoteAuthorizationKind.VoterWithBls,
             blsPublicKey.ToBytes(),
             blsProofOfPossession.ToBytes(),
@@ -298,7 +298,7 @@ public sealed class VoteInitializeV2
         if (value.Length != expectedLength)
             throw new ArgumentException($"Value must be exactly {expectedLength} bytes.", parameterName);
 
-        return value.ToArray();
+        return [.. value];
     }
 
     private static byte[] CopyPublicKey(BlsPublicKey publicKey) =>

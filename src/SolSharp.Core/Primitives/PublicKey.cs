@@ -74,7 +74,7 @@ public readonly struct PublicKey : IEquatable<PublicKey>
     {
         if (Base58.TryDecode(base58, out var bytes) && bytes.Length == Length)
         {
-            key = new PublicKey(bytes, base58);
+            key = new(bytes, base58);
             return true;
         }
 

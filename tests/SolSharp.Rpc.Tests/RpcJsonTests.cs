@@ -20,7 +20,7 @@ public static class RpcJsonTests
             public void Null_ThrowsJsonException()
             {
                 // Act
-                Action act = () => JsonSerializer.Deserialize<SignatureNotification>("null", RpcJson.Options);
+                Action act = static () => JsonSerializer.Deserialize<SignatureNotification>("null", RpcJson.Options);
 
                 // Assert
                 act.Should().Throw<JsonException>();
@@ -109,7 +109,7 @@ public static class RpcJsonTests
         public void Serialize_UnregisteredType_ThrowsInsteadOfFallingBackToReflection()
         {
             // Act
-            Action act = () => JsonSerializer.Serialize(new Unregistered(), RpcJson.Options);
+            Action act = static () => JsonSerializer.Serialize(new Unregistered(), RpcJson.Options);
 
             // Assert
             act.Should().Throw<NotSupportedException>();
@@ -128,7 +128,7 @@ public static class RpcJsonTests
                 """{"Context":{"Slot":42},"Value":7}""", RpcJson.Options);
 
             // Assert
-            value!.Context!.Slot.Should().Be(42);
+            value!.Context.Slot.Should().Be(42);
             value.Value.Should().Be(7);
         }
 
@@ -140,7 +140,7 @@ public static class RpcJsonTests
                 """{"context":{"slot":42,"apiVersion":"3.1.7"},"value":7}""", RpcJson.Options);
 
             // Assert
-            value!.Context!.ApiVersion.Should().Be("3.1.7");
+            value!.Context.ApiVersion.Should().Be("3.1.7");
         }
 
         [Test]
@@ -149,7 +149,7 @@ public static class RpcJsonTests
             // Arrange
             var account = new AccountInfo
             {
-                Owner = new PublicKey(new byte[PublicKey.Length]),
+                Owner = new(new byte[PublicKey.Length]),
                 Space = 3,
                 Data = [1, 2, 3]
             };
@@ -174,7 +174,7 @@ public static class RpcJsonTests
         public void UnregisteredType_Throws()
         {
             // Act
-            Action act = () => RpcJson.TypeInfo<Unregistered>();
+            Action act = static () => RpcJson.TypeInfo<Unregistered>();
 
             // Assert
             act.Should().Throw<NotSupportedException>();
@@ -193,7 +193,7 @@ public static class RpcJsonTests
         public void MissingMandatoryWrapperMember_ThrowsJsonException(string json)
         {
             // Act
-            Action act = () => JsonSerializer.Deserialize<SolSharp.Rpc.Protocol.RpcContextValue<ulong?>>(
+            Action act = () => JsonSerializer.Deserialize<RpcContextValue<ulong?>>(
                 json, RpcJson.Options);
 
             // Assert
@@ -204,11 +204,11 @@ public static class RpcJsonTests
         public void ExplicitNullableValue_IsPreserved()
         {
             // Act
-            var value = JsonSerializer.Deserialize<SolSharp.Rpc.Protocol.RpcContextValue<ulong?>>(
+            var value = JsonSerializer.Deserialize<RpcContextValue<ulong?>>(
                 """{"context":{"slot":1},"value":null}""", RpcJson.Options);
 
             // Assert
-            value!.Context!.Slot.Should().Be(1);
+            value!.Context.Slot.Should().Be(1);
             value.Value.Should().BeNull();
         }
 
@@ -216,7 +216,7 @@ public static class RpcJsonTests
         public void ProgrammaticMissingContext_ThrowsInvalidOperationException()
         {
             // Arrange
-            var value = new SolSharp.Rpc.Protocol.RpcContextValue<ulong>();
+            var value = new RpcContextValue<ulong>();
 
             // Act
             Action act = () => _ = value.Context;
@@ -233,7 +233,7 @@ public static class RpcJsonTests
         public void MissingLogsMembers_ThrowsJsonException()
         {
             // Act
-            Action act = () => JsonSerializer.Deserialize<LogInfo>("{}", RpcJson.Options);
+            Action act = static () => JsonSerializer.Deserialize<LogInfo>("{}", RpcJson.Options);
 
             // Assert
             act.Should().Throw<JsonException>();
@@ -243,7 +243,7 @@ public static class RpcJsonTests
         public void MissingSlotMembers_ThrowsJsonException()
         {
             // Act
-            Action act = () => JsonSerializer.Deserialize<SlotInfo>("{}", RpcJson.Options);
+            Action act = static () => JsonSerializer.Deserialize<SlotInfo>("{}", RpcJson.Options);
 
             // Assert
             act.Should().Throw<JsonException>();
@@ -253,7 +253,7 @@ public static class RpcJsonTests
         public void MissingVoteMembers_ThrowsJsonException()
         {
             // Act
-            Action act = () => JsonSerializer.Deserialize<VoteNotification>("{}", RpcJson.Options);
+            Action act = static () => JsonSerializer.Deserialize<VoteNotification>("{}", RpcJson.Options);
 
             // Assert
             act.Should().Throw<JsonException>();
@@ -277,7 +277,7 @@ public static class RpcJsonTests
         public void MissingRawBlockMembers_ThrowsJsonException()
         {
             // Act
-            Action act = () => JsonSerializer.Deserialize<RawBlockNotification>("{}", RpcJson.Options);
+            Action act = static () => JsonSerializer.Deserialize<RawBlockNotification>("{}", RpcJson.Options);
 
             // Assert
             act.Should().Throw<JsonException>();
@@ -287,7 +287,7 @@ public static class RpcJsonTests
         public void RawBlockWithNeitherBodyNorError_ThrowsJsonException()
         {
             // Act
-            Action act = () => JsonSerializer.Deserialize<RawBlockNotification>(
+            Action act = static () => JsonSerializer.Deserialize<RawBlockNotification>(
                 """{"slot":1,"block":null,"err":null}""", RpcJson.Options);
 
             // Assert
@@ -298,7 +298,7 @@ public static class RpcJsonTests
         public void MissingBlockMembers_ThrowsJsonException()
         {
             // Act
-            Action act = () => JsonSerializer.Deserialize<BlockNotification>("{}", RpcJson.Options);
+            Action act = static () => JsonSerializer.Deserialize<BlockNotification>("{}", RpcJson.Options);
 
             // Assert
             act.Should().Throw<JsonException>();
@@ -308,7 +308,7 @@ public static class RpcJsonTests
         public void MissingParsedBlockMembers_ThrowsJsonException()
         {
             // Act
-            Action act = () => JsonSerializer.Deserialize<ParsedBlockNotification>("{}", RpcJson.Options);
+            Action act = static () => JsonSerializer.Deserialize<ParsedBlockNotification>("{}", RpcJson.Options);
 
             // Assert
             act.Should().Throw<JsonException>();

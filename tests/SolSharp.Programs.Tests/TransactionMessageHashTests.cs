@@ -41,7 +41,7 @@ public static class TransactionMessageHashTests
         public void NullMessage_Throws()
         {
             // Act
-            Action act = () => TransactionMessageHash.Compute((ITransactionMessage)null!);
+            Action act = static () => TransactionMessageHash.Compute((ITransactionMessage)null!);
 
             // Assert
             act.Should().Throw<ArgumentNullException>().WithParameterName("message");

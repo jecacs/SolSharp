@@ -48,8 +48,8 @@ public static class SolanaRpcClientParsedTransactionTests
     private static (SolanaRpcClient Client, FakeHttpMessageHandler Handler) Make(string responseJson)
     {
         var handler = new FakeHttpMessageHandler(responseJson);
-        var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
-        return (new SolanaRpcClient(http), handler);
+        var http = new HttpClient(handler) { BaseAddress = new("http://localhost") };
+        return (new(http), handler);
     }
 
     private static PublicKey Key(string base58) => PublicKey.Parse(base58);
@@ -68,7 +68,7 @@ public static class SolanaRpcClientParsedTransactionTests
 
             // Assert
             tx.Should().NotBeNull();
-            tx!.Slot.Should().Be(250000000);
+            tx.Slot.Should().Be(250000000);
             tx.BlockTime.Should().Be(1700000000);
             tx.Version.Should().Be(RpcTransactionVersion.Legacy);
             tx.Signatures.Should().ContainSingle().Which.Should().Be("sig1aaaa");
@@ -146,11 +146,11 @@ public static class SolanaRpcClientParsedTransactionTests
 
             // Assert
             tx.Should().NotBeNull();
-            tx!.Version.Should().Be(RpcTransactionVersion.FromNumber(0));
+            tx.Version.Should().Be(RpcTransactionVersion.FromNumber(0));
             tx.Meta!.LoadedAddresses.Should().NotBeNull();
             tx.Meta.LoadedAddresses!.Writable.Should().ContainSingle().Which.Should().Be(Key(V0Writable));
             tx.Meta.LoadedAddresses.Readonly.Should().ContainSingle().Which.Should().Be(Key(V0Readonly));
-            tx.Message.AccountKeys.Should().Contain(account => account.Source == "lookupTable");
+            tx.Message.AccountKeys.Should().Contain(static account => account.Source == "lookupTable");
         }
 
         [Test]
@@ -198,7 +198,7 @@ public static class SolanaRpcClientParsedTransactionTests
 
             // Assert
             tx.Should().NotBeNull();
-            tx!.Slot.Should().Be(0);
+            tx.Slot.Should().Be(0);
             tx.BlockTime.Should().BeNull();
             tx.Meta.Should().BeNull();
             tx.Message.Instructions.Should().BeEmpty();
@@ -314,7 +314,7 @@ public static class SolanaRpcClientParsedTransactionTests
 
             // Assert
             block.Should().NotBeNull();
-            block!.Blockhash.Should().Be("BHash5block11111111111111111111111111111111");
+            block.Blockhash.Should().Be("BHash5block11111111111111111111111111111111");
             block.ParentSlot.Should().Be(249999999);
             block.BlockHeight.Should().Be(123456);
             block.BlockTime.Should().Be(1700000005);

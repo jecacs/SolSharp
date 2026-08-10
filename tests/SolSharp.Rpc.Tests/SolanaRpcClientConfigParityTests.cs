@@ -13,8 +13,8 @@ public static class SolanaRpcClientConfigParityTests
     {
         var handler = new FakeHttpMessageHandler(
             $$"""{"jsonrpc":"2.0","result":{{resultJson}},"id":1}""");
-        var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
-        return (new SolanaRpcClient(http), handler);
+        var http = new HttpClient(handler) { BaseAddress = new("http://localhost") };
+        return (new(http), handler);
     }
 
     private static RpcContextOptions ContextOptions() => new()
@@ -130,7 +130,7 @@ public static class SolanaRpcClientConfigParityTests
             var options = new GetAccountInfoOptions
             {
                 Commitment = Commitment.Processed,
-                DataSlice = new DataSlice(3, 5),
+                DataSlice = new(3, 5),
                 MinContextSlot = 50
             };
 
@@ -138,7 +138,7 @@ public static class SolanaRpcClientConfigParityTests
             var result = await client.GetAccountInfoWithContextAsync(PublicKey.Parse(Address), options);
 
             // Assert
-            result.Context!.Slot.Should().Be(55);
+            result.Context.Slot.Should().Be(55);
             result.Context.ApiVersion.Should().Be("3.0");
             result.Value.Should().BeNull();
             handler.CapturedRequestBody.Should().Be(
@@ -152,7 +152,7 @@ public static class SolanaRpcClientConfigParityTests
             var (client, handler) = Make("""{"context":{"slot":55},"value":null}""");
             var options = new GetAccountInfoOptions
             {
-                DataSlice = new DataSlice(2147483648UL, ulong.MaxValue)
+                DataSlice = new(2147483648UL, ulong.MaxValue)
             };
 
             // Act
@@ -176,7 +176,7 @@ public static class SolanaRpcClientConfigParityTests
             // Act
             var result = await client.GetAccountInfoWithOptionsAsync(
                 PublicKey.Parse(Address),
-                new RpcAccountInfoOptions { Encoding = RpcAccountEncoding.Binary, MinContextSlot = 50 });
+                new() { Encoding = RpcAccountEncoding.Binary, MinContextSlot = 50 });
 
             // Assert
             result.Should().BeNull();
@@ -196,7 +196,7 @@ public static class SolanaRpcClientConfigParityTests
             var options = new GetAccountInfoOptions
             {
                 Commitment = Commitment.Confirmed,
-                DataSlice = new DataSlice(1, 2),
+                DataSlice = new(1, 2),
                 MinContextSlot = 70
             };
 
@@ -205,7 +205,7 @@ public static class SolanaRpcClientConfigParityTests
                 [PublicKey.Parse(Address)], options);
 
             // Assert
-            result.Context!.Slot.Should().Be(77);
+            result.Context.Slot.Should().Be(77);
             result.Value.Should().ContainSingle().Which.Should().BeNull();
             handler.CapturedRequestBody.Should().Be(
                 """{"jsonrpc":"2.0","id":1,"method":"getMultipleAccounts","params":[["11111111111111111111111111111111"],{"encoding":"base64","commitment":"confirmed","dataSlice":{"offset":1,"length":2},"minContextSlot":70}]}""");
@@ -224,7 +224,7 @@ public static class SolanaRpcClientConfigParityTests
             // Act
             var result = await client.GetMultipleAccountsWithOptionsAsync(
                 [PublicKey.Parse(Address)],
-                new RpcAccountInfoOptions { Encoding = RpcAccountEncoding.Base58, MinContextSlot = 70 });
+                new() { Encoding = RpcAccountEncoding.Base58, MinContextSlot = 70 });
 
             // Assert
             result.Should().ContainSingle().Which.Should().BeNull();
@@ -245,7 +245,7 @@ public static class SolanaRpcClientConfigParityTests
             {
                 Commitment = Commitment.Finalized,
                 Filters = [AccountFilter.DataSize(165)],
-                DataSlice = new DataSlice(0, 8),
+                DataSlice = new(0, 8),
                 MinContextSlot = 80,
                 SortResults = false
             };
@@ -254,7 +254,7 @@ public static class SolanaRpcClientConfigParityTests
             var result = await client.GetProgramAccountsWithContextAsync(PublicKey.Parse(Program), options);
 
             // Assert
-            result.Context!.Slot.Should().Be(88);
+            result.Context.Slot.Should().Be(88);
             result.Value.Should().BeEmpty();
             handler.CapturedRequestBody.Should().Be(
                 """{"jsonrpc":"2.0","id":1,"method":"getProgramAccounts","params":["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",{"encoding":"base64","commitment":"finalized","minContextSlot":80,"dataSlice":{"offset":0,"length":8},"filters":[{"dataSize":165}],"withContext":true,"sortResults":false}]}""");
@@ -272,7 +272,7 @@ public static class SolanaRpcClientConfigParityTests
 
             // Act
             var result = await client.GetProgramAccountsAsync(
-                PublicKey.Parse(Program), new GetProgramAccountsOptions { WithContext = true });
+                PublicKey.Parse(Program), new() { WithContext = true });
 
             // Assert
             result.Should().BeEmpty();
@@ -391,7 +391,7 @@ public static class SolanaRpcClientConfigParityTests
             var result = await client.GetTokenAccountsByOwnerWithFilterAsync(
                 PublicKey.Parse(Address),
                 TokenAccountsFilter.ByProgramId(PublicKey.Parse(Program)),
-                new GetAccountInfoOptions { DataSlice = new DataSlice(0, 0), MinContextSlot = 8 });
+                new() { DataSlice = new(0, 0), MinContextSlot = 8 });
 
             // Assert
             result.Should().BeEmpty();
@@ -545,7 +545,7 @@ public static class SolanaRpcClientConfigParityTests
             var (client, handler) = Make("""{"context":{"slot":1},"value":[]}""");
 
             // Act
-            var result = await client.GetLargestAccountsWithOptionsAsync(new GetLargestAccountsOptions
+            var result = await client.GetLargestAccountsWithOptionsAsync(new()
             {
                 Commitment = Commitment.Processed,
                 Filter = LargestAccountsFilter.NonCirculating,
@@ -565,7 +565,7 @@ public static class SolanaRpcClientConfigParityTests
             var (client, _) = Make("""{"context":{"slot":1},"value":[null]}""");
 
             // Act
-            var act = async () => await client.GetLargestAccountsWithOptionsAsync(new GetLargestAccountsOptions());
+            var act = async () => await client.GetLargestAccountsWithOptionsAsync(new());
 
             // Assert
             await act.Should().ThrowAsync<System.Text.Json.JsonException>();
@@ -583,7 +583,7 @@ public static class SolanaRpcClientConfigParityTests
                 """{"context":{"slot":1},"value":{"total":100,"circulating":90,"nonCirculating":10,"nonCirculatingAccounts":["11111111111111111111111111111111"]}}""");
 
             // Act
-            var result = await client.GetSupplyWithOptionsAsync(new GetSupplyOptions
+            var result = await client.GetSupplyWithOptionsAsync(new()
             {
                 Commitment = Commitment.Finalized,
                 ExcludeNonCirculatingAccountsList = false
@@ -696,7 +696,7 @@ public static class SolanaRpcClientConfigParityTests
                 PublicKey.Parse(Address), ContextOptions());
 
             // Assert
-            result.Context!.Slot.Should().Be(43);
+            result.Context.Slot.Should().Be(43);
             result.Value.Should().BeNull();
             handler.CapturedRequestBody.Should().Be(
                 """{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["11111111111111111111111111111111",{"encoding":"jsonParsed","commitment":"finalized","minContextSlot":42}]}""");

@@ -19,8 +19,8 @@ public static class SolanaRpcClientLookupTableTests
     private static (SolanaRpcClient Client, FakeHttpMessageHandler Handler) Make(string responseJson)
     {
         var handler = new FakeHttpMessageHandler(responseJson);
-        var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
-        return (new SolanaRpcClient(http), handler);
+        var http = new HttpClient(handler) { BaseAddress = new("http://localhost") };
+        return (new(http), handler);
     }
 
     private static string AccountEnvelope(
@@ -60,7 +60,7 @@ public static class SolanaRpcClientLookupTableTests
 
             // Assert
             table.Should().NotBeNull();
-            table!.IsActive.Should().BeTrue();
+            table.IsActive.Should().BeTrue();
             table.IsUsable.Should().BeTrue();
             table.Lifecycle.Should().Be(AddressLookupTableLifecycle.Activated);
             table.DeactivationSlot.Should().Be(ulong.MaxValue);
@@ -91,7 +91,7 @@ public static class SolanaRpcClientLookupTableTests
 
             // Assert
             table.Should().NotBeNull();
-            table!.LastExtendedSlotStartIndex.Should().Be(1);
+            table.LastExtendedSlotStartIndex.Should().Be(1);
             table.ContextSlot.Should().Be(123);
             table.StoredAddresses.Should().HaveCount(2);
             table.Addresses.Should().ContainSingle()
@@ -112,7 +112,7 @@ public static class SolanaRpcClientLookupTableTests
 
             // Assert
             table.Should().NotBeNull();
-            table!.IsActive.Should().BeFalse("deactivation has begun");
+            table.IsActive.Should().BeFalse("deactivation has begun");
             table.Lifecycle.Should().Be(AddressLookupTableLifecycle.Deactivating);
             table.IsUsable.Should().BeTrue("Agave permits lookups during the SlotHashes cooldown");
             table.DeactivationSlot.Should().Be(deactivationSlot);
@@ -134,7 +134,7 @@ public static class SolanaRpcClientLookupTableTests
 
             // Assert
             table.Should().NotBeNull();
-            table!.IsActive.Should().BeFalse();
+            table.IsActive.Should().BeFalse();
             table.Lifecycle.Should().Be(AddressLookupTableLifecycle.Deactivating);
             table.IsUsable.Should().BeTrue();
             table.DeactivationSlot.Should().Be(100);
@@ -154,7 +154,7 @@ public static class SolanaRpcClientLookupTableTests
 
             // Assert
             table.Should().NotBeNull();
-            table!.IsActive.Should().BeFalse();
+            table.IsActive.Should().BeFalse();
             table.Lifecycle.Should().Be(AddressLookupTableLifecycle.DeactivationStatusUnknown);
             table.IsUsable.Should().BeNull();
             table.DeactivationSlot.Should().Be(100);

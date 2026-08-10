@@ -41,7 +41,7 @@ finally
 }
 
 var recipient = PublicKey.Parse(systemProgram);
-using var blsKeypair = BlsKeypair.Derive(Enumerable.Range(0, 32).Select(value => (byte)value).ToArray());
+using var blsKeypair = BlsKeypair.Derive(Enumerable.Range(0, 32).Select(static value => (byte)value).ToArray());
 var blsSignature = blsKeypair.Sign(message);
 var blsProof = blsKeypair.CreateVoteProofOfPossession(recipient);
 Check(blsKeypair.Verify(blsSignature, message), "BLS sign/verify through PoP-verified keypair boundary");
@@ -49,7 +49,7 @@ Check(
     blsKeypair.PublicKey.VerifyVoteProofOfPossession(blsProof, recipient),
     "BLS vote proof-of-possession binding");
 Check(BlsPublicKey.Parse(blsKeypair.PublicKey.ToString()).Equals(blsKeypair.PublicKey), "BLS base64 round-trip");
-using var secondBlsKeypair = BlsKeypair.Derive(Enumerable.Range(1, 32).Select(value => (byte)value).ToArray());
+using var secondBlsKeypair = BlsKeypair.Derive(Enumerable.Range(1, 32).Select(static value => (byte)value).ToArray());
 var firstVerifiedBlsKey = blsKeypair.PublicKey.VerifyAndWrapProofOfPossession(
     blsKeypair.CreateProofOfPossession("aot-aggregate"u8),
     "aot-aggregate"u8);
@@ -90,7 +90,7 @@ Check(transaction.VerifyAndHashMessage() == transaction.GetMessageHash(), "trans
 var v1Message = new TransactionBuilder()
     .SetFeePayer(keypair.PublicKey)
     .SetRecentBlockhash(blockhash)
-    .SetV1Config(new TransactionConfigV1
+    .SetV1Config(new()
     {
         ComputeUnitLimit = 200_000,
         LoadedAccountsDataSizeLimit = 64 * 1024
@@ -110,7 +110,8 @@ var instructionSysvar = InstructionsSysvar.Serialize([transferInstruction]);
 var introspected = InstructionsSysvar.ReadInstruction(instructionSysvar, 0);
 Check(introspected.ProgramId == SystemProgram.ProgramId, "Instructions sysvar round-trip");
 
-using var http = new HttpClient(new CannedRpcHandler()) { BaseAddress = new Uri("http://localhost") };
+using var http = new HttpClient(new CannedRpcHandler());
+http.BaseAddress = new("http://localhost");
 var client = new SolanaRpcClient(http);
 
 var latest = await client.GetLatestBlockhashAsync();
@@ -121,7 +122,7 @@ Check(account is { Lamports: 42, Data: [1, 2, 3] }, "getAccountInfo");
 
 var programAccounts = await client.GetProgramAccountsAsync(
     recipient,
-    new GetProgramAccountsOptions
+    new()
     {
         Filters =
         [
@@ -133,7 +134,7 @@ Check(programAccounts.Count == 0, "getProgramAccounts full filter union");
 
 var simulation = await client.SimulateTransactionAsync(
     wire,
-    new SimulateTransactionOptions { Accounts = [recipient], InnerInstructions = true });
+    new() { Accounts = [recipient], InnerInstructions = true });
 Check(
     simulation is
     {
@@ -170,10 +171,13 @@ Console.WriteLine("AOT smoke passed.");
 
 static void Check(bool condition, string what)
 {
-    if (!condition)
-        throw new InvalidOperationException($"AOT smoke failed: {what}.");
+    if (condition)
+    {
+        Console.WriteLine($"ok: {what}");
+        return;
+    }
 
-    Console.WriteLine($"ok: {what}");
+    throw new InvalidOperationException($"AOT smoke failed: {what}.");
 }
 
 /// <summary>Answers each JSON-RPC method with a canned response, keyed on the request body.</summary>
@@ -219,7 +223,7 @@ internal sealed class CannedRpcHandler : HttpMessageHandler
             _ => throw new InvalidOperationException($"Unexpected RPC request: {body}")
         };
 
-        return new HttpResponseMessage(HttpStatusCode.OK)
+        return new(HttpStatusCode.OK)
         {
             Content = new StringContent(json, Encoding.UTF8, "application/json")
         };

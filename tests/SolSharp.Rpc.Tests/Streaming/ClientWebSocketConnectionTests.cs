@@ -10,7 +10,7 @@ namespace SolSharp.Rpc.Tests.Streaming;
 public static class ClientWebSocketConnectionTests
 {
     [TestFixture]
-    public sealed class ReceiveAsync
+    public sealed class Receive
     {
         [Test]
         public async Task FragmentedTextWithinLimit_ReturnsCompleteMessage()
@@ -37,7 +37,8 @@ public static class ClientWebSocketConnectionTests
             await using var connection = new ClientWebSocketConnection(socket, 4, TimeSpan.FromMilliseconds(20));
 
             // Act
-            var act = async () => await connection.ReceiveAsync(CancellationToken.None);
+            var act = connection.Awaiting(static subject =>
+                subject.ReceiveAsync(CancellationToken.None));
 
             // Assert
             await act.Should().ThrowAsync<InvalidDataException>()
@@ -54,7 +55,8 @@ public static class ClientWebSocketConnectionTests
             await using var connection = new ClientWebSocketConnection(socket, 1024, TimeSpan.FromMilliseconds(20));
 
             // Act
-            var act = async () => await connection.ReceiveAsync(CancellationToken.None);
+            var act = connection.Awaiting(static subject =>
+                subject.ReceiveAsync(CancellationToken.None));
 
             // Assert
             await act.Should().ThrowAsync<InvalidDataException>()
@@ -71,7 +73,7 @@ public static class ClientWebSocketConnectionTests
                 PeerCloseStatus = WebSocketCloseStatus.EndpointUnavailable,
                 PeerCloseDescription = "maintenance"
             };
-            socket.Push((byte[])[], WebSocketMessageType.Close, endOfMessage: true);
+            socket.Push([], WebSocketMessageType.Close, endOfMessage: true);
             await using var connection = new ClientWebSocketConnection(socket, 1024, TimeSpan.FromMilliseconds(20));
 
             // Act
@@ -136,7 +138,7 @@ public static class ClientWebSocketConnectionTests
             dispose.IsCompleted.Should().BeFalse();
             socket.CloseAsyncCalled.Should().BeFalse();
 
-            socket.Push((byte[])[], WebSocketMessageType.Close, endOfMessage: true);
+            socket.Push([], WebSocketMessageType.Close, endOfMessage: true);
             (await receive).Should().BeNull();
             await dispose.WaitAsync(TimeSpan.FromSeconds(1));
 
@@ -186,8 +188,6 @@ public static class ClientWebSocketConnectionTests
 
         public string? SentCloseDescription { get; private set; }
 
-        public bool BlockCloseOutput { get; init; }
-
         public bool BlockCloseAsync { get; init; }
 
         public bool CloseAsyncCalled { get; private set; }
@@ -222,10 +222,10 @@ public static class ClientWebSocketConnectionTests
                     ? WebSocketState.Closed
                     : WebSocketState.CloseReceived;
 
-            return new ValueWebSocketReceiveResult(frame.Data.Length, frame.Type, frame.EndOfMessage);
+            return new(frame.Data.Length, frame.Type, frame.EndOfMessage);
         }
 
-        public async Task CloseOutputAsync(
+        public Task CloseOutputAsync(
             WebSocketCloseStatus closeStatus,
             string? statusDescription,
             CancellationToken cancellationToken)
@@ -233,11 +233,10 @@ public static class ClientWebSocketConnectionTests
             SentCloseStatus = closeStatus;
             SentCloseDescription = statusDescription;
             CloseOutputStarted.TrySetResult();
-            if (BlockCloseOutput)
-                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             State = State == WebSocketState.CloseReceived
                 ? WebSocketState.Closed
                 : WebSocketState.CloseSent;
+            return Task.CompletedTask;
         }
 
         public async Task CloseAsync(

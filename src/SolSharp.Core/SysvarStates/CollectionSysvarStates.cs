@@ -45,9 +45,9 @@ public sealed record SlotHashesSysvarState
         var count = reader.ReadBoundedCount(MaximumEntries, "Slot hashes");
         var entries = new SlotHashEntry[count];
         for (var i = 0; i < entries.Length; i++)
-            entries[i] = new SlotHashEntry(reader.ReadUInt64(), reader.ReadHash());
+            entries[i] = new(reader.ReadUInt64(), reader.ReadHash());
         reader.EnsureEnd();
-        return new SlotHashesSysvarState(entries);
+        return new(entries);
     }
 }
 
@@ -81,10 +81,10 @@ public sealed record StakeHistorySysvarState
         {
             var epoch = reader.ReadUInt64();
             var entry = new StakeHistoryEntry(reader.ReadUInt64(), reader.ReadUInt64(), reader.ReadUInt64());
-            entries[i] = new StakeHistoryEpoch(epoch, entry);
+            entries[i] = new(epoch, entry);
         }
 
         reader.EnsureEnd();
-        return new StakeHistorySysvarState(entries);
+        return new(entries);
     }
 }

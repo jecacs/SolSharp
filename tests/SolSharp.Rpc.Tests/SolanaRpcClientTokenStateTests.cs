@@ -23,14 +23,14 @@ public static class SolanaRpcClientTokenStateTests
     {
         var bytes = new byte[PublicKey.Length];
         Array.Fill(bytes, value);
-        return new PublicKey(bytes);
+        return new(bytes);
     }
 
     private static (SolanaRpcClient Client, FakeHttpMessageHandler Handler) Make(string responseJson)
     {
         var handler = new FakeHttpMessageHandler(responseJson);
-        var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
-        return (new SolanaRpcClient(http), handler);
+        var http = new HttpClient(handler) { BaseAddress = new("http://localhost") };
+        return (new(http), handler);
     }
 
     private static string AccountEnvelope(string dataBase64, string owner = SolanaProgramIds.TokenProgram) =>
@@ -57,7 +57,7 @@ public static class SolanaRpcClientTokenStateTests
 
             // Assert
             mint.Should().NotBeNull();
-            mint!.MintAuthority.Should().Be(Pk(1));
+            mint.MintAuthority.Should().Be(Pk(1));
             mint.Supply.Should().Be(1_000_000ul);
             mint.Decimals.Should().Be(6);
             mint.IsInitialized.Should().BeTrue();
@@ -105,7 +105,7 @@ public static class SolanaRpcClientTokenStateTests
 
             // Assert
             account.Should().NotBeNull();
-            account!.Mint.Should().Be(Pk(2));
+            account.Mint.Should().Be(Pk(2));
             account.Owner.Should().Be(Pk(3));
             account.Amount.Should().Be(5_000_000ul);
             account.Delegate.Should().Be(Pk(4));
@@ -154,7 +154,7 @@ public static class SolanaRpcClientTokenStateTests
 
             // Assert
             mint.Should().NotBeNull();
-            mint!.Decimals.Should().Be(6);
+            mint.Decimals.Should().Be(6);
             handler.CapturedRequestBody.Should().Contain("\"getAccountInfo\"");
         }
 
@@ -177,7 +177,7 @@ public static class SolanaRpcClientTokenStateTests
             var mint = await client.GetMintAsync(Pk(1));
 
             mint.Should().NotBeNull();
-            mint!.Decimals.Should().Be(6);
+            mint.Decimals.Should().Be(6);
         }
     }
 
@@ -195,7 +195,7 @@ public static class SolanaRpcClientTokenStateTests
 
             // Assert
             account.Should().NotBeNull();
-            account!.Amount.Should().Be(5_000_000ul);
+            account.Amount.Should().Be(5_000_000ul);
         }
 
         [Test]
@@ -218,7 +218,7 @@ public static class SolanaRpcClientTokenStateTests
             var account = await client.GetTokenAccountAsync(Pk(2));
 
             account.Should().NotBeNull();
-            account!.Amount.Should().Be(5_000_000ul);
+            account.Amount.Should().Be(5_000_000ul);
         }
     }
 }

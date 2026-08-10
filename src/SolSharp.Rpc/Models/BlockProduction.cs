@@ -60,7 +60,7 @@ public sealed class BlockProductionCountsJsonConverter : JsonConverter<BlockProd
             throw new JsonException("A block-production count must be exactly [leaderSlots, blocksProduced] as u64 values.");
         }
 
-        return new BlockProductionCounts(leaderSlots, blocksProduced);
+        return new(leaderSlots, blocksProduced);
     }
 
     /// <inheritdoc/>

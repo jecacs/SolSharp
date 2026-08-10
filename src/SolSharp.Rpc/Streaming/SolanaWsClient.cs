@@ -26,7 +26,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
     private static readonly TimeSpan MaximumTimerDuration = TimeSpan.FromMilliseconds(uint.MaxValue - 1);
     private readonly Func<IWebSocketConnection> _connectionFactory;
     private readonly SolanaWsClientOptions _options;
-    private readonly System.Threading.Lock _stateGate = new();
+    private readonly Lock _stateGate = new();
     private readonly Dictionary<int, PendingSubscribe> _pending = [];
     private readonly Dictionary<long, Subscription> _active = [];
     private readonly Dictionary<(long Generation, ulong ServerId), Subscription> _byServerId = [];
@@ -50,7 +50,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
     /// <summary>Creates a client over a real <see cref="System.Net.WebSockets.ClientWebSocket"/> with default options.</summary>
     /// <param name="loggerFactory">Optional factory for connection/reconnection diagnostics; no logging when null.</param>
-    public SolanaWsClient(ILoggerFactory? loggerFactory = null) : this(new SolanaWsClientOptions(), loggerFactory)
+    public SolanaWsClient(ILoggerFactory? loggerFactory = null) : this(new(), loggerFactory)
     {
     }
 
@@ -93,7 +93,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
     }
 
     internal SolanaWsClient(IWebSocketConnection connection)
-        : this(() => connection, new SolanaWsClientOptions { AutoReconnect = false })
+        : this(() => connection, new() { AutoReconnect = false })
     {
     }
 
@@ -151,7 +151,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         get
         {
             lock (_stateGate)
-                return _pending.Values.Count(pending => pending.Subscription is not null);
+                return _pending.Values.Count(static pending => pending.Subscription is not null);
         }
     }
 
@@ -160,7 +160,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         get
         {
             lock (_stateGate)
-                return _pending.Values.Count(pending => pending.State == PendingState.Abandoned);
+                return _pending.Values.Count(static pending => pending.State == PendingState.Abandoned);
         }
     }
 
@@ -190,7 +190,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
             _phase = ClientPhase.Connecting;
             _endpoint = endpoint;
-            completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
             _connectTask = completion.Task;
         }
 
@@ -345,7 +345,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
             account,
             new AccountInfoConfig
             {
-                Encoding = options.Encoding is { } encoding ? RpcWireNames.AccountEncoding(encoding) : null,
+                Encoding = options.Encoding is { } encoding ? encoding.WireName : null,
                 Commitment = options.Commitment
             }
         ];
@@ -403,7 +403,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
             {
                 Encoding = "base64",
                 Commitment = commitment,
-                Filters = filters?.Select(filter => filter.Payload).ToArray()
+                Filters = filters?.Select(static filter => filter.Payload).ToArray()
             }
         ];
         await RegisterAsync("programSubscribe", parameters, "programUnsubscribe", sink, cancellationToken);
@@ -433,9 +433,9 @@ public sealed class SolanaWsClient : IAsyncDisposable
             program,
             new ProgramAccountsConfig
             {
-                Encoding = options.Encoding is { } encoding ? RpcWireNames.AccountEncoding(encoding) : null,
+                Encoding = options.Encoding is { } encoding ? encoding.WireName : null,
                 Commitment = options.Commitment,
-                Filters = options.Filters?.Select(filter => filter.Payload).ToArray()
+                Filters = options.Filters?.Select(static filter => filter.Payload).ToArray()
             }
         ];
         await RegisterAsync("programSubscribe", parameters, "programUnsubscribe", sink, cancellationToken);
@@ -464,7 +464,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
             {
                 Encoding = "jsonParsed",
                 Commitment = commitment,
-                Filters = filters?.Select(filter => filter.Payload).ToArray()
+                Filters = filters?.Select(static filter => filter.Payload).ToArray()
             }
         ];
         await RegisterAsync("programSubscribe", parameters, "programUnsubscribe", sink, cancellationToken);
@@ -578,10 +578,10 @@ public sealed class SolanaWsClient : IAsyncDisposable
             {
                 Commitment = options.Commitment,
                 Encoding = options.Encoding is { } encoding
-                    ? RpcWireNames.TransactionEncoding(encoding)
+                    ? encoding.WireName
                     : null,
                 TransactionDetails = options.TransactionDetails is { } details
-                    ? RpcWireNames.TransactionDetails(details)
+                    ? details.WireName
                     : null,
                 ShowRewards = options.ShowRewards,
                 MaxSupportedTransactionVersion = options.MaxSupportedTransactionVersion
@@ -785,9 +785,9 @@ public sealed class SolanaWsClient : IAsyncDisposable
         lock (_stateGate)
         {
             if (_disposeTask is not null)
-                return new ValueTask(_disposeTask);
+                return new(_disposeTask);
 
-            completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
             _disposeTask = completion.Task;
             _phase = ClientPhase.Disposing;
             runLoop = _runLoop;
@@ -803,7 +803,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
         _ = DisposeCoreAsync(
             completion, connection, connecting, connectTask, runLoop, sendOperationsDrained);
-        return new ValueTask(completion.Task);
+        return new(completion.Task);
     }
 
     private static async Task CancelAfterAsync(CancellationTokenSource source, TimeSpan timeout)
@@ -1017,7 +1017,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
                 throw new InvalidOperationException("The client is not connected.");
 
             var localId = ++_nextLocalId;
-            subscription = new Subscription(
+            subscription = new(
                 localId,
                 subscribeMethod,
                 subscribeParams,
@@ -1070,7 +1070,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
             }
 
             var requestId = ++_nextRequestId;
-            pending = new PendingSubscribe(requestId, epoch, subscription, initial);
+            pending = new(requestId, epoch, subscription, initial);
             subscription.Attempt = pending;
             _pending.Add(requestId, pending);
         }
@@ -1079,7 +1079,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         {
             var sendTask = SendAsync(
                 epoch,
-                new RpcRequest
+                new()
                 {
                     Id = pending.RequestId,
                     Method = subscription.SubscribeMethod,
@@ -1251,7 +1251,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         }
 
         var reservationHeld = unsubscribe && binding is not null && TryReserveSendLocked(binding.Value.Epoch);
-        return new TerminalWork(subscription, exception, binding, registration, reservationHeld);
+        return new(subscription, exception, binding, registration, reservationHeld);
     }
 
     private async Task ExecuteTerminalWorkAsync(TerminalWork work)
@@ -1281,7 +1281,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
             await SendAsync(
                 binding.Epoch,
-                new RpcRequest { Id = requestId, Method = method, Params = [binding.ServerId] },
+                new() { Id = requestId, Method = method, Params = [binding.ServerId] },
                 _lifetimeCts.Token,
                 reservationHeld: true);
         }
@@ -1366,7 +1366,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
             return false;
 
         if (_sendOperationCount++ == 0)
-            _sendOperationsDrained = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _sendOperationsDrained = new(TaskCreationOptions.RunContinuationsAsynchronously);
         return true;
     }
 
@@ -1629,7 +1629,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         {
             established =
             [
-                .. _active.Values.Where(subscription =>
+                .. _active.Values.Where(static subscription =>
                     subscription.Phase == SubscriptionPhase.Active && subscription.Binding is null)
             ];
         }
@@ -2043,7 +2043,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
             Generation = generation;
             Connection = connection;
             _disposeConnection = disposeConnection;
-            _dispose = new Lazy<Task>(DisposeCoreAsync, LazyThreadSafetyMode.ExecutionAndPublication);
+            _dispose = new(DisposeCoreAsync, LazyThreadSafetyMode.ExecutionAndPublication);
         }
 
         public long Generation { get; }

@@ -7,7 +7,7 @@ namespace SolSharp.Programs.Tests;
 
 public static class Token2022PermissionedBurnTests
 {
-    private static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
+    private static PublicKey Key(byte value) => new([.. Enumerable.Repeat(value, PublicKey.Length)]);
 
     private static byte[] Pod(byte value, int length) => [.. Enumerable.Repeat(value, length)];
 
@@ -17,7 +17,7 @@ public static class Token2022PermissionedBurnTests
         => string.Concat(Enumerable.Repeat(value.ToString("x2"), length));
 
     private static (PublicKey, bool, bool)[] Metas(Instruction instruction)
-        => [.. instruction.Accounts.Select(account => (account.PublicKey, account.IsSigner, account.IsWritable))];
+        => [.. instruction.Accounts.Select(static account => (account.PublicKey, account.IsSigner, account.IsWritable))];
 
     private static Instruction Build(
         ConfidentialProofLocation equalityProofLocation,
@@ -67,7 +67,7 @@ public static class Token2022PermissionedBurnTests
                 (Key(3), true, false),
                 (Key(4), true, false));
             decoded.Should().NotBeNull();
-            decoded!.Name.Should().Be("PermissionedBurnExtension");
+            decoded.Name.Should().Be("PermissionedBurnExtension");
             decoded.ExtensionInstructionDiscriminator.Should().Be(3);
         }
 
@@ -82,7 +82,7 @@ public static class Token2022PermissionedBurnTests
 
             // Assert
             instruction.Data.TakeLast(3).Should().Equal(0, 0xfe, 0);
-            instruction.Accounts.Count(account => account.PublicKey == PublicKey.Parse(Sysvars.Instructions)).Should().Be(1);
+            instruction.Accounts.Count(static account => account.PublicKey == PublicKey.Parse(Sysvars.Instructions)).Should().Be(1);
             Metas(instruction).Should().Equal(
                 (Key(1), false, true),
                 (Key(2), false, true),
@@ -125,7 +125,7 @@ public static class Token2022PermissionedBurnTests
 
             // Assert
             instruction.Data.TakeLast(3).Should().Equal(0x80, 0x01, 0x7f);
-            instruction.Accounts.Count(account => account.PublicKey == PublicKey.Parse(Sysvars.Instructions)).Should().Be(1);
+            instruction.Accounts.Count(static account => account.PublicKey == PublicKey.Parse(Sysvars.Instructions)).Should().Be(1);
             Metas(instruction).Should().Equal(
                 (Key(1), false, true),
                 (Key(2), false, true),
@@ -138,7 +138,7 @@ public static class Token2022PermissionedBurnTests
         public void MultisigAcceptsElevenMembersAndPreservesBothAuthorities()
         {
             // Arrange
-            var signers = Enumerable.Range(10, 11).Select(value => Key(checked((byte)value))).ToArray();
+            var signers = Enumerable.Range(10, 11).Select(static value => Key(checked((byte)value))).ToArray();
 
             // Act
             var instruction = Build(
@@ -157,7 +157,7 @@ public static class Token2022PermissionedBurnTests
         public void MultisigRejectsMoreThanElevenMembers()
         {
             // Arrange
-            var signers = Enumerable.Range(10, 12).Select(value => Key(checked((byte)value))).ToArray();
+            var signers = Enumerable.Range(10, 12).Select(static value => Key(checked((byte)value))).ToArray();
 
             // Act
             Action act = () => _ = Build(

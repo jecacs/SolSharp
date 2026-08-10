@@ -9,8 +9,7 @@ public static class LoaderV4Program
     public const ulong DeploymentCooldownSlots = 1;
 
     /// <summary>The Loader V4 program address.</summary>
-    public static readonly PublicKey ProgramId =
-        PublicKey.Parse("LoaderV411111111111111111111111111111111111");
+    public static readonly PublicKey ProgramId = PublicKey.Parse("LoaderV411111111111111111111111111111111111");
 
     private const uint WriteDiscriminator = 0;
     private const uint CopyDiscriminator = 1;

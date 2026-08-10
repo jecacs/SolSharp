@@ -22,10 +22,10 @@ internal sealed class ParsedInstructionInfoJsonConverter : JsonConverter<ParsedI
             !root.TryGetProperty("info", out var info) ||
             root.EnumerateObject().Count() != 2)
         {
-            return new ParsedInstructionInfo { Info = root.Clone() };
+            return new() { Info = root.Clone() };
         }
 
-        return new ParsedInstructionInfo
+        return new()
         {
             Type = type.GetString()!,
             Info = info.Clone()

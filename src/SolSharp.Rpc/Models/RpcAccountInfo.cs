@@ -103,7 +103,7 @@ public sealed record RpcProgramAccount
     [JsonPropertyName("account")]
     public required RpcAccountInfo Account
     {
-        get => field!;
+        get;
         init => field = value ?? throw new JsonException("A keyed RPC account must carry a non-null account.");
     }
 }

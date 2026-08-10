@@ -74,7 +74,7 @@ public sealed class ExtraAccountSeed
     {
         if (bytes.Length > 30)
             throw new ArgumentException("A literal extra-account seed may contain at most 30 bytes.", nameof(bytes));
-        return new ExtraAccountSeed(ExtraAccountSeedKind.Literal, bytes.ToArray());
+        return new(ExtraAccountSeedKind.Literal, [.. bytes]);
     }
 
     /// <summary>Creates a seed copied from instruction data.</summary>
@@ -317,7 +317,7 @@ public sealed class ExtraAccountMeta
     {
         if (data.Length != Length)
             return null;
-        return new ExtraAccountMeta(data[0], data.Slice(1, AddressConfigurationLength).ToArray(), data[33], data[34]);
+        return new(data[0], [.. data.Slice(1, AddressConfigurationLength)], data[33], data[34]);
     }
 
     /// <summary>Encodes this entry in the pinned SPL 35-byte POD layout.</summary>
@@ -339,7 +339,7 @@ public sealed class ExtraAccountMeta
     {
         if (Discriminator == 0)
         {
-            publicKey = new PublicKey(_addressConfiguration);
+            publicKey = new(_addressConfiguration);
             return true;
         }
 

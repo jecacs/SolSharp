@@ -10,7 +10,7 @@ public static class AddressLookupTableProgramTests
     {
         var bytes = new byte[PublicKey.Length];
         Array.Fill(bytes, value);
-        return new PublicKey(bytes);
+        return new(bytes);
     }
 
     private static string DataHex(Instruction instruction) => Convert.ToHexString(instruction.Data).ToLowerInvariant();

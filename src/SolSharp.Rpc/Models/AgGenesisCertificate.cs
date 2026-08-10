@@ -45,7 +45,7 @@ public sealed record AgGenesisBlock
             if (value.Count != 32)
                 throw new JsonException("An Alpenglow block identifier must contain exactly 32 bytes.");
 
-            field = Array.AsReadOnly(value.ToArray());
+            field = Array.AsReadOnly([.. value]);
         }
     }
 }
@@ -65,7 +65,7 @@ public sealed record AgGenesisCertificateSignature
             if (value.Count != 192)
                 throw new JsonException("An Alpenglow aggregate signature must contain exactly 192 bytes.");
 
-            field = Array.AsReadOnly(value.ToArray());
+            field = Array.AsReadOnly([.. value]);
         }
     }
 
@@ -83,7 +83,7 @@ public sealed record AgGenesisCertificateSignature
                 throw new JsonException("An Alpenglow validator bitmap cannot be null.");
             if (value.Count > 512)
                 throw new JsonException("An Alpenglow validator bitmap cannot exceed 512 bytes.");
-            field = Array.AsReadOnly(value.ToArray());
+            field = Array.AsReadOnly([.. value]);
         }
     }
 }

@@ -19,7 +19,7 @@ internal static class MessageWire
         var keys = new PublicKey[count];
         for (var i = 0; i < count; i++)
         {
-            keys[i] = new PublicKey(data.Slice(offset, PublicKey.Length));
+            keys[i] = new(data.Slice(offset, PublicKey.Length));
             offset += PublicKey.Length;
         }
 
@@ -50,7 +50,7 @@ internal static class MessageWire
             var instructionData = data.Slice(offset, dataLength).ToArray();
             offset += dataLength;
 
-            instructions[i] = new CompiledInstruction
+            instructions[i] = new()
             {
                 ProgramIdIndex = programIdIndex,
                 AccountIndexes = accountIndexes,

@@ -15,7 +15,7 @@ internal sealed class ClientWebSocketConnection : IWebSocketConnection
     private readonly IClientWebSocket _socket;
     private readonly int _maxMessageSizeBytes;
     private readonly TimeSpan _closeTimeout;
-    private readonly System.Threading.Lock _lifecycleGate = new();
+    private readonly Lock _lifecycleGate = new();
     private readonly TaskCompletionSource _peerCloseReceived =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -82,16 +82,16 @@ internal sealed class ClientWebSocketConnection : IWebSocketConnection
         lock (_lifecycleGate)
         {
             if (_disposeTask is not null)
-                return new ValueTask(_disposeTask);
+                return new(_disposeTask);
 
-            completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
             _disposeTask = completion.Task;
             receiveLoopOwnsPeerRead = _receiveActive;
             _closeOwnsReceive = !receiveLoopOwnsPeerRead;
         }
 
         _ = DisposeCoreAsync(completion, receiveLoopOwnsPeerRead);
-        return new ValueTask(completion.Task);
+        return new(completion.Task);
     }
 
     private async ValueTask<string?> ReceiveCoreAsync(CancellationToken cancellationToken)

@@ -75,7 +75,7 @@ public class TransactionBenchmarks
 public class Base58Benchmarks
 {
     private const string KeyBase58 = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
-    private static readonly byte[] KeyBytes = [.. Enumerable.Range(0, 32).Select(i => (byte)i)];
+    private static readonly byte[] KeyBytes = [.. Enumerable.Range(0, 32).Select(static i => (byte)i)];
 
     [Benchmark]
     public string Encode() => Base58.Encode(KeyBytes);

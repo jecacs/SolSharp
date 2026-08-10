@@ -16,7 +16,7 @@ public sealed record ProgramAccount
     [JsonPropertyName("account")]
     public required AccountInfo Account
     {
-        get => field!;
+        get;
         init => field = value ?? throw new JsonException("A keyed account must carry a non-null account.");
     }
 }

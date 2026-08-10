@@ -135,7 +135,7 @@ public static class InstructionsSysvar
             var flags = data[cursor++];
             var key = new PublicKey(data.Slice(cursor, PublicKey.Length));
             cursor += PublicKey.Length;
-            accounts[i] = new AccountMeta(
+            accounts[i] = new(
                 key,
                 isSigner: (flags & SignerFlag) != 0,
                 isWritable: (flags & WritableFlag) != 0);
@@ -146,11 +146,11 @@ public static class InstructionsSysvar
         var dataLength = BinaryPrimitives.ReadUInt16LittleEndian(data[cursor..]);
         cursor += HeaderValueLength;
         EnsureAvailable(data, cursor, dataLength, "instruction data");
-        return new Instruction
+        return new()
         {
             ProgramId = programId,
             Accounts = accounts,
-            Data = data.Slice(cursor, dataLength).ToArray()
+            Data = [.. data.Slice(cursor, dataLength)]
         };
     }
 

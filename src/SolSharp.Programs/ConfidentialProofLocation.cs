@@ -39,7 +39,7 @@ public sealed class ConfidentialProofLocation
                 instructionOffset,
                 "A proof instruction offset must be non-zero; zero denotes a context-state account on the wire.");
 
-        return new ConfidentialProofLocation(instructionOffset, contextStateAccount: null);
+        return new(instructionOffset, contextStateAccount: null);
     }
 
     /// <summary>Uses a proof that was pre-verified into a context-state account.</summary>

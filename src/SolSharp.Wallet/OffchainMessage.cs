@@ -65,7 +65,7 @@ public sealed class OffchainMessage : IEquatable<OffchainMessage>
     private OffchainMessage(OffchainMessageFormat format, ReadOnlySpan<byte> message)
     {
         Format = format;
-        _message = message.ToArray();
+        _message = [.. message];
     }
 
     /// <summary>The off-chain message version.</summary>
@@ -113,7 +113,7 @@ public sealed class OffchainMessage : IEquatable<OffchainMessage>
         else
             throw new ArgumentException("An off-chain message must contain valid UTF-8.", nameof(message));
 
-        return new OffchainMessage(format, message);
+        return new(format, message);
     }
 
     /// <summary>Creates a version-0 off-chain message from valid .NET text.</summary>
@@ -171,7 +171,7 @@ public sealed class OffchainMessage : IEquatable<OffchainMessage>
         if (!valid)
             throw new FormatException("Off-chain message payload does not satisfy its declared format.");
 
-        return new OffchainMessage(format, message);
+        return new(format, message);
     }
 
     /// <summary>Returns a defensive copy of the payload bytes, without the wire header.</summary>
@@ -204,7 +204,7 @@ public sealed class OffchainMessage : IEquatable<OffchainMessage>
     public Signature Sign(ISigner signer)
     {
         ArgumentNullException.ThrowIfNull(signer);
-        return new Signature(signer.Sign(Serialize()));
+        return new(signer.Sign(Serialize()));
     }
 
     /// <summary>Verifies a signature over the exact serialized message.</summary>

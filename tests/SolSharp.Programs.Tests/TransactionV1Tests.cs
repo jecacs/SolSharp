@@ -60,7 +60,7 @@ public static class TransactionV1Tests
             transaction.Version.Should().Be(TransactionVersion.V1);
             transaction.GetSerializedLength().Should().Be(messageBytes.Length + Transaction.SignatureLength);
             bytes[..messageBytes.Length].Should().Equal(messageBytes);
-            bytes[messageBytes.Length..].Should().OnlyContain(value => value == 0);
+            bytes[messageBytes.Length..].Should().OnlyContain(static value => value == 0);
             bytes[0].Should().Be(MessageV1.VersionPrefix);
         }
     }
@@ -83,7 +83,7 @@ public static class TransactionV1Tests
                 payer.PublicKey,
                 new Hash(Fill(8)),
                 [instruction],
-                new TransactionConfigV1
+                new()
                 {
                     ComputeUnitLimit = 200_000,
                     LoadedAccountsDataSizeLimit = 1_000_000
@@ -346,7 +346,7 @@ public static class TransactionV1Tests
                 .SetFeePayer(Pk(1))
                 .SetRecentBlockhash(new Hash(Fill(8)))
                 .SetAddressLookupTables(new AddressLookupTableAccount(Pk(5), [Pk(2)]))
-                .AddInstruction(new Instruction { ProgramId = Pk(9), Accounts = [], Data = [] });
+                .AddInstruction(new() { ProgramId = Pk(9), Accounts = [], Data = [] });
 
             // Act
             Action act = () => builder.BuildMessageV1();
@@ -374,7 +374,7 @@ public static class TransactionV1Tests
             // Act
             var transaction = new TransactionBuilder()
                 .SetRecentBlockhash(new Hash(Fill(8)))
-                .SetV1Config(new TransactionConfigV1
+                .SetV1Config(new()
                 {
                     ComputeUnitLimit = 200_000,
                     LoadedAccountsDataSizeLimit = 1_000_000

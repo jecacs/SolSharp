@@ -138,7 +138,7 @@ public sealed record TokenExtensionSet
 
         // A bare (non-extended) account is exactly the base length and has no extension section.
         if (data.Length == baseLength)
-            return new TokenExtensionSet { Extensions = [] };
+            return new() { Extensions = [] };
 
         if (data.Length < TlvStartIndex
             || data[AccountTypeIndex] != expectedAccountType
@@ -150,11 +150,11 @@ public sealed record TokenExtensionSet
         while (offset < data.Length)
         {
             if (data.Length - offset < sizeof(ushort))
-                return new TokenExtensionSet { Extensions = extensions };
+                return new() { Extensions = extensions };
 
             var type = BinaryPrimitives.ReadUInt16LittleEndian(data[offset..]);
             if (type == (ushort)ExtensionType.Uninitialized)
-                return new TokenExtensionSet { Extensions = extensions };
+                return new() { Extensions = extensions };
 
             if (data.Length - offset < 4)
                 return null;
@@ -164,14 +164,14 @@ public sealed record TokenExtensionSet
             if (valueStart + length > data.Length)
                 return null;
 
-            extensions.Add(new TokenExtension
+            extensions.Add(new()
             {
                 Type = (ExtensionType)type,
-                Data = data.Slice(valueStart, length).ToArray()
+                Data = [.. data.Slice(valueStart, length)]
             });
             offset = valueStart + length;
         }
 
-        return new TokenExtensionSet { Extensions = extensions };
+        return new() { Extensions = extensions };
     }
 }

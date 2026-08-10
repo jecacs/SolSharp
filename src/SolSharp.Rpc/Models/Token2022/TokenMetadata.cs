@@ -49,9 +49,9 @@ public sealed record TokenMetadata
 
         var additional = new List<KeyValuePair<string, string>>(count);
         for (var i = 0; i < count; i++)
-            additional.Add(new KeyValuePair<string, string>(reader.ReadString(), reader.ReadString()));
+            additional.Add(new(reader.ReadString(), reader.ReadString()));
 
-        return new TokenMetadata
+        return new()
         {
             UpdateAuthority = updateAuthority,
             Mint = mint,

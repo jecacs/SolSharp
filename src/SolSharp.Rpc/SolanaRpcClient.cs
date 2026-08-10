@@ -349,7 +349,7 @@ public class SolanaRpcClient
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(transaction);
-        options ??= new SendTransactionOptions();
+        options ??= new();
 
         var encoded = Convert.ToBase64String(transaction);
         return SendAsync<string>(
@@ -381,7 +381,7 @@ public class SolanaRpcClient
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(transaction);
-        options ??= new SimulateTransactionOptions();
+        options ??= new();
         if (options.SigVerify && options.ReplaceRecentBlockhash)
             throw new ArgumentException(
                 "Signature verification cannot be combined with recent-blockhash replacement.", nameof(options));
@@ -627,7 +627,7 @@ public class SolanaRpcClient
         GetSignaturesForAddressOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        options ??= new GetSignaturesForAddressOptions();
+        options ??= new();
         var result = await SendAsync<SignatureInfo[]>(
             RpcRequests.GetSignaturesForAddress(address, options.Limit, options.Before, options.Until, options.Commitment, options.MinContextSlot),
             cancellationToken);
@@ -653,7 +653,7 @@ public class SolanaRpcClient
         GetProgramAccountsOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        options ??= new GetProgramAccountsOptions();
+        options ??= new();
         var request = RpcRequests.GetProgramAccounts(
             programId,
             options.Commitment,
@@ -758,7 +758,7 @@ public class SolanaRpcClient
         GetProgramAccountsOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        options ??= new GetProgramAccountsOptions();
+        options ??= new();
         var result = await SendAsync<RpcContextValue<ProgramAccount[]>>(
             RpcRequests.GetProgramAccounts(
                 programId,
@@ -793,7 +793,7 @@ public class SolanaRpcClient
     {
         var response = await GetAccountInfoWithContextAsync(
             tableAddress,
-            new GetAccountInfoOptions { Commitment = commitment },
+            new() { Commitment = commitment },
             cancellationToken);
         var account = response.Value;
         if (account is not { Executable: false } || account.Owner != AddressLookupTableProgramOwner)
@@ -1090,7 +1090,7 @@ public class SolanaRpcClient
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
-        options ??= new GetAccountInfoOptions();
+        options ??= new();
         var result = await SendAsync<RpcContextValue<ProgramAccount[]>>(
             RpcRequests.GetTokenAccountsByOwner(
                 owner,
@@ -2340,7 +2340,7 @@ public class SolanaRpcClient
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
-        options ??= new GetAccountInfoOptions();
+        options ??= new();
         var result = await SendAsync<RpcContextValue<ProgramAccount[]>>(
             RpcRequests.GetTokenAccountsByDelegate(
                 delegateAccount,
@@ -2375,10 +2375,9 @@ public class SolanaRpcClient
 
     internal async Task<JsonElement> SendBatchAsync(IReadOnlyList<RpcRequest> requests, CancellationToken cancellationToken)
     {
-        using var message = new HttpRequestMessage(HttpMethod.Post, string.Empty)
-        {
-            Content = JsonContent.Create(requests, RpcJson.TypeInfo<IReadOnlyList<RpcRequest>>())
-        };
+        using var message = new HttpRequestMessage(HttpMethod.Post, string.Empty);
+        message.Content = JsonContent.Create(requests, RpcJson.TypeInfo<IReadOnlyList<RpcRequest>>());
+
         using var response = await _httpClient.SendAsync(
             message, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
@@ -2538,7 +2537,7 @@ public class SolanaRpcClient
                         throw new RpcException(-1, "JSON-RPC response carried a malformed error object.");
                     }
 
-                    error = new RpcError
+                    error = new()
                     {
                         Code = code,
                         Message = messageElement.GetString()!,
@@ -2646,10 +2645,9 @@ public class SolanaRpcClient
         bool allowNullResult,
         CancellationToken cancellationToken)
     {
-        using var message = new HttpRequestMessage(HttpMethod.Post, string.Empty)
-        {
-            Content = JsonContent.Create(request, RpcJson.TypeInfo<RpcRequest>())
-        };
+        using var message = new HttpRequestMessage(HttpMethod.Post, string.Empty);
+        message.Content = JsonContent.Create(request, RpcJson.TypeInfo<RpcRequest>());
+
         if (request.Method == RpcMethods.RequestAirdrop)
             message.Options.Set(DisableRetriesKey, true);
 

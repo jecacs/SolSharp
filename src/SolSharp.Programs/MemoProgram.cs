@@ -56,11 +56,11 @@ public static class MemoProgram
         for (var i = 0; i < signers.Length; i++)
             accounts[i] = AccountMeta.ReadonlySigner(signers[i]);
 
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts = accounts,
-            Data = memo.ToArray()
+            Data = [.. memo]
         };
     }
 }

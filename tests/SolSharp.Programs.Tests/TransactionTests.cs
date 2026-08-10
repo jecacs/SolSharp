@@ -46,7 +46,7 @@ public static class TransactionTests
         cosigner = Keypair.FromSeed(Fill(2));
         var instruction = new Instruction
         {
-            ProgramId = new PublicKey(Fill(9)),
+            ProgramId = new(Fill(9)),
             Accounts = [AccountMeta.ReadonlySigner(cosigner.PublicKey)],
             Data = [7]
         };
@@ -98,7 +98,7 @@ public static class TransactionTests
             using (payer)
             {
                 var firstSigner = new TestSigner(payer.PublicKey, new byte[Transaction.SignatureLength]);
-                var stranger = new TestSigner(new PublicKey(Fill(9)), new byte[Transaction.SignatureLength]);
+                var stranger = new TestSigner(new(Fill(9)), new byte[Transaction.SignatureLength]);
 
                 // Act
                 Action act = () => transaction.Sign(firstSigner, stranger);
@@ -170,7 +170,7 @@ public static class TransactionTests
             var second = new PublicKey(Fill(2));
             var instruction = new Instruction
             {
-                ProgramId = new PublicKey(Fill(9)),
+                ProgramId = new(Fill(9)),
                 Accounts = [AccountMeta.ReadonlySigner(second)],
                 Data = [7]
             };
@@ -184,7 +184,7 @@ public static class TransactionTests
 
             // Assert
             act.Should().Throw<ArgumentException>();
-            transaction.Serialize().Skip(1).Take(2 * Transaction.SignatureLength).Should().OnlyContain(value => value == 0);
+            transaction.Serialize().Skip(1).Take(2 * Transaction.SignatureLength).Should().OnlyContain(static value => value == 0);
         }
 
         [Test]
@@ -215,7 +215,7 @@ public static class TransactionTests
             var stranger = new PublicKey(Fill(3));
             var instruction = new Instruction
             {
-                ProgramId = new PublicKey(Fill(9)),
+                ProgramId = new(Fill(9)),
                 Accounts = [AccountMeta.ReadonlySigner(second)],
                 Data = [7]
             };
@@ -253,7 +253,7 @@ public static class TransactionTests
 
                 // Assert
                 bytes[0].Should().Be(1); // ShortVec(1): one signature slot
-                bytes.Skip(1).Take(Transaction.SignatureLength).Should().OnlyContain(b => b == 0);
+                bytes.Skip(1).Take(Transaction.SignatureLength).Should().OnlyContain(static b => b == 0);
             }
         }
 

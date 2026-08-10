@@ -83,7 +83,7 @@ public static partial class TokenProgram
         data[0] = TransferDiscriminator;
         BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(1), amount);
 
-        return new Instruction
+        return new()
         {
             ProgramId = tokenProgram ?? ProgramId,
             Accounts =
@@ -138,7 +138,7 @@ public static partial class TokenProgram
         BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(1), amount);
         data[9] = decimals;
 
-        return new Instruction
+        return new()
         {
             ProgramId = tokenProgram ?? ProgramId,
             Accounts =
@@ -460,7 +460,7 @@ public static partial class TokenProgram
             buffer.WriteByte(0);
         }
 
-        return new Instruction
+        return new()
         {
             ProgramId = tokenProgram ?? ProgramId,
             Accounts = [AccountMeta.Writable(mint), AccountMeta.Readonly(RentSysvar)],
@@ -510,7 +510,7 @@ public static partial class TokenProgram
             authority.CopyTo(data.AsSpan(3));
         }
 
-        return new Instruction
+        return new()
         {
             ProgramId = program,
             Accounts = [AccountMeta.Writable(account), AccountMeta.ReadonlySigner(currentAuthority)],
@@ -710,7 +710,7 @@ public static partial class TokenProgram
         for (var i = 0; i < multisigSigners.Count; i++)
             accounts[instruction.Accounts.Count + i] = AccountMeta.ReadonlySigner(multisigSigners[i]);
 
-        return new Instruction
+        return new()
         {
             ProgramId = instruction.ProgramId,
             Accounts = accounts,

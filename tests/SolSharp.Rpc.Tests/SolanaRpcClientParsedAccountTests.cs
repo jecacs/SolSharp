@@ -23,8 +23,8 @@ public static class SolanaRpcClientParsedAccountTests
     private static (SolanaRpcClient Client, FakeHttpMessageHandler Handler) Make(string responseJson)
     {
         var handler = new FakeHttpMessageHandler(responseJson);
-        var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
-        return (new SolanaRpcClient(http), handler);
+        var http = new HttpClient(handler) { BaseAddress = new("http://localhost") };
+        return (new(http), handler);
     }
 
     [TestFixture]
@@ -41,7 +41,7 @@ public static class SolanaRpcClientParsedAccountTests
 
             // Assert
             account.Should().NotBeNull();
-            account!.Owner.Should().Be(PublicKey.Parse(Token));
+            account.Owner.Should().Be(PublicKey.Parse(Token));
             account.Lamports.Should().Be(2039280ul);
             account.Space.Should().Be(165ul);
             account.Program.Should().Be("spl-token");
@@ -65,9 +65,9 @@ public static class SolanaRpcClientParsedAccountTests
 
             // Assert
             account.Should().NotBeNull();
-            account!.Program.Should().BeNull();
+            account.Program.Should().BeNull();
             account.Parsed.Should().BeNull();
-            account.RawData.Should().Equal((byte)1, 2, 3, 4);
+            account.RawData.Should().Equal(1, 2, 3, 4);
         }
 
         [Test]
@@ -151,7 +151,7 @@ public static class SolanaRpcClientParsedAccountTests
 
             // Assert
             account.Should().NotBeNull();
-            account!.Program.Should().Be("custom");
+            account.Program.Should().Be("custom");
             if (parsedValue == "null")
                 account.Parsed.Should().BeNull();
             else

@@ -17,7 +17,7 @@ public static class TokenDecoderTests
         {
             // Arrange
             var initialize = TokenProgram.InitializeMint(Key(1), 6, Key(2), Key(3));
-            var setAuthority = TokenProgram.SetAuthority(Key(1), Key(2), AuthorityType.CloseAccount, null);
+            var setAuthority = TokenProgram.SetAuthority(Key(1), Key(2), AuthorityType.CloseAccount);
             var checkedTransfer = TokenProgram.TransferChecked(Key(1), Key(2), Key(3), Key(4), 500, 6);
 
             // Act
@@ -27,18 +27,18 @@ public static class TokenDecoderTests
 
             // Assert
             decodedInitialize.Should().NotBeNull();
-            decodedInitialize!.Discriminator.Should().Be(initialize.Data[0]);
+            decodedInitialize.Discriminator.Should().Be(initialize.Data[0]);
             decodedInitialize.Payload.ToArray().Should().Equal(initialize.Data[1..]);
             decodedInitialize.Name.Should().Be("InitializeMint");
             decodedInitialize.Decimals.Should().Be(6);
             decodedInitialize.RelatedPublicKey.Should().Be(Key(2));
             decodedInitialize.OptionalPublicKey.Should().Be(Key(3));
             decodedAuthority.Should().NotBeNull();
-            decodedAuthority!.AuthorityType.Should().Be(AuthorityType.CloseAccount);
+            decodedAuthority.AuthorityType.Should().Be(AuthorityType.CloseAccount);
             decodedAuthority.HasOptionalPublicKey.Should().BeTrue();
             decodedAuthority.OptionalPublicKey.Should().BeNull();
             decodedTransfer.Should().NotBeNull();
-            decodedTransfer!.Amount.Should().Be(500);
+            decodedTransfer.Amount.Should().Be(500);
             decodedTransfer.Decimals.Should().Be(6);
         }
 
@@ -64,13 +64,13 @@ public static class TokenDecoderTests
 
             // Assert
             decodedConfidential.Should().NotBeNull();
-            decodedConfidential!.Name.Should().Be("ConfidentialTransferExtension");
+            decodedConfidential.Name.Should().Be("ConfidentialTransferExtension");
             decodedConfidential.ExtensionInstructionDiscriminator.Should().Be(9);
             decodedUnwrap.Should().NotBeNull();
-            decodedUnwrap!.HasOptionalAmount.Should().BeTrue();
+            decodedUnwrap.HasOptionalAmount.Should().BeTrue();
             decodedUnwrap.Amount.Should().Be(100);
             decodedAccountDataSize.Should().NotBeNull();
-            decodedAccountDataSize!.Discriminator.Should().Be(21);
+            decodedAccountDataSize.Discriminator.Should().Be(21);
             decodedAccountDataSize.Payload.ToArray().Should().Equal(accountDataSize.Data[1..]);
             decodedAccountDataSize.ExtensionTypes.Should().Equal(
                 Token2022ExtensionType.TransferFeeConfig,
@@ -78,13 +78,13 @@ public static class TokenDecoderTests
             TokenProgram.DecodeInstructionData([255]).Should().BeNull();
             TokenProgram.DecodeInstructionData([255, 0, 0]).Should().BeNull();
             decodedBatch.Should().NotBeNull();
-            decodedBatch!.BatchEntries.Select(entry => (entry.AccountCount, entry.Data.ToArray())).Should().SatisfyRespectively(
-                first =>
+            decodedBatch.BatchEntries.Select(static entry => (entry.AccountCount, entry.Data.ToArray())).Should().SatisfyRespectively(
+                static first =>
                 {
                     first.AccountCount.Should().Be(1);
                     first.Item2.Should().Equal(17);
                 },
-                second =>
+                static second =>
                 {
                     second.AccountCount.Should().Be(3);
                     second.Item2.Should().Equal(TokenProgram.Transfer(Key(1), Key(2), Key(3), 4).Data);
@@ -182,16 +182,16 @@ public static class TokenMintStateDecoderTests
 
             // Assert
             classic.Should().NotBeNull();
-            classic!.MintAuthority.Should().Be(Key(1));
+            classic.MintAuthority.Should().Be(Key(1));
             classic.Supply.Should().Be(500);
             classic.Decimals.Should().Be(6);
             classic.IsInitialized.Should().BeTrue();
             classic.FreezeAuthority.Should().BeNull();
             classic.Extensions.Should().BeEmpty();
             extended.Should().NotBeNull();
-            extended!.Extensions.Should().ContainSingle();
+            extended.Extensions.Should().ContainSingle();
             extended.Extensions[0].ExtensionType.Should().Be(Token2022ExtensionType.ScaledUiAmount);
-            extended.Extensions[0].Data.ToArray().Should().Equal("\t\t\t"u8.ToArray());
+            extended.Extensions[0].Data.ToArray().Should().Equal([.. "\t\t\t"u8]);
         }
 
         [Test]
@@ -231,7 +231,7 @@ public static class TokenMintStateDecoderTests
 
             // Assert
             state.Should().NotBeNull();
-            state!.Extensions.Should().BeEmpty();
+            state.Extensions.Should().BeEmpty();
         }
 
         [Test]
@@ -270,7 +270,7 @@ public static class TokenHoldingAccountStateDecoderTests
 
             // Assert
             state.Should().NotBeNull();
-            state!.Mint.Should().Be(Key(1));
+            state.Mint.Should().Be(Key(1));
             state.Owner.Should().Be(Key(2));
             state.Amount.Should().Be(100);
             state.Delegate.Should().Be(Key(3));
@@ -313,7 +313,7 @@ public static class TokenHoldingAccountStateDecoderTests
 
             // Assert
             state.Should().NotBeNull();
-            state!.Extensions.Should().BeEmpty();
+            state.Extensions.Should().BeEmpty();
         }
     }
 }
@@ -339,7 +339,7 @@ public static class TokenMultisigStateDecoderTests
 
             // Assert
             state.Should().NotBeNull();
-            state!.RequiredSignatures.Should().Be(2);
+            state.RequiredSignatures.Should().Be(2);
             state.SignerCount.Should().Be(3);
             state.Signers.Take(3).Should().Equal(Key(1), Key(2), Key(3));
             data[2] = 2;
@@ -368,11 +368,11 @@ public static class TokenMetadataStateDecoderTests
             WriteString(data, "test");
 
             // Act
-            var state = TokenMetadataState.Decode(data.ToArray());
+            var state = TokenMetadataState.Decode([.. data]);
 
             // Assert
             state.Should().NotBeNull();
-            state!.UpdateAuthority.Should().Be(Key(1));
+            state.UpdateAuthority.Should().Be(Key(1));
             state.Mint.Should().Be(Key(2));
             state.Name.Should().Be("Name");
             state.Symbol.Should().Be("SYM");
@@ -397,7 +397,7 @@ public static class TokenMetadataStateDecoderTests
 
 internal static class TokenDecoderTestHelpers
 {
-    internal static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
+    internal static PublicKey Key(byte value) => new([.. Enumerable.Repeat(value, PublicKey.Length)]);
 
     internal static byte[] MintData()
     {
@@ -439,6 +439,6 @@ internal static class TokenDecoderTestHelpers
     {
         Span<byte> bytes = stackalloc byte[sizeof(uint)];
         BinaryPrimitives.WriteUInt32LittleEndian(bytes, value);
-        data.AddRange(bytes.ToArray());
+        data.AddRange([.. bytes]);
     }
 }

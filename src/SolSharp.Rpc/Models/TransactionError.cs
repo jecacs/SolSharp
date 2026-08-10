@@ -42,7 +42,7 @@ public sealed record TransactionError
             return null;
 
         if (value.ValueKind == JsonValueKind.String)
-            return new TransactionError { Kind = value.GetString()! };
+            return new() { Kind = value.GetString()! };
 
         if (value.ValueKind == JsonValueKind.Object)
         {
@@ -52,11 +52,11 @@ public sealed record TransactionError
                     && member.Value.ValueKind == JsonValueKind.Array
                     && member.Value.GetArrayLength() >= 2)
                 {
-                    return new TransactionError
+                    return new()
                     {
                         Kind = member.Name,
                         InstructionIndex = member.Value[0].ValueKind == JsonValueKind.Number ? member.Value[0].GetInt32() : null,
-                        InstructionError = global::SolSharp.Rpc.Models.InstructionError.Parse(member.Value[1]),
+                        InstructionError = InstructionError.Parse(member.Value[1]),
                         Details = member.Value.Clone()
                     };
                 }
@@ -65,7 +65,7 @@ public sealed record TransactionError
                     member.Value.ValueKind == JsonValueKind.Number &&
                     member.Value.TryGetInt32(out var duplicateInstructionIndex))
                 {
-                    return new TransactionError
+                    return new()
                     {
                         Kind = member.Name,
                         DuplicateInstructionIndex = duplicateInstructionIndex,
@@ -80,7 +80,7 @@ public sealed record TransactionError
                     accountIndex.ValueKind == JsonValueKind.Number &&
                     accountIndex.TryGetInt32(out var accountIndexValue))
                 {
-                    return new TransactionError
+                    return new()
                     {
                         Kind = member.Name,
                         AccountIndex = accountIndexValue,
@@ -88,11 +88,11 @@ public sealed record TransactionError
                     };
                 }
 
-                return new TransactionError { Kind = member.Name, Details = member.Value.Clone() };
+                return new() { Kind = member.Name, Details = member.Value.Clone() };
             }
         }
 
-        return new TransactionError { Kind = value.ToString() };
+        return new() { Kind = value.ToString() };
     }
 
     /// <inheritdoc/>
@@ -122,19 +122,19 @@ public sealed record InstructionError
     public static InstructionError Parse(JsonElement error)
     {
         if (error.ValueKind == JsonValueKind.String)
-            return new InstructionError { Kind = error.GetString()! };
+            return new() { Kind = error.GetString()! };
 
         if (error.ValueKind == JsonValueKind.Object)
         {
             foreach (var member in error.EnumerateObject())
             {
                 return member.NameEquals("Custom") && member.Value.ValueKind == JsonValueKind.Number
-                    ? new InstructionError { Kind = "Custom", CustomCode = member.Value.GetUInt32() }
+                    ? new() { Kind = "Custom", CustomCode = member.Value.GetUInt32() }
                     : new InstructionError { Kind = member.Name };
             }
         }
 
-        return new InstructionError { Kind = error.ToString() };
+        return new() { Kind = error.ToString() };
     }
 
     /// <inheritdoc/>

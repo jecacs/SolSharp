@@ -30,7 +30,7 @@ public sealed class BlsKeypair : IDisposable
     /// <summary>The length of <c>ALPENGLOW || vote_account</c>.</summary>
     public const int VoteProofPayloadLength = 41;
 
-    private readonly System.Threading.Lock _secretGate = new();
+    private readonly Lock _secretGate = new();
     private readonly byte[] _secretKey;
     private bool _disposed;
 
@@ -38,7 +38,7 @@ public sealed class BlsKeypair : IDisposable
     {
         _secretKey = secretKey;
         PublicKey = BlsPublicKey.FromValidated(BlsOperations.DerivePublicKey(secretKey));
-        PopVerifiedPublicKey = new BlsPopVerifiedPublicKey(PublicKey);
+        PopVerifiedPublicKey = new(PublicKey);
     }
 
     /// <summary>Finalizer backstop that clears the managed secret when deterministic disposal was missed.</summary>
@@ -128,7 +128,7 @@ public sealed class BlsKeypair : IDisposable
         if (!BlsOperations.IsCanonicalSecretKey(secretKey))
             throw new ArgumentException("BLS secret key must be a canonical nonzero 32-byte little-endian scalar.", nameof(secretKey));
 
-        return Create(secretKey.ToArray());
+        return Create([.. secretKey]);
     }
 
     /// <summary>
@@ -160,7 +160,7 @@ public sealed class BlsKeypair : IDisposable
             CryptographicOperations.ZeroMemory(expectedPublicKey);
         }
 
-        return Create(secretKey.ToArray());
+        return Create([.. secretKey]);
     }
 
     /// <summary>
@@ -404,7 +404,7 @@ public sealed class BlsKeypair : IDisposable
     {
         try
         {
-            return new BlsKeypair(ownedSecretKey);
+            return new(ownedSecretKey);
         }
         catch
         {

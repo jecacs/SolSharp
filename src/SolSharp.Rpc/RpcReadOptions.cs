@@ -155,15 +155,43 @@ public sealed record GetTransactionOptions
 
 internal static class RpcWireNames
 {
-    public static string AccountEncoding(RpcAccountEncoding value) => value switch
+    extension(RpcAccountEncoding value)
     {
-        RpcAccountEncoding.Binary => "binary",
-        RpcAccountEncoding.Base58 => "base58",
-        RpcAccountEncoding.Base64 => "base64",
-        RpcAccountEncoding.JsonParsed => "jsonParsed",
-        RpcAccountEncoding.Base64Zstd => "base64+zstd",
-        _ => throw new ArgumentOutOfRangeException(nameof(value), value, "Unknown account encoding.")
-    };
+        public string WireName => value switch
+        {
+            RpcAccountEncoding.Binary => "binary",
+            RpcAccountEncoding.Base58 => "base58",
+            RpcAccountEncoding.Base64 => "base64",
+            RpcAccountEncoding.JsonParsed => "jsonParsed",
+            RpcAccountEncoding.Base64Zstd => "base64+zstd",
+            _ => throw new ArgumentOutOfRangeException(nameof(value), value, "Unknown account encoding.")
+        };
+    }
+
+    extension(RpcTransactionEncoding value)
+    {
+        public string WireName => value switch
+        {
+            RpcTransactionEncoding.Binary => "binary",
+            RpcTransactionEncoding.Base64 => "base64",
+            RpcTransactionEncoding.Base58 => "base58",
+            RpcTransactionEncoding.Json => "json",
+            RpcTransactionEncoding.JsonParsed => "jsonParsed",
+            _ => throw new ArgumentOutOfRangeException(nameof(value), value, "Unknown transaction encoding.")
+        };
+    }
+
+    extension(RpcTransactionDetails value)
+    {
+        public string WireName => value switch
+        {
+            RpcTransactionDetails.Full => "full",
+            RpcTransactionDetails.Signatures => "signatures",
+            RpcTransactionDetails.None => "none",
+            RpcTransactionDetails.Accounts => "accounts",
+            _ => throw new ArgumentOutOfRangeException(nameof(value), value, "Unknown transaction detail level.")
+        };
+    }
 
     public static bool TryAccountEncoding(string? value, out RpcAccountEncoding encoding)
     {
@@ -179,23 +207,4 @@ internal static class RpcWireNames
 
         return value is "binary" or "base58" or "base64" or "jsonParsed" or "base64+zstd";
     }
-
-    public static string TransactionEncoding(RpcTransactionEncoding value) => value switch
-    {
-        RpcTransactionEncoding.Binary => "binary",
-        RpcTransactionEncoding.Base64 => "base64",
-        RpcTransactionEncoding.Base58 => "base58",
-        RpcTransactionEncoding.Json => "json",
-        RpcTransactionEncoding.JsonParsed => "jsonParsed",
-        _ => throw new ArgumentOutOfRangeException(nameof(value), value, "Unknown transaction encoding.")
-    };
-
-    public static string TransactionDetails(RpcTransactionDetails value) => value switch
-    {
-        RpcTransactionDetails.Full => "full",
-        RpcTransactionDetails.Signatures => "signatures",
-        RpcTransactionDetails.None => "none",
-        RpcTransactionDetails.Accounts => "accounts",
-        _ => throw new ArgumentOutOfRangeException(nameof(value), value, "Unknown transaction detail level.")
-    };
 }

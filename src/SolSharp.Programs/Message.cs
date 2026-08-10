@@ -87,7 +87,7 @@ public sealed class Message : ITransactionMessage
         void Merge(PublicKey key, bool signer, bool writable)
         {
             flags.TryGetValue(key, out var current);
-            flags[key] = new AccountFlags(current.IsSigner || signer, current.IsWritable || writable);
+            flags[key] = new(current.IsSigner || signer, current.IsWritable || writable);
         }
 
         Merge(feePayer, signer: true, writable: true);
@@ -153,7 +153,7 @@ public sealed class Message : ITransactionMessage
             for (var a = 0; a < instruction.Accounts.Count; a++)
                 accountIndexes[a] = (byte)finalPosition[instruction.Accounts[a].PublicKey];
 
-            compiled[n] = new CompiledInstruction
+            compiled[n] = new()
             {
                 ProgramIdIndex = (byte)finalPosition[instruction.ProgramId],
                 AccountIndexes = accountIndexes,
@@ -161,7 +161,7 @@ public sealed class Message : ITransactionMessage
             };
         }
 
-        return new Message(
+        return new(
             (byte)requiredSignatures,
             (byte)readonlySigned,
             (byte)readonlyUnsigned,
@@ -207,7 +207,7 @@ public sealed class Message : ITransactionMessage
             MessageWire.SanitizeHeader(requiredSignatures, readonlySignedAccounts, readonlyUnsignedAccounts, accountKeys.Length);
             MessageWire.SanitizeInstructions(instructions, accountKeys.Length, accountKeys.Length);
 
-            return new Message(requiredSignatures, readonlySignedAccounts, readonlyUnsignedAccounts, accountKeys, recentBlockhash, instructions);
+            return new(requiredSignatures, readonlySignedAccounts, readonlyUnsignedAccounts, accountKeys, recentBlockhash, instructions);
         }
         catch (Exception exception) when (exception is IndexOutOfRangeException or ArgumentOutOfRangeException)
         {

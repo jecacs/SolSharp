@@ -48,6 +48,27 @@ dotnet_style_predefined_type_for_locals_parameters_members = true:warning
 dotnet_style_predefined_type_for_member_access = true:warning
 dotnet_style_require_accessibility_modifiers = for_non_interface_members:warning
 
+# Public API is intentional even when no in-solution consumer references it.
+# Rider cannot infer external NuGet consumers from solution-wide usage.
+resharper_member_can_be_private_global_highlighting = none
+
+# Keep defensive fallback arms for invalid enum/wire values. Rider's integer
+# analysis may consider them unreachable after an earlier range validation.
+resharper_unreachable_switch_arm_due_to_integer_analysis_highlighting = none
+
+# Factory-created types intentionally hide their constructors; this does not
+# mean that the class cannot produce instances through its public API.
+resharper_class_cannot_be_instantiated_highlighting = none
+
+# RPC DTOs validate malformed runtime JSON even where their public NRT contract
+# promises non-null values, especially for collection elements that STJ cannot enforce.
+resharper_condition_is_always_true_or_false_according_to_nullable_api_contract_highlighting = none
+
+# C# 14 field-backed DTO properties use `field!` to satisfy definite-assignment
+# analysis while their init accessor validates JSON. Replacing this getter with an
+# auto-accessor triggers compiler warning CS9264.
+resharper_redundant_accessor_body_highlighting = none
+
 # var everywhere
 csharp_style_var_for_built_in_types = true:warning
 csharp_style_var_when_type_is_apparent = true:warning
@@ -67,6 +88,9 @@ csharp_style_prefer_primary_constructors = true:warning
 dotnet_style_prefer_collection_expression = when_types_loosely_match:warning
 dotnet_style_object_initializer = true:warning
 dotnet_style_collection_initializer = true:warning
+# Prevent anonymous functions from accidentally capturing state and allocating closures.
+csharp_prefer_static_anonymous_function = true:warning
+dotnet_diagnostic.IDE0320.severity = warning
 csharp_style_implicit_object_creation_when_type_is_apparent = true:warning
 # Keep Rider/ReSharper aligned with Roslyn even when a developer's global IDE
 # preference requires an explicit type in object creation expressions.
@@ -202,8 +226,13 @@ dotnet_naming_style.t_pascal_case.capitalization = pascal_case
 dotnet_naming_rule.types_and_members_pascal.severity = warning
 dotnet_naming_rule.types_and_members_pascal.symbols = types_and_members
 dotnet_naming_rule.types_and_members_pascal.style = pascal_case
+# Rider splits canonical curve and release-layout names differently from Roslyn.
+dotnet_naming_rule.types_and_members_pascal.resharper_style = AaBb, Secp256r1+AaBb, Secp256k1+AaBb, VoteState+AaBb_AaBb
 dotnet_naming_symbols.types_and_members.applicable_kinds = class, struct, enum, property, method, event, delegate, namespace
 dotnet_naming_style.pascal_case.capitalization = pascal_case
+
+# Preserve versioned enum names such as V1_14_11 while keeping PascalCase as the default.
+resharper_csharp_naming_rule.enum_member = AaBb, V+AaBb_AaBb
 
 # Constants: PascalCase
 dotnet_naming_rule.constants_pascal.severity = warning

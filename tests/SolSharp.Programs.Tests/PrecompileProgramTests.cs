@@ -15,8 +15,8 @@ public static class Ed25519ProgramTests
             // Act
             var instruction = Ed25519Program.CreateInstruction(
                 [0xaa, 0xbb],
-                Enumerable.Repeat((byte)0x22, Ed25519Program.SignatureLength).ToArray(),
-                Enumerable.Repeat((byte)0x11, Ed25519Program.PublicKeyLength).ToArray());
+                [.. Enumerable.Repeat((byte)0x22, Ed25519Program.SignatureLength)],
+                [.. Enumerable.Repeat((byte)0x11, Ed25519Program.PublicKeyLength)]);
 
             // Assert
             Hex(instruction).Should().Be(
@@ -73,7 +73,7 @@ public static class Ed25519ProgramTests
 
             // Act
             var decoded = Ed25519Program.DecodeOffsets(oneRecordWithIgnoredPadding);
-            var zeroWithTrailingData = () => Ed25519Program.DecodeOffsets([0, 0, 0]);
+            var zeroWithTrailingData = static () => Ed25519Program.DecodeOffsets([0, 0, 0]);
 
             // Assert
             decoded.Should().Equal(new Ed25519SignatureOffsets(1, 2, 3, 4, 5, 6, 7));
@@ -93,8 +93,8 @@ public static class Secp256r1ProgramTests
             // Act
             var instruction = Secp256r1Program.CreateInstruction(
                 [0xaa, 0xbb],
-                Enumerable.Repeat((byte)0x22, Secp256r1Program.SignatureLength).ToArray(),
-                Enumerable.Repeat((byte)0x11, Secp256r1Program.CompressedPublicKeyLength).ToArray());
+                [.. Enumerable.Repeat((byte)0x22, Secp256r1Program.SignatureLength)],
+                [.. Enumerable.Repeat((byte)0x11, Secp256r1Program.CompressedPublicKeyLength)]);
 
             // Assert
             Hex(instruction).Should().Be(
@@ -118,7 +118,7 @@ public static class Secp256r1ProgramTests
             var tooMany = Enumerable.Repeat(default(Secp256r1SignatureOffsets), 9).ToArray();
 
             // Act
-            var createEmpty = () => Secp256r1Program.CreateOffsetsInstruction([]);
+            var createEmpty = static () => Secp256r1Program.CreateOffsetsInstruction([]);
             var createTooMany = () => Secp256r1Program.CreateOffsetsInstruction(tooMany);
 
             // Assert
@@ -156,9 +156,9 @@ public static class Secp256k1ProgramTests
             // Act
             var instruction = Secp256k1Program.CreateInstruction(
                 [0xaa, 0xbb],
-                Enumerable.Repeat((byte)0x22, Secp256k1Program.SignatureLength).ToArray(),
+                [.. Enumerable.Repeat((byte)0x22, Secp256k1Program.SignatureLength)],
                 1,
-                Enumerable.Repeat((byte)0x11, Secp256k1Program.EthereumAddressLength).ToArray());
+                [.. Enumerable.Repeat((byte)0x11, Secp256k1Program.EthereumAddressLength)]);
 
             // Assert
             Hex(instruction).Should().Be(
@@ -197,7 +197,7 @@ public static class Secp256k1ProgramTests
         public void ZeroCountWithTrailingData_IsRejectedLikeTheRuntime()
         {
             // Act
-            var act = () => Secp256k1Program.DecodeOffsets([0, 0]);
+            var act = static () => Secp256k1Program.DecodeOffsets([0, 0]);
 
             // Assert
             act.Should().Throw<ArgumentException>();

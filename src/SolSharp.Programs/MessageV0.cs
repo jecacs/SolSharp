@@ -110,7 +110,7 @@ public sealed class MessageV0 : ITransactionMessage
         void Merge(PublicKey key, bool signer, bool writable, bool invoked)
         {
             metas.TryGetValue(key, out var current);
-            metas[key] = new KeyMeta(current.IsSigner || signer, current.IsWritable || writable, current.IsInvoked || invoked);
+            metas[key] = new(current.IsSigner || signer, current.IsWritable || writable, current.IsInvoked || invoked);
         }
 
         Merge(feePayer, signer: true, writable: true, invoked: false);
@@ -196,7 +196,7 @@ public sealed class MessageV0 : ITransactionMessage
             if (writableIndexes.Count == 0 && readonlyIndexes.Count == 0)
                 continue;
 
-            lookups.Add(new MessageAddressTableLookup
+            lookups.Add(new()
             {
                 AccountKey = table.Key,
                 WritableIndexes = [.. writableIndexes],
@@ -257,7 +257,7 @@ public sealed class MessageV0 : ITransactionMessage
             for (var a = 0; a < instruction.Accounts.Count; a++)
                 accountIndexes[a] = (byte)position[instruction.Accounts[a].PublicKey];
 
-            compiled[n] = new CompiledInstruction
+            compiled[n] = new()
             {
                 ProgramIdIndex = (byte)position[instruction.ProgramId],
                 AccountIndexes = accountIndexes,
@@ -265,7 +265,7 @@ public sealed class MessageV0 : ITransactionMessage
             };
         }
 
-        return new MessageV0(
+        return new(
             (byte)requiredSignatures,
             (byte)readonlySigned,
             (byte)readonlyUnsigned,
@@ -334,7 +334,7 @@ public sealed class MessageV0 : ITransactionMessage
                 var readonlyIndexes = data.Slice(offset, readonlyCount).ToArray();
                 offset += readonlyCount;
 
-                addressTableLookups[i] = new MessageAddressTableLookup
+                addressTableLookups[i] = new()
                 {
                     AccountKey = accountKey,
                     WritableIndexes = writableIndexes,
@@ -370,7 +370,7 @@ public sealed class MessageV0 : ITransactionMessage
 
             MessageWire.SanitizeInstructions(instructions, accountKeys.Length, addressableAccounts);
 
-            return new MessageV0(requiredSignatures, readonlySignedAccounts, readonlyUnsignedAccounts, accountKeys, recentBlockhash, instructions, addressTableLookups);
+            return new(requiredSignatures, readonlySignedAccounts, readonlyUnsignedAccounts, accountKeys, recentBlockhash, instructions, addressTableLookups);
         }
         catch (Exception exception) when (exception is IndexOutOfRangeException or ArgumentOutOfRangeException)
         {

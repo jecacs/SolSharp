@@ -59,7 +59,7 @@ public sealed class DecodedSplInterfaceInstruction
     internal DecodedSplInterfaceInstruction(string name, ReadOnlySpan<byte> payload)
     {
         Name = name;
-        _payload = payload.ToArray();
+        _payload = [.. payload];
     }
 
     /// <summary>The upstream instruction variant name.</summary>

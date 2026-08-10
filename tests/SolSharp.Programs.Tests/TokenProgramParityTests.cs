@@ -9,12 +9,12 @@ public static class TokenProgramParityTests
 {
     private static readonly PublicKey Rent = PublicKey.Parse(Sysvars.Rent);
 
-    private static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
+    private static PublicKey Key(byte value) => new([.. Enumerable.Repeat(value, PublicKey.Length)]);
 
     private static string Hex(Instruction instruction) => Convert.ToHexString(instruction.Data).ToLowerInvariant();
 
     private static (PublicKey, bool, bool)[] Metas(Instruction instruction)
-        => [.. instruction.Accounts.Select(account => (account.PublicKey, account.IsSigner, account.IsWritable))];
+        => [.. instruction.Accounts.Select(static account => (account.PublicKey, account.IsSigner, account.IsWritable))];
 
     [TestFixture]
     public sealed class InitializeMint2
@@ -99,7 +99,7 @@ public static class TokenProgramParityTests
         public void RejectsUnrepresentableThresholds(int signerCount, byte required)
         {
             // Arrange
-            var members = Enumerable.Range(0, signerCount).Select(index => Key((byte)(index + 2))).ToArray();
+            var members = Enumerable.Range(0, signerCount).Select(static index => Key((byte)(index + 2))).ToArray();
 
             // Act
             Action act = () => _ = TokenProgram.InitializeMultisig(Key(1), members, required);
@@ -195,7 +195,7 @@ public static class TokenProgramParityTests
         public void RejectsInvalidUnicode()
         {
             // Act
-            Action act = () => _ = TokenProgram.UiAmountToAmount(Key(1), "\ud800");
+            Action act = static () => _ = TokenProgram.UiAmountToAmount(Key(1), "\ud800");
 
             // Assert
             act.Should().Throw<ArgumentException>().WithParameterName("uiAmount");
@@ -288,7 +288,7 @@ public static class TokenProgramParityTests
             };
 
             // Act
-            Action empty = () => _ = TokenProgram.Batch([]);
+            Action empty = static () => _ = TokenProgram.Batch([]);
             Action emptyInnerData = () => _ = TokenProgram.Batch([emptyData]);
             Action nested = () => _ = TokenProgram.Batch([inner]);
 

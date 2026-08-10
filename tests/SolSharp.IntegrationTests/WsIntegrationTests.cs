@@ -45,7 +45,7 @@ public static class WsIntegrationTests
                 await using var client = new SolanaWsClient();
                 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
-                await client.ConnectAsync(new Uri(IntegrationEnvironment.WsEndpoint), timeout.Token);
+                await client.ConnectAsync(new(IntegrationEnvironment.WsEndpoint), timeout.Token);
                 await probe(client, timeout.Token);
             }
             catch (Exception exception)
@@ -65,9 +65,9 @@ public static class WsIntegrationTests
     public sealed class SubscribeSlots
     {
         [Test]
-        public Task ReceivesNotification() => ProbeAsync(async (client, token) =>
+        public Task ReceivesNotification() => ProbeAsync(async static (client, token) =>
         {
-            await foreach (var slot in client.SubscribeSlotsAsync(token).WithCancellation(token))
+            await foreach (var slot in client.SubscribeSlotsAsync(token))
             {
                 slot.Slot.Should().BeGreaterThan(0);
                 return;
@@ -81,9 +81,9 @@ public static class WsIntegrationTests
     public sealed class SubscribeRoots
     {
         [Test]
-        public Task ReceivesRootedSlot() => ProbeAsync(async (client, token) =>
+        public Task ReceivesRootedSlot() => ProbeAsync(async static (client, token) =>
         {
-            await foreach (var root in client.SubscribeRootsAsync(token).WithCancellation(token))
+            await foreach (var root in client.SubscribeRootsAsync(token))
             {
                 root.Should().BeGreaterThan(0);
                 return;
@@ -97,7 +97,7 @@ public static class WsIntegrationTests
     public sealed class SubscribeLogs
     {
         [Test]
-        public Task ReceivesLogsMentioningTheTokenProgram() => ProbeAsync(async (client, token) =>
+        public Task ReceivesLogsMentioningTheTokenProgram() => ProbeAsync(async static (client, token) =>
         {
             var reader = await client.SubscribeLogsAsync(TokenProgram, cancellationToken: token);
             var note = await reader.ReadAsync(token);
@@ -112,7 +112,7 @@ public static class WsIntegrationTests
     public sealed class SubscribeAccount
     {
         [Test]
-        public Task ReceivesAClockUpdate() => ProbeAsync(async (client, token) =>
+        public Task ReceivesAClockUpdate() => ProbeAsync(async static (client, token) =>
         {
             var reader = await client.SubscribeAccountAsync(Clock, cancellationToken: token);
             var note = await reader.ReadAsync(token);
@@ -128,7 +128,7 @@ public static class WsIntegrationTests
     public sealed class SubscribeParsedAccount
     {
         [Test]
-        public Task DecodesAClockUpdate() => ProbeAsync(async (client, token) =>
+        public Task DecodesAClockUpdate() => ProbeAsync(async static (client, token) =>
         {
             var reader = await client.SubscribeParsedAccountAsync(Clock, cancellationToken: token);
             var note = await reader.ReadAsync(token);

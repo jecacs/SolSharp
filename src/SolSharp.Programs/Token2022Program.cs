@@ -127,7 +127,7 @@ public static partial class Token2022Program
         var data = new byte[PublicKey.Length + 1];
         data[0] = InitializePermanentDelegateDiscriminator;
         @delegate.CopyTo(data.AsSpan(1));
-        return new Instruction { ProgramId = ProgramId, Accounts = [AccountMeta.Writable(mint)], Data = data };
+        return new() { ProgramId = ProgramId, Accounts = [AccountMeta.Writable(mint)], Data = data };
     }
 
     private static Instruction WritableMintInstruction(PublicKey mint, byte discriminator)
@@ -184,6 +184,6 @@ public static partial class Token2022Program
         for (var i = 0; i < multisigSigners.Count; i++)
             accounts[instruction.Accounts.Count + i] = AccountMeta.ReadonlySigner(multisigSigners[i]);
 
-        return new Instruction { ProgramId = instruction.ProgramId, Accounts = accounts, Data = [.. instruction.Data] };
+        return new() { ProgramId = instruction.ProgramId, Accounts = accounts, Data = [.. instruction.Data] };
     }
 }

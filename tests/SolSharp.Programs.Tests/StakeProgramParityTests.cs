@@ -226,8 +226,8 @@ public static class StakeProgramTests
             // Act
             var instruction = StakeProgram.Initialize(
                 Pk(9),
-                new StakeAuthorized(Pk(1), Pk(2)),
-                new StakeLockup(-2, 3, Pk(4)));
+                new(Pk(1), Pk(2)),
+                new(-2, 3, Pk(4)));
 
             // Assert
             var expected =
@@ -237,7 +237,7 @@ public static class StakeProgramTests
                 "feffffffffffffff0300000000000000" +
                 string.Concat(Enumerable.Repeat("04", 32));
             Hex(instruction).Should().Be(expected);
-            instruction.Accounts.Select(account => account.PublicKey).Should().Equal(
+            instruction.Accounts.Select(static account => account.PublicKey).Should().Equal(
                 Pk(9),
                 PublicKey.Parse("SysvarRent111111111111111111111111111111111"));
         }
@@ -288,7 +288,7 @@ public static class StakeProgramTests
     {
         [Test]
         public void MatchesPinnedDiscriminatorAndFieldOrder() =>
-            Hex(StakeProgram.SetLockup(Pk(1), new StakeLockupArguments(-2, null, Pk(4)), Pk(2)))
+            Hex(StakeProgram.SetLockup(Pk(1), new(-2, null, Pk(4)), Pk(2)))
                 .Should().Be(
                     "0600000001feffffffffffffff00" +
                     "01" + string.Concat(Enumerable.Repeat("04", 32)));
@@ -332,7 +332,7 @@ public static class StakeProgramTests
     {
         [Test]
         public void MatchesPinnedDiscriminatorAndFieldOrder() =>
-            Hex(StakeProgram.SetLockupChecked(Pk(1), new StakeLockupArguments(null, 7, Pk(4)), Pk(2)))
+            Hex(StakeProgram.SetLockupChecked(Pk(1), new(null, 7, Pk(4)), Pk(2)))
                 .Should().Be("0c00000000010700000000000000");
     }
 
@@ -381,7 +381,7 @@ public static class StakeProgramTests
     {
         [Test]
         public void UsesPinnedStableDiscriminator() =>
-            Hex(StakeProgram.InitializeChecked(Pk(1), new StakeAuthorized(Pk(2), Pk(3))))
+            Hex(StakeProgram.InitializeChecked(Pk(1), new(Pk(2), Pk(3))))
                 .Should().Be("09000000");
     }
 
@@ -461,10 +461,10 @@ public static class StakeAccountStateTests
             state.Kind.Should().Be(StakeAccountStateKind.Stake);
             state.Metadata.Should().Be(new StakeAccountMetadata(
                 11,
-                new StakeAuthorized(Pk(1), Pk(2)),
-                new StakeLockup(-3, 5, Pk(3))));
+                new(Pk(1), Pk(2)),
+                new(-3, 5, Pk(3))));
             state.Stake.Should().Be(new StakeDelegatedData(
-                new StakeDelegation(Pk(4), 13, 17, ulong.MaxValue, 19),
+                new(Pk(4), 13, 17, ulong.MaxValue, 19),
                 23));
             state.StakeFlags.Should().Be(1);
         }
@@ -473,10 +473,10 @@ public static class StakeAccountStateTests
 
 internal static class StakeProgramTestHelpers
 {
-    internal static PublicKey Pk(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
+    internal static PublicKey Pk(byte value) => new([.. Enumerable.Repeat(value, PublicKey.Length)]);
 
     internal static string Hex(Instruction instruction) => Convert.ToHexString(instruction.Data).ToLowerInvariant();
 
     internal static (PublicKey, bool, bool)[] Metas(Instruction instruction)
-        => [.. instruction.Accounts.Select(account => (account.PublicKey, account.IsSigner, account.IsWritable))];
+        => [.. instruction.Accounts.Select(static account => (account.PublicKey, account.IsSigner, account.IsWritable))];
 }

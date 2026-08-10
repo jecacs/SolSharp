@@ -95,8 +95,8 @@ public static class VoteProgramParityTests
             var initialize = new VoteInitializeV2(
                 Pk(1),
                 Pk(2),
-                Enumerable.Repeat((byte)3, VoteAuthorization.BlsPublicKeyLength).ToArray(),
-                Enumerable.Repeat((byte)4, VoteAuthorization.BlsProofOfPossessionLength).ToArray(),
+                [.. Enumerable.Repeat((byte)3, VoteAuthorization.BlsPublicKeyLength)],
+                [.. Enumerable.Repeat((byte)4, VoteAuthorization.BlsProofOfPossessionLength)],
                 Pk(5),
                 0x1234,
                 0xabcd);
@@ -108,7 +108,7 @@ public static class VoteProgramParityTests
             Hex(instruction).Should().Be(
                 "10000000" + Repeat(1, 32) + Repeat(2, 32) + Repeat(3, 48) + Repeat(4, 96) +
                 Repeat(5, 32) + "3412cdab");
-            instruction.Accounts.Select(account => (account.PublicKey, account.IsSigner, account.IsWritable))
+            instruction.Accounts.Select(static account => (account.PublicKey, account.IsSigner, account.IsWritable))
                 .Should().Equal(
                     (Pk(9), false, true),
                     (Pk(1), true, false),
@@ -125,8 +125,8 @@ public static class VoteProgramParityTests
         {
             // Arrange
             var authorization = VoteAuthorization.VoterWithBls(
-                Enumerable.Repeat((byte)4, VoteAuthorization.BlsPublicKeyLength).ToArray(),
-                Enumerable.Repeat((byte)5, VoteAuthorization.BlsProofOfPossessionLength).ToArray());
+                [.. Enumerable.Repeat((byte)4, VoteAuthorization.BlsPublicKeyLength)],
+                [.. Enumerable.Repeat((byte)5, VoteAuthorization.BlsProofOfPossessionLength)]);
 
             // Act
             var instruction = VoteProgram.Authorize(Pk(1), Pk(2), Pk(3), authorization);
@@ -215,8 +215,8 @@ public static class VoteProgramParityTests
         public void NonMonotonicSlotsAndWideConfirmationCounts_AreRejected()
         {
             // Arrange
-            var descending = new VoteStateUpdate([new VoteLockout(9, 1), new VoteLockout(8, 1)], null, H(1));
-            var wide = new VoteStateUpdate([new VoteLockout(9, 256)], null, H(1));
+            var descending = new VoteStateUpdate([new(9, 1), new(8, 1)], null, H(1));
+            var wide = new VoteStateUpdate([new(9, 256)], null, H(1));
 
             // Act
             Action descendingAction = () => VoteProgram.CompactUpdateVoteState(Pk(1), Pk(2), descending);
@@ -283,7 +283,7 @@ public static class VoteProgramParityTests
     {
         [Test]
         public void UsesPinnedDiscriminator()
-            => Hex(VoteProgram.Vote(Pk(1), Pk(2), new VoteData([], H(3)))).Should().StartWith("02000000");
+            => Hex(VoteProgram.Vote(Pk(1), Pk(2), new([], H(3)))).Should().StartWith("02000000");
     }
 
     [TestFixture]
@@ -315,7 +315,7 @@ public static class VoteProgramParityTests
     {
         [Test]
         public void UsesPinnedDiscriminator()
-            => Hex(VoteProgram.VoteSwitch(Pk(1), Pk(2), new VoteData([], H(3)), H(4)))
+            => Hex(VoteProgram.VoteSwitch(Pk(1), Pk(2), new([], H(3)), H(4)))
                 .Should().StartWith("06000000");
     }
 
@@ -336,7 +336,7 @@ public static class VoteProgramParityTests
             => Hex(VoteProgram.UpdateVoteStateSwitch(
                     Pk(1),
                     Pk(2),
-                    new VoteStateUpdate([], null, H(3)),
+                    new([], null, H(3)),
                     H(4)))
                 .Should().StartWith("09000000");
     }
@@ -380,9 +380,9 @@ public static class VoteInitializeTests
 
 internal static class VoteProgramParityTestHelpers
 {
-    internal static PublicKey Pk(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
+    internal static PublicKey Pk(byte value) => new([.. Enumerable.Repeat(value, PublicKey.Length)]);
 
-    internal static Hash H(byte value) => new(Enumerable.Repeat(value, Hash.Length).ToArray());
+    internal static Hash H(byte value) => new([.. Enumerable.Repeat(value, Hash.Length)]);
 
     internal static string Repeat(byte value, int count)
         => string.Concat(Enumerable.Repeat(value.ToString("x2"), count));
@@ -390,10 +390,10 @@ internal static class VoteProgramParityTestHelpers
     internal static string Hex(Instruction instruction) => Convert.ToHexString(instruction.Data).ToLowerInvariant();
 
     internal static (PublicKey, bool, bool)[] Metas(Instruction instruction)
-        => [.. instruction.Accounts.Select(account => (account.PublicKey, account.IsSigner, account.IsWritable))];
+        => [.. instruction.Accounts.Select(static account => (account.PublicKey, account.IsSigner, account.IsWritable))];
 
     internal static VoteStateUpdate Update()
-        => new([new VoteLockout(7, 1), new VoteLockout(300, 2)], 5, H(9), -2);
+        => new([new(7, 1), new(300, 2)], 5, H(9), -2);
 
     internal static string CompactBody()
         => "0500000000000000" +

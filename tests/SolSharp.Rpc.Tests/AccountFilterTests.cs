@@ -44,7 +44,7 @@ public static class AccountFilterTests
         public void NegativeOffset_ThrowsArgumentOutOfRangeException()
         {
             // Arrange
-            Action act = () => _ = AccountFilter.MemoryCompare(-1, "1");
+            Action act = static () => _ = AccountFilter.MemoryCompare(-1, "1");
 
             // Act & Assert
             act.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("offset");
@@ -58,7 +58,7 @@ public static class AccountFilterTests
         public void MaximumDecodedLengthAndOffset_AreAccepted()
         {
             // Arrange
-            var encoded = Base58.Encode(Enumerable.Repeat(byte.MaxValue, 128).ToArray());
+            var encoded = Base58.Encode([.. Enumerable.Repeat(byte.MaxValue, 128)]);
             encoded.Should().HaveLength(175);
 
             // Act
@@ -75,7 +75,7 @@ public static class AccountFilterTests
         public void InvalidEncoding_ThrowsArgumentException()
         {
             // Arrange
-            Action act = () => _ = AccountFilter.MemoryCompareBase58(0, "III");
+            Action act = static () => _ = AccountFilter.MemoryCompareBase58(0, "III");
 
             // Act & Assert
             act.Should().Throw<ArgumentException>().WithParameterName("bytesBase58");
@@ -117,7 +117,7 @@ public static class AccountFilterTests
         public void InvalidEncoding_ThrowsArgumentException()
         {
             // Arrange
-            Action act = () => _ = AccountFilter.MemoryCompareBase64(0, "not-base64");
+            Action act = static () => _ = AccountFilter.MemoryCompareBase64(0, "not-base64");
 
             // Act & Assert
             act.Should().Throw<ArgumentException>().WithParameterName("bytesBase64");
@@ -159,7 +159,7 @@ public static class AccountFilterTests
         public void MoreThan128Bytes_ThrowsArgumentException()
         {
             // Arrange
-            Action act = () => _ = AccountFilter.MemoryCompareRaw(0, new byte[129]);
+            Action act = static () => _ = AccountFilter.MemoryCompareRaw(0, new byte[129]);
 
             // Act & Assert
             act.Should().Throw<ArgumentException>().WithParameterName("bytes");
@@ -183,7 +183,7 @@ public static class AccountFilterTests
         public void NegativeValue_ThrowsArgumentOutOfRangeException()
         {
             // Arrange
-            Action act = () => _ = AccountFilter.DataSize(-1);
+            Action act = static () => _ = AccountFilter.DataSize(-1);
 
             // Act & Assert
             act.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("size");
@@ -226,7 +226,8 @@ public static class AccountFilterTests
         {
             // Arrange
             var handler = new FakeHttpMessageHandler("""{"jsonrpc":"2.0","result":[],"id":1}""");
-            using var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
+            using var http = new HttpClient(handler);
+            http.BaseAddress = new("http://localhost");
             var client = new SolanaRpcClient(http);
             var options = new GetProgramAccountsOptions
             {
@@ -259,10 +260,10 @@ public static class AccountFilterTests
             // Arrange
             var fake = new FakeWebSocketConnection();
             await using var client = new SolanaWsClient(fake);
-            await client.ConnectAsync(new Uri("wss://localhost"));
+            await client.ConnectAsync(new("wss://localhost"));
             var subscribe = client.SubscribeProgramWithOptionsAsync(
                 PublicKey.Parse(ProgramId),
-                new ProgramSubscriptionOptions
+                new()
                 {
                     Encoding = RpcAccountEncoding.Base64,
                     Filters =

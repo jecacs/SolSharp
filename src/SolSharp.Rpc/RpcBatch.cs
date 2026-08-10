@@ -84,7 +84,7 @@ public sealed class RpcBatch
     public Task<string> SendTransactionAsync(byte[] transaction, SendTransactionOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(transaction);
-        options ??= new SendTransactionOptions();
+        options ??= new();
 
         var encoded = Convert.ToBase64String(transaction);
         return Add(

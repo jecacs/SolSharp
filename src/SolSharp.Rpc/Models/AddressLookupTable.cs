@@ -130,7 +130,7 @@ public sealed record AddressLookupTable
 
         var addresses = new PublicKey[count];
         for (var i = 0; i < count; i++)
-            addresses[i] = new PublicKey(addressBytes.Slice(i * PublicKey.Length, PublicKey.Length));
+            addresses[i] = new(addressBytes.Slice(i * PublicKey.Length, PublicKey.Length));
 
         IReadOnlyList<PublicKey> activeAddresses = addresses;
         if (contextSlot is { } observedSlot && observedSlot <= lastExtendedSlot)
@@ -140,7 +140,7 @@ public sealed record AddressLookupTable
             activeAddresses = activePrefix;
         }
 
-        return new AddressLookupTable
+        return new()
         {
             DeactivationSlot = deactivationSlot,
             LastExtendedSlot = lastExtendedSlot,

@@ -107,7 +107,7 @@ public ref struct BorshReader(ReadOnlySpan<byte> data)
     /// <summary>Reads a length-prefixed byte vector (a u32 length, then that many bytes) into a new array.</summary>
     /// <returns>The bytes read.</returns>
     /// <exception cref="FormatException">There are not enough bytes left.</exception>
-    public byte[] ReadByteVector() => Take(ReadLength()).ToArray();
+    public byte[] ReadByteVector() => [.. Take(ReadLength())];
 
     /// <summary>
     /// Reads a u32 length prefix - as used by Borsh Vec and String - returning it as an <see cref="int"/>.

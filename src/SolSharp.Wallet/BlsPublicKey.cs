@@ -17,7 +17,7 @@ public sealed class BlsPublicKey : IEquatable<BlsPublicKey>
 
     private BlsPublicKey(ReadOnlySpan<byte> bytes)
     {
-        _bytes = bytes.ToArray();
+        _bytes = [.. bytes];
     }
 
     internal ReadOnlySpan<byte> Bytes => _bytes;
@@ -31,7 +31,7 @@ public sealed class BlsPublicKey : IEquatable<BlsPublicKey>
         if (!BlsOperations.IsValidPublicKey(compressed))
             throw new ArgumentException("BLS public key must be a canonical non-infinity G1 subgroup point.", nameof(compressed));
 
-        return new BlsPublicKey(compressed);
+        return new(compressed);
     }
 
     /// <summary>Parses the standard base64 text emitted by <see cref="ToString"/>.</summary>
@@ -70,7 +70,7 @@ public sealed class BlsPublicKey : IEquatable<BlsPublicKey>
             return false;
         }
 
-        publicKey = new BlsPublicKey(compressed);
+        publicKey = new(compressed);
         return true;
     }
 
@@ -128,7 +128,7 @@ public sealed class BlsPublicKey : IEquatable<BlsPublicKey>
         if (!BlsOperations.VerifyProofOfPossession(_bytes, proof.Bytes, payload))
             throw new CryptographicException("The BLS proof of possession is invalid for this public key and payload.");
 
-        return new BlsPopVerifiedPublicKey(this);
+        return new(this);
     }
 
     /// <summary>Verifies the vote-program proof bound to <c>ALPENGLOW || vote_account</c>.</summary>

@@ -73,7 +73,7 @@ public readonly struct Hash : IEquatable<Hash>
     {
         if (Base58.TryDecode(base58, out var bytes) && bytes.Length == Length)
         {
-            hash = new Hash(bytes, base58);
+            hash = new(bytes, base58);
             return true;
         }
 

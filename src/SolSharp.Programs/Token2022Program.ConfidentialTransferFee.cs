@@ -22,7 +22,7 @@ public static partial class Token2022Program
             data.AsSpan(2 + PublicKey.Length, ElGamalPublicKeyLength),
             withdrawAuthorityElGamalPublicKey,
             nameof(withdrawAuthorityElGamalPublicKey));
-        return new Instruction { ProgramId = ProgramId, Accounts = [AccountMeta.Writable(mint)], Data = data };
+        return new() { ProgramId = ProgramId, Accounts = [AccountMeta.Writable(mint)], Data = data };
     }
 
     /// <summary>Withdraws confidential fees held by a mint into a confidential token account.</summary>
@@ -50,7 +50,7 @@ public static partial class Token2022Program
             data.AsSpan(3, DecryptableBalanceLength),
             newDecryptableAvailableBalance,
             nameof(newDecryptableAvailableBalance));
-        return new Instruction { ProgramId = ProgramId, Accounts = accounts, Data = data };
+        return new() { ProgramId = ProgramId, Accounts = accounts, Data = data };
     }
 
     /// <summary>
@@ -95,7 +95,7 @@ public static partial class Token2022Program
             data.AsSpan(4, DecryptableBalanceLength),
             newDecryptableAvailableBalance,
             nameof(newDecryptableAvailableBalance));
-        return new Instruction { ProgramId = ProgramId, Accounts = accounts, Data = data };
+        return new() { ProgramId = ProgramId, Accounts = accounts, Data = data };
     }
 
     /// <summary>Permissionlessly harvests confidential withheld fees from token accounts into their mint.</summary>
@@ -112,7 +112,7 @@ public static partial class Token2022Program
         accounts[0] = AccountMeta.Writable(mint);
         for (var i = 0; i < sources.Count; i++)
             accounts[i + 1] = AccountMeta.Writable(sources[i]);
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts = accounts,
@@ -152,7 +152,7 @@ public static partial class Token2022Program
     {
         var accounts = new List<AccountMeta> { AccountMeta.Writable(mint) };
         AppendAuthority(accounts, authority, multisigSigners);
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts = accounts,

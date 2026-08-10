@@ -107,7 +107,7 @@ public sealed class AddressLookupTableState
         var discriminator = BinaryPrimitives.ReadUInt32LittleEndian(data);
         if (discriminator == (uint)AddressLookupTableStateKind.Uninitialized)
         {
-            return new AddressLookupTableState(
+            return new(
                 AddressLookupTableStateKind.Uninitialized,
                 ulong.MaxValue,
                 0,
@@ -137,9 +137,9 @@ public sealed class AddressLookupTableState
         };
         var addresses = new PublicKey[count];
         for (var i = 0; i < addresses.Length; i++)
-            addresses[i] = new PublicKey(addressBytes.Slice(i * PublicKey.Length, PublicKey.Length));
+            addresses[i] = new(addressBytes.Slice(i * PublicKey.Length, PublicKey.Length));
 
-        return new AddressLookupTableState(
+        return new(
             AddressLookupTableStateKind.LookupTable,
             BinaryPrimitives.ReadUInt64LittleEndian(data[4..]),
             BinaryPrimitives.ReadUInt64LittleEndian(data[12..]),
@@ -183,10 +183,10 @@ public sealed class AddressLookupTableState
         EnsureInitialized();
 
         if (DeactivationSlot == ulong.MaxValue)
-            return new AddressLookupTableStatus(AddressLookupTableStatusKind.Activated);
+            return new(AddressLookupTableStatusKind.Activated);
         if (DeactivationSlot == currentSlot)
         {
-            return new AddressLookupTableStatus(
+            return new(
                 AddressLookupTableStatusKind.Deactivating,
                 SlotHashesSysvarState.MaximumEntries + 1);
         }
@@ -195,13 +195,13 @@ public sealed class AddressLookupTableState
         {
             if (slotHashes.Entries[i].Slot == DeactivationSlot)
             {
-                return new AddressLookupTableStatus(
+                return new(
                     AddressLookupTableStatusKind.Deactivating,
                     SlotHashesSysvarState.MaximumEntries - i);
             }
         }
 
-        return new AddressLookupTableStatus(AddressLookupTableStatusKind.Deactivated);
+        return new(AddressLookupTableStatusKind.Deactivated);
     }
 
     /// <summary>Returns whether the table remains usable for lookups at the supplied slot.</summary>

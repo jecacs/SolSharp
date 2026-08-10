@@ -42,31 +42,32 @@ public static class ServiceCollectionExtensions
             .AddOptions<SolanaRpcOptions>()
             .Configure(configure)
             .Validate(
-                options => Uri.TryCreate(options.Endpoint, UriKind.Absolute, out var uri)
+                static options => Uri.TryCreate(options.Endpoint, UriKind.Absolute, out var uri)
                            && uri.Scheme is "http" or "https",
                 "SolanaRpcOptions.Endpoint must be an absolute http(s) URL.")
             .Validate(
-                options => options.MaximumResponseContentLength > 0,
+                static options => options.MaximumResponseContentLength > 0,
                 "SolanaRpcOptions.MaximumResponseContentLength must be positive.")
             .ValidateOnStart();
 
-        var builder = services.AddHttpClient<SolanaRpcClient>((provider, client) =>
+        var builder = services.AddHttpClient<SolanaRpcClient>(static (provider, client) =>
         {
             var options = provider.GetRequiredService<IOptions<SolanaRpcOptions>>().Value;
-            client.BaseAddress = new Uri(options.Endpoint);
+            client.BaseAddress = new(options.Endpoint);
         });
 
         var resilience = builder.AddStandardResilienceHandler();
         if (configureResilience is not null)
             resilience.Configure(configureResilience);
-        resilience.Configure(options =>
+
+        resilience.Configure(static options =>
         {
             var shouldHandle = options.Retry.ShouldHandle;
             options.Retry.ShouldHandle = arguments =>
             {
                 var request = arguments.Outcome.Result?.RequestMessage ?? arguments.Context.GetRequestMessage();
                 return request?.Options.TryGetValue(SolanaRpcClient.DisableRetriesKey, out var disabled) == true && disabled
-                    ? new ValueTask<bool>(false)
+                    ? ValueTask.FromResult(false)
                     : shouldHandle(arguments);
             };
         });

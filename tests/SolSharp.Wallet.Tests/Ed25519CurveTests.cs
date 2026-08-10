@@ -11,15 +11,15 @@ public static class Ed25519CurveTests
     // field element y satisfies d*y^2 + 1 == 0, and y is always reduced into the field first.
     public static IEnumerable<TestCaseData> Vectors()
     {
-        yield return new TestCaseData("c28a70a61c7510a1cd89216ca16cffcaea4987477e86dbccb97046fc2e18384e", true);
-        yield return new TestCaseData("d85d8eec7f26e23219072f7955d0f8f66dcd1e54c201c787e892d8f94f61976f", true);
-        yield return new TestCaseData("5ad30c5baad27f885137c313f07166ebb39c74720c62cca88e238eb3cca90e3b", true);
-        yield return new TestCaseData("390c8c7d7247342cd8100f2f6f770d65d670e58e0351d8ae8e4f6eac342fc231", false);
-        yield return new TestCaseData("2210a924798ef86d43f27cf2d0613031dcb5d8d2ef1b321fcead377f6261e547", false);
-        yield return new TestCaseData("2792788baba329464d76c44e6d20d4d0a9eed41f69d7c70ac2f403b498c7d670", false);
-        yield return new TestCaseData("0000000000000000000000000000000000000000000000000000000000000000", true);
-        yield return new TestCaseData("0101010101010101010101010101010101010101010101010101010101010101", true);
-        yield return new TestCaseData("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", true);
+        yield return new("c28a70a61c7510a1cd89216ca16cffcaea4987477e86dbccb97046fc2e18384e", true);
+        yield return new("d85d8eec7f26e23219072f7955d0f8f66dcd1e54c201c787e892d8f94f61976f", true);
+        yield return new("5ad30c5baad27f885137c313f07166ebb39c74720c62cca88e238eb3cca90e3b", true);
+        yield return new("390c8c7d7247342cd8100f2f6f770d65d670e58e0351d8ae8e4f6eac342fc231", false);
+        yield return new("2210a924798ef86d43f27cf2d0613031dcb5d8d2ef1b321fcead377f6261e547", false);
+        yield return new("2792788baba329464d76c44e6d20d4d0a9eed41f69d7c70ac2f403b498c7d670", false);
+        yield return new("0000000000000000000000000000000000000000000000000000000000000000", true);
+        yield return new("0101010101010101010101010101010101010101010101010101010101010101", true);
+        yield return new("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", true);
     }
 
     [TestFixture]

@@ -6,10 +6,10 @@ namespace SolSharp.Programs.Tests;
 
 public static class MessageDecompileTests
 {
-    private static PublicKey Pk(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
+    private static PublicKey Pk(byte value) => new([.. Enumerable.Repeat(value, PublicKey.Length)]);
 
     private static (PublicKey, bool, bool)[] Metas(Instruction instruction)
-        => [.. instruction.Accounts.Select(a => (a.PublicKey, a.IsSigner, a.IsWritable))];
+        => [.. instruction.Accounts.Select(static a => (a.PublicKey, a.IsSigner, a.IsWritable))];
 
     [TestFixture]
     public sealed class MessageDecompileInstructions
@@ -83,10 +83,10 @@ public static class MessageDecompileTests
             var decompiled = message.DecompileInstructions([]);
 
             // Assert
-            decompiled.Select(instruction => instruction.ProgramId).Should().Equal(Pk(9), Pk(10));
-            decompiled.Select(instruction => instruction.Data).Should().SatisfyRespectively(
-                data => data.Should().Equal(1),
-                data => data.Should().Equal(2, 3));
+            decompiled.Select(static instruction => instruction.ProgramId).Should().Equal(Pk(9), Pk(10));
+            decompiled.Select(static instruction => instruction.Data).Should().SatisfyRespectively(
+                static data => data.Should().Equal(1),
+                static data => data.Should().Equal(2, 3));
             Metas(decompiled[0]).Should().Equal(
                 (repeated, false, true),
                 (repeated, false, true));

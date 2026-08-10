@@ -73,10 +73,10 @@ public sealed class TokenMetadataState
         {
             if (!TryReadString(data, ref offset, out var key) || !TryReadString(data, ref offset, out var value))
                 return null;
-            additional.Add(new KeyValuePair<string, string>(key, value));
+            additional.Add(new(key, value));
         }
 
-        return new TokenMetadataState(updateAuthority, mint, name, symbol, uri, additional);
+        return new(updateAuthority, mint, name, symbol, uri, additional);
     }
 
     internal static bool TryReadString(ReadOnlySpan<byte> data, ref int offset, out string value)

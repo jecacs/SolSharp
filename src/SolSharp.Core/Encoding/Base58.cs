@@ -32,7 +32,7 @@ public static class Base58
         ArgumentNullException.ThrowIfNull(text);
         if (text.Length == 0)
             return [];
-        if (text.AsSpan().ContainsAnyExcept(Alphabet))
+        if (text.ContainsAnyExcept(Alphabet))
             throw new FormatException($"Not a valid base58 string: '{text}'.");
 
         return Codec.Decode(text);
@@ -45,7 +45,7 @@ public static class Base58
     public static bool TryDecode(string? text, out byte[] bytes)
     {
         bytes = [];
-        if (string.IsNullOrEmpty(text) || text.AsSpan().ContainsAnyExcept(Alphabet))
+        if (string.IsNullOrEmpty(text) || text.ContainsAnyExcept(Alphabet))
             return false;
 
         bytes = Codec.Decode(text);

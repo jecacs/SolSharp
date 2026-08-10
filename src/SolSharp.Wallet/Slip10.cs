@@ -46,7 +46,7 @@ public static class Slip10
                 current = child;
             }
 
-            return current.AsSpan(0, 32).ToArray();
+            return [.. current.AsSpan(0, 32)];
         }
         finally
         {

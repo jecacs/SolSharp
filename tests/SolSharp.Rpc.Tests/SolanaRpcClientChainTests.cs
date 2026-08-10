@@ -12,8 +12,8 @@ public static class SolanaRpcClientChainTests
     private static (SolanaRpcClient Client, FakeHttpMessageHandler Handler) Make(string responseJson)
     {
         var handler = new FakeHttpMessageHandler(responseJson);
-        var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
-        return (new SolanaRpcClient(http), handler);
+        var http = new HttpClient(handler) { BaseAddress = new("http://localhost") };
+        return (new(http), handler);
     }
 
     [TestFixture]
@@ -124,7 +124,7 @@ public static class SolanaRpcClientChainTests
 
             // Assert
             block.Should().NotBeNull();
-            block!.Blockhash.Should().Be("Ckt");
+            block.Blockhash.Should().Be("Ckt");
             block.PreviousBlockhash.Should().Be("Prev");
             block.ParentSlot.Should().Be(99);
             block.BlockHeight.Should().Be(90);

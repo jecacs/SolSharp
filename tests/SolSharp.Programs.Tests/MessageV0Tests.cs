@@ -10,7 +10,7 @@ public static class MessageV0Tests
     {
         var bytes = new byte[PublicKey.Length];
         Array.Fill(bytes, value);
-        return new PublicKey(bytes);
+        return new(bytes);
     }
 
     private static PublicKey UniqueKey(int value)
@@ -18,7 +18,7 @@ public static class MessageV0Tests
         var bytes = new byte[PublicKey.Length];
         bytes[0] = (byte)value;
         bytes[1] = (byte)(value >> 8);
-        return new PublicKey(bytes);
+        return new(bytes);
     }
 
     // 32 bytes encode to the same base58 whether they represent a key or a blockhash.
@@ -107,7 +107,7 @@ public static class MessageV0Tests
                 var bytes = new byte[PublicKey.Length];
                 bytes[0] = (byte)i;
                 bytes[1] = (byte)(i >> 8);
-                addresses[i] = new PublicKey(bytes);
+                addresses[i] = new(bytes);
             }
 
             var instruction = new Instruction { ProgramId = Pk(9), Accounts = [AccountMeta.Writable(Pk(2))], Data = [] };
@@ -222,7 +222,7 @@ public static class MessageV0Tests
         {
             var keys = Enumerable.Range(0, count).Select(UniqueKey).ToArray();
             payer = keys[0];
-            return new Instruction
+            return new()
             {
                 ProgramId = keys[^1],
                 Accounts = [.. keys.Skip(1).Select(AccountMeta.ReadonlySigner)],

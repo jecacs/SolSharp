@@ -13,7 +13,7 @@ public static class TokenProgramOpsTests
     {
         var bytes = new byte[PublicKey.Length];
         Array.Fill(bytes, value);
-        return new PublicKey(bytes);
+        return new(bytes);
     }
 
     private static string DataHex(Instruction instruction) => Convert.ToHexString(instruction.Data).ToLowerInvariant();
@@ -166,7 +166,7 @@ public static class TokenProgramOpsTests
         public void UndefinedAuthorityType_Throws()
         {
             // Act
-            Action act = () => _ = TokenProgram.SetAuthority(Pk(2), Pk(3), (AuthorityType)byte.MaxValue);
+            Action act = static () => _ = TokenProgram.SetAuthority(Pk(2), Pk(3), (AuthorityType)byte.MaxValue);
 
             // Assert
             act.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("authorityType");
@@ -396,7 +396,7 @@ public static class TokenProgramOpsTests
         public void EmptyMemberList_Throws()
         {
             // Act
-            Action act = () => _ = TokenProgram.Transfer(Pk(2), Pk(3), Pk(6), 1, null, []);
+            Action act = static () => _ = TokenProgram.Transfer(Pk(2), Pk(3), Pk(6), 1, null, []);
 
             // Assert
             act.Should().Throw<ArgumentException>().WithMessage("*at least one*");
@@ -406,7 +406,7 @@ public static class TokenProgramOpsTests
         public void ElevenMembers_IsAccepted()
         {
             // Arrange
-            var members = Enumerable.Range(10, 11).Select(value => Pk((byte)value)).ToArray();
+            var members = Enumerable.Range(10, 11).Select(static value => Pk((byte)value)).ToArray();
 
             // Act
             var instruction = TokenProgram.Transfer(Pk(2), Pk(3), Pk(6), 1, null, members);
@@ -419,7 +419,7 @@ public static class TokenProgramOpsTests
         public void TwelveMembers_Throws()
         {
             // Arrange
-            var members = Enumerable.Range(10, 12).Select(value => Pk((byte)value)).ToArray();
+            var members = Enumerable.Range(10, 12).Select(static value => Pk((byte)value)).ToArray();
 
             // Act
             Action act = () => _ = TokenProgram.Transfer(Pk(2), Pk(3), Pk(6), 1, null, members);

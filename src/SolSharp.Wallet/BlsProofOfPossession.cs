@@ -14,7 +14,7 @@ public sealed class BlsProofOfPossession : IEquatable<BlsProofOfPossession>
 
     private BlsProofOfPossession(ReadOnlySpan<byte> bytes)
     {
-        _bytes = bytes.ToArray();
+        _bytes = [.. bytes];
     }
 
     internal ReadOnlySpan<byte> Bytes => _bytes;
@@ -28,7 +28,7 @@ public sealed class BlsProofOfPossession : IEquatable<BlsProofOfPossession>
         if (!BlsOperations.IsValidSignature(compressed))
             throw new ArgumentException("BLS proof must be a canonical non-infinity G2 subgroup point.", nameof(compressed));
 
-        return new BlsProofOfPossession(compressed);
+        return new(compressed);
     }
 
     /// <summary>Parses the standard base64 text emitted by <see cref="ToString"/>.</summary>
@@ -67,7 +67,7 @@ public sealed class BlsProofOfPossession : IEquatable<BlsProofOfPossession>
             return false;
         }
 
-        proof = new BlsProofOfPossession(compressed);
+        proof = new(compressed);
         return true;
     }
 
@@ -107,6 +107,7 @@ public sealed class BlsProofOfPossession : IEquatable<BlsProofOfPossession>
         var hash = default(HashCode);
         foreach (var value in _bytes)
             hash.Add(value);
+
         return hash.ToHashCode();
     }
 

@@ -62,8 +62,8 @@ public static class OffchainMessageTests
         public void EmptyOrInvalidUtf8_Throws()
         {
             // Act
-            var empty = () => _ = OffchainMessage.Create((byte[])[]);
-            var invalid = () => _ = OffchainMessage.Create([0xFF]);
+            var empty = static () => _ = OffchainMessage.Create((byte[])[]);
+            var invalid = static () => _ = OffchainMessage.Create([0xFF]);
 
             // Assert
             empty.Should().Throw<ArgumentException>();
@@ -74,8 +74,8 @@ public static class OffchainMessageTests
         public void UnsupportedVersionOrOversizedPayload_Throws()
         {
             // Act
-            var version = () => _ = OffchainMessage.Create(1, "x"u8);
-            var oversized = () => _ = OffchainMessage.Create(new byte[OffchainMessage.MaxMessageLength + 1]);
+            var version = static () => _ = OffchainMessage.Create(1, "x"u8);
+            var oversized = static () => _ = OffchainMessage.Create(new byte[OffchainMessage.MaxMessageLength + 1]);
 
             // Assert
             version.Should().Throw<ArgumentOutOfRangeException>();
@@ -96,7 +96,7 @@ public static class OffchainMessageTests
 
             // Assert
             message.Serialize().Should().Equal(UpstreamAsciiWire);
-            message.ToMessageBytes().Should().Equal("Test Message"u8.ToArray());
+            message.ToMessageBytes().Should().Equal([.. "Test Message"u8]);
             message.Should().Be(OffchainMessage.Create("Test Message"));
         }
 

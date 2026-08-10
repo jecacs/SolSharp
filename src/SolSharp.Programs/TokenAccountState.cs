@@ -24,7 +24,7 @@ public sealed class Token2022ExtensionData
     internal Token2022ExtensionData(Token2022ExtensionType extensionType, ReadOnlySpan<byte> data)
     {
         ExtensionType = extensionType;
-        _data = data.ToArray();
+        _data = [.. data];
     }
 
     /// <summary>The pinned Token-2022 extension type.</summary>
@@ -89,7 +89,7 @@ public sealed class TokenMintState
         if (!TokenStateDecoder.TryDecodeExtensions(data, BaseLength, expectedAccountType: 1, out var extensions))
             return null;
 
-        return new TokenMintState(
+        return new(
             mintAuthority,
             BinaryPrimitives.ReadUInt64LittleEndian(data[36..]),
             data[44],
@@ -172,9 +172,9 @@ public sealed class TokenHoldingAccountState
             return null;
         }
 
-        return new TokenHoldingAccountState(
-            new PublicKey(data[..PublicKey.Length]),
-            new PublicKey(data.Slice(PublicKey.Length, PublicKey.Length)),
+        return new(
+            new(data[..PublicKey.Length]),
+            new(data.Slice(PublicKey.Length, PublicKey.Length)),
             BinaryPrimitives.ReadUInt64LittleEndian(data[64..]),
             @delegate,
             (TokenAccountStatus)statusByte,
@@ -220,8 +220,8 @@ public sealed class TokenMultisigState
             return null;
         var signers = new PublicKey[11];
         for (var i = 0; i < signers.Length; i++)
-            signers[i] = new PublicKey(data.Slice(3 + (i * PublicKey.Length), PublicKey.Length));
-        return new TokenMultisigState(data[0], data[1], data[2] != 0, signers);
+            signers[i] = new(data.Slice(3 + (i * PublicKey.Length), PublicKey.Length));
+        return new(data[0], data[1], data[2] != 0, signers);
     }
 }
 
@@ -326,7 +326,7 @@ internal static class TokenStateDecoder
                 return false;
             }
 
-            decoded.Add(new Token2022ExtensionData(
+            decoded.Add(new(
                 (Token2022ExtensionType)typeValue,
                 tlv.Slice(valueStart, valueLength)));
             offset = valueStart + valueLength;

@@ -20,7 +20,7 @@ public static class SolanaUnitsTests
         public void NegativeThrows()
         {
             // Act
-            Action act = () => SolanaUnits.SolToLamports(-1m);
+            Action act = static () => SolanaUnits.SolToLamports(-1m);
 
             // Assert
             act.Should().Throw<ArgumentOutOfRangeException>();
@@ -30,7 +30,7 @@ public static class SolanaUnitsTests
         public void LargerThanUlongLamports_Throws()
         {
             // Act: 18_446_744_074 SOL converts past ulong.MaxValue lamports.
-            Action act = () => SolanaUnits.SolToLamports(18_446_744_074m);
+            Action act = static () => SolanaUnits.SolToLamports(18_446_744_074m);
 
             // Assert
             act.Should().Throw<ArgumentOutOfRangeException>();
@@ -41,7 +41,7 @@ public static class SolanaUnitsTests
         {
             // Act: 1e20 SOL used to overflow the decimal multiply before the range check ran,
             // surfacing as OverflowException instead of the documented exception.
-            Action act = () => SolanaUnits.SolToLamports(1e20m);
+            Action act = static () => SolanaUnits.SolToLamports(1e20m);
 
             // Assert
             act.Should().Throw<ArgumentOutOfRangeException>();

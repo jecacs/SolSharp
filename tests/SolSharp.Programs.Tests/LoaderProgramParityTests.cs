@@ -23,7 +23,7 @@ public static class LegacyBpfLoaderProgramTests
             Hex(instruction).Should().Be("00000000785634120300000000000000aabbcc");
             instruction.ProgramId.Should().Be(LegacyBpfLoaderProgram.ProgramId);
             instruction.Accounts.Should().ContainSingle()
-                .Which.Should().Match<AccountMeta>(account => account.IsSigner && account.IsWritable);
+                .Which.Should().Match<AccountMeta>(static account => account.IsSigner && account.IsWritable);
         }
     }
 
@@ -73,7 +73,7 @@ public static class UpgradeableBpfLoaderProgramTests
                 Pk(1),
                 Pk(2),
                 lamports,
-                checked((ulong)UpgradeableBpfLoaderState.BufferMetadataLength + programLength),
+                checked(UpgradeableBpfLoaderState.BufferMetadataLength + programLength),
                 UpgradeableBpfLoaderProgram.ProgramId);
             var expectedInitialize = UpgradeableBpfLoaderProgram.InitializeBuffer(Pk(2), Pk(3));
 
@@ -91,7 +91,7 @@ public static class UpgradeableBpfLoaderProgramTests
         public void MetadataLengthOverflow_Throws()
         {
             // Act
-            Action act = () => UpgradeableBpfLoaderProgram.CreateBuffer(
+            Action act = static () => UpgradeableBpfLoaderProgram.CreateBuffer(
                 Pk(1), Pk(2), Pk(3), 1, ulong.MaxValue);
 
             // Assert
@@ -121,7 +121,7 @@ public static class UpgradeableBpfLoaderProgramTests
     {
         [Test]
         public void MatchesPinnedWincodeBincodeCompatibilityVector() =>
-            Hex(UpgradeableBpfLoaderProgram.DeployInstruction(Pk(1), Pk(2), Pk(3), Pk(4), 42, true))
+            Hex(UpgradeableBpfLoaderProgram.DeployInstruction(Pk(1), Pk(2), Pk(3), Pk(4), 42))
                 .Should().Be("020000002a0000000000000001");
     }
 
@@ -440,10 +440,10 @@ public static class LoaderV4StateTests
 
 internal static class LoaderProgramTestHelpers
 {
-    internal static PublicKey Pk(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
+    internal static PublicKey Pk(byte value) => new([.. Enumerable.Repeat(value, PublicKey.Length)]);
 
     internal static string Hex(Instruction instruction) => Convert.ToHexString(instruction.Data).ToLowerInvariant();
 
     internal static (PublicKey, bool, bool)[] Metas(Instruction instruction)
-        => [.. instruction.Accounts.Select(account => (account.PublicKey, account.IsSigner, account.IsWritable))];
+        => [.. instruction.Accounts.Select(static account => (account.PublicKey, account.IsSigner, account.IsWritable))];
 }

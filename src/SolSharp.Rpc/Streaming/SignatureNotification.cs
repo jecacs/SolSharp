@@ -59,13 +59,13 @@ public sealed class SignatureNotificationJsonConverter : JsonConverter<Signature
             if (root.GetString() != "receivedSignature")
                 throw new JsonException("Expected the receivedSignature event.");
 
-            return new SignatureNotification { Kind = SignatureNotificationKind.Received };
+            return new() { Kind = SignatureNotificationKind.Received };
         }
 
         if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("err", out var error))
             throw new JsonException("Expected a receivedSignature string or a processed { err } object.");
 
-        return new SignatureNotification
+        return new()
         {
             Kind = SignatureNotificationKind.Processed,
             Err = error.Clone()

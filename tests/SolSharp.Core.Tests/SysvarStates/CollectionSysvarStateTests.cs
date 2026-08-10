@@ -23,8 +23,8 @@ public static class SlotHashesSysvarStateTests
             var state = SlotHashesSysvarState.Parse(data);
 
             // Assert
-            state.Entries.Select(entry => entry.Slot).Should().Equal(9, 8);
-            state.Entries[0].Hash.ToBytes().Should().Equal(Enumerable.Range(1, 32).Select(value => (byte)value));
+            state.Entries.Select(static entry => entry.Slot).Should().Equal(9, 8);
+            state.Entries[0].Hash.ToBytes().Should().Equal(Enumerable.Range(1, 32).Select(static value => (byte)value));
             SlotHashesSysvarState.MaximumEntries.Should().Be(512);
             SlotHashesSysvarState.MaximumDataLength.Should().Be(20_488);
         }
@@ -61,8 +61,8 @@ public static class StakeHistorySysvarStateTests
 
             // Assert
             state.Entries.Should().Equal(
-                new StakeHistoryEpoch(9, new StakeHistoryEntry(10, 11, 12)),
-                new StakeHistoryEpoch(8, new StakeHistoryEntry(13, 14, 15)));
+                new StakeHistoryEpoch(9, new(10, 11, 12)),
+                new StakeHistoryEpoch(8, new(13, 14, 15)));
             StakeHistorySysvarState.MaximumEntries.Should().Be(512);
             StakeHistorySysvarState.MaximumDataLength.Should().Be(16_392);
         }

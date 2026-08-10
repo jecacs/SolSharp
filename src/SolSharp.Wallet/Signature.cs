@@ -79,7 +79,7 @@ public readonly struct Signature : IEquatable<Signature>
     {
         if (Base58.TryDecode(base58, out var bytes) && bytes.Length == Length)
         {
-            signature = new Signature(bytes, base58);
+            signature = new(bytes, base58);
             return true;
         }
 

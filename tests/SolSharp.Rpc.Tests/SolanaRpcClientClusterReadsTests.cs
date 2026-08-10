@@ -30,8 +30,8 @@ public static class SolanaRpcClientClusterReadsTests
     private static (SolanaRpcClient Client, FakeHttpMessageHandler Handler) Make(string responseJson)
     {
         var handler = new FakeHttpMessageHandler(responseJson);
-        var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
-        return (new SolanaRpcClient(http), handler);
+        var http = new HttpClient(handler) { BaseAddress = new("http://localhost") };
+        return (new(http), handler);
     }
 
     [TestFixture]
@@ -146,7 +146,7 @@ public static class SolanaRpcClientClusterReadsTests
 
             // Assert
             schedule.Should().NotBeNull();
-            schedule!.Should().ContainKey(Node);
+            schedule.Should().ContainKey(Node);
             schedule[Node].Should().Equal(0ul, 1ul, 2ul, 3ul, 4ul, 5ul, 6ul, 7ul);
         }
 
@@ -246,9 +246,9 @@ public static class SolanaRpcClientClusterReadsTests
 
             // Assert
             certificate.Should().NotBeNull();
-            certificate!.Block.Slot.Should().Be(99);
+            certificate.Block.Slot.Should().Be(99);
             certificate.Block.BlockId.Should().Equal(Enumerable.Range(0, 32).Select(static value => (byte)value));
-            certificate.Signature.Signature.Should().HaveCount(192).And.OnlyContain(value => value == 7);
+            certificate.Signature.Signature.Should().HaveCount(192).And.OnlyContain(static value => value == 7);
             certificate.Signature.Bitmap.Should().Equal(1, 128);
             handler.CapturedRequestBody.Should().Contain("\"method\":\"getAgGenesisCert\"");
         }

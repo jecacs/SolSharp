@@ -16,8 +16,8 @@ public static class SolanaRpcClientProgramAccountsTests
     private static (SolanaRpcClient Client, FakeHttpMessageHandler Handler) Make(string responseJson)
     {
         var handler = new FakeHttpMessageHandler(responseJson);
-        var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
-        return (new SolanaRpcClient(http), handler);
+        var http = new HttpClient(handler) { BaseAddress = new("http://localhost") };
+        return (new(http), handler);
     }
 
     [TestFixture]
@@ -72,7 +72,7 @@ public static class SolanaRpcClientProgramAccountsTests
         {
             // Arrange
             var (client, handler) = Make("""{"jsonrpc":"2.0","result":[],"id":1}""");
-            var options = new GetProgramAccountsOptions { DataSlice = new DataSlice(8, 32) };
+            var options = new GetProgramAccountsOptions { DataSlice = new(8, 32) };
 
             // Act
             await client.GetProgramAccountsAsync(PublicKey.Parse(ProgramId), options);

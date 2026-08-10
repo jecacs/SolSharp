@@ -38,12 +38,35 @@ jobs:
       - name: Restore
         run: dotnet restore --locked-mode -p:NuGetAuditMode=all -warnaserror
 
+      - name: Restore benchmarks
+        run: >-
+          dotnet restore benchmarks/SolSharp.Benchmarks/SolSharp.Benchmarks.csproj
+          --locked-mode
+          -p:NuGetAuditMode=all
+          -warnaserror
+
       # Hard gate: the project keeps a zero-warning build, so fail CI on any warning.
       - name: Build
         run: dotnet build --no-restore --configuration Release -warnaserror
 
+      - name: Build benchmarks
+        run: >-
+          dotnet build benchmarks/SolSharp.Benchmarks/SolSharp.Benchmarks.csproj
+          --no-restore
+          --configuration Release
+          -warnaserror
+
       - name: Verify formatting and analyzer style
         run: dotnet format --no-restore --verify-no-changes --severity info
+
+      - name: Verify benchmark formatting and analyzer style
+        # Benchmark methods intentionally remain instance members, and cold-start cases create
+        # fresh options; warnings (including IDE0320) remain build-gated.
+        run: >-
+          dotnet format benchmarks/SolSharp.Benchmarks/SolSharp.Benchmarks.csproj
+          --no-restore
+          --verify-no-changes
+          --severity warn
 
       # The four unit-test projects produce overlapping reports because higher layers reference
       # lower assemblies. ReportGenerator merges those hits before enforcing the repository-wide

@@ -62,13 +62,13 @@ public static partial class TokenProgram
                 break;
             case 6:
                 if (payload.IsEmpty ||
-                    payload[0] > (byte)Programs.AuthorityType.PermissionedBurn ||
+                    payload[0] > (byte)AuthorityType.PermissionedBurn ||
                     !TryReadCompactOptionalPublicKey(payload[1..], out var newAuthority))
                 {
                     return null;
                 }
 
-                decoded.AuthorityType = (Programs.AuthorityType)payload[0];
+                decoded.AuthorityType = (AuthorityType)payload[0];
                 decoded.HasOptionalPublicKey = true;
                 decoded.OptionalPublicKey = newAuthority;
                 break;
@@ -317,7 +317,7 @@ public static partial class TokenProgram
                 return false;
             }
 
-            decoded.Add(new DecodedTokenBatchEntry(accountCount, data.Slice(offset, dataLength)));
+            decoded.Add(new(accountCount, data.Slice(offset, dataLength)));
             offset += dataLength;
         }
 
@@ -334,7 +334,7 @@ public sealed class DecodedTokenBatchEntry
     internal DecodedTokenBatchEntry(byte accountCount, ReadOnlySpan<byte> data)
     {
         AccountCount = accountCount;
-        _data = data.ToArray();
+        _data = [.. data];
     }
 
     /// <summary>The number of sequential account metas consumed by this embedded instruction.</summary>
@@ -356,7 +356,7 @@ public sealed class DecodedTokenInstruction
     {
         Discriminator = discriminator;
         Name = name;
-        _payload = payload.ToArray();
+        _payload = [.. payload];
     }
 
     /// <summary>The outer one-byte token instruction discriminator.</summary>

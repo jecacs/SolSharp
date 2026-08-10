@@ -1,7 +1,6 @@
 using System.Buffers.Binary;
 using FluentAssertions;
 using NUnit.Framework;
-using SolSharp.Core.Primitives;
 
 namespace SolSharp.Programs.Tests;
 
@@ -119,16 +118,16 @@ public static class VoteStateVersionsTests
 
             // Assert
             state.Version.Should().Be(VoteStateVersion.V1_14_11);
-            state.Node.ToBytes().Should().OnlyContain(value => value == 1);
-            state.AuthorizedWithdrawer.ToBytes().Should().OnlyContain(value => value == 2);
+            state.Node.ToBytes().Should().OnlyContain(static value => value == 1);
+            state.AuthorizedWithdrawer.ToBytes().Should().OnlyContain(static value => value == 2);
             state.Commission.Should().Be(3);
             state.Votes.Should().Equal(new VoteStateLockout(0, 4, 5));
             state.RootSlot.Should().Be(6);
             state.AuthorizedVoters.Should().Equal(
-                new AuthorizedVoteVoter(7, new PublicKey(Enumerable.Repeat((byte)8, 32).ToArray())));
+                new AuthorizedVoteVoter(7, new(Enumerable.Repeat((byte)8, 32).ToArray())));
             state.PriorVoters.Should().HaveCount(VoteStateVersions.PriorVoterEntries);
             state.PriorVoters[0].Should().Be(
-                new PriorVoteVoter(new PublicKey(Enumerable.Repeat((byte)9, 32).ToArray()), 10, 11));
+                new PriorVoteVoter(new(Enumerable.Repeat((byte)9, 32).ToArray()), 10, 11));
             state.PriorVoterIndex.Should().Be(31);
             state.PriorVotersEmpty.Should().BeFalse();
             state.EpochCredits.Should().Equal(new VoteEpochCredits(12, 13, 14));
@@ -169,19 +168,19 @@ public static class VoteStateVersionsTests
 
             // Assert
             state.Version.Should().Be(VoteStateVersion.V4);
-            state.Node.ToBytes().Should().OnlyContain(value => value == 21);
-            state.AuthorizedWithdrawer.ToBytes().Should().OnlyContain(value => value == 22);
-            state.InflationRewardsCollector.ToBytes().Should().OnlyContain(value => value == 23);
-            state.BlockRevenueCollector.ToBytes().Should().OnlyContain(value => value == 24);
+            state.Node.ToBytes().Should().OnlyContain(static value => value == 21);
+            state.AuthorizedWithdrawer.ToBytes().Should().OnlyContain(static value => value == 22);
+            state.InflationRewardsCollector.ToBytes().Should().OnlyContain(static value => value == 23);
+            state.BlockRevenueCollector.ToBytes().Should().OnlyContain(static value => value == 24);
             state.InflationRewardsCommissionBasisPoints.Should().Be(2_526);
             state.BlockRevenueCommissionBasisPoints.Should().Be(2_728);
             state.PendingDelegatorRewards.Should().Be(29);
             state.BlsPublicKey.Should().NotBeNull();
-            state.BlsPublicKey!.Value.ToArray().Should().OnlyContain(value => value == 30);
+            state.BlsPublicKey!.Value.ToArray().Should().OnlyContain(static value => value == 30);
             state.Votes.Should().Equal(new VoteStateLockout(31, 32, 33));
             state.RootSlot.Should().Be(34);
             state.AuthorizedVoters.Should().Equal(
-                new AuthorizedVoteVoter(35, new PublicKey(Enumerable.Repeat((byte)36, 32).ToArray())));
+                new AuthorizedVoteVoter(35, new(Enumerable.Repeat((byte)36, 32).ToArray())));
             state.EpochCredits.Should().Equal(new VoteEpochCredits(37, 38, 39));
             state.LastTimestamp.Should().Be(new VoteStateTimestamp(40, -41));
             state.IsUninitialized.Should().BeFalse();
@@ -211,9 +210,10 @@ public static class VoteStateVersionsTests
             WriteRepeated(stream, 0, 64);
             stream.WriteByte(0);
             WriteUInt64(stream, VoteStateVersions.MaximumLockouts + 1UL);
+            var data = stream.ToArray();
 
             // Act & Assert
-            FluentActions.Invoking(() => VoteStateVersions.Parse(stream.ToArray()))
+            FluentActions.Invoking(() => VoteStateVersions.Parse(data))
                 .Should().Throw<ArgumentException>().WithMessage("*exceeds the maximum*");
         }
 

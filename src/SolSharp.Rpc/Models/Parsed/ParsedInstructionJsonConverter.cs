@@ -35,11 +35,11 @@ internal sealed class ParsedInstructionJsonConverter : JsonConverter<ParsedInstr
             }
 
             var parsedInfo = parsed.ValueKind is JsonValueKind.Null
-                ? new ParsedInstructionInfo { Info = parsed.Clone() }
+                ? new() { Info = parsed.Clone() }
                 : parsed.Deserialize(options.GetTypeInfo<ParsedInstructionInfo>())
                     ?? throw new JsonException("A parsed instruction must carry a parsed JSON value.");
 
-            return new ParsedInstruction
+            return new()
             {
                 Program = program.GetString(),
                 ProgramId = programId,
@@ -57,7 +57,7 @@ internal sealed class ParsedInstructionJsonConverter : JsonConverter<ParsedInstr
         var parsedAccounts = accounts.Deserialize(options.GetTypeInfo<IReadOnlyList<PublicKey>>())
             ?? throw new JsonException("A partially decoded instruction must carry a non-null accounts array.");
 
-        return new ParsedInstruction
+        return new()
         {
             ProgramId = programId,
             Accounts = parsedAccounts,

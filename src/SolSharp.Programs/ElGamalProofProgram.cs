@@ -100,7 +100,7 @@ public static class ElGamalProofProgram
         var data = new byte[proofData.Length + 1];
         data[0] = (byte)proofInstruction;
         proofData.CopyTo(data.AsSpan(1));
-        return new Instruction
+        return new()
         {
             ProgramId = ProgramId,
             Accounts = ContextAccounts(contextStateAccount, contextStateAuthority),
@@ -130,7 +130,7 @@ public static class ElGamalProofProgram
         var data = new byte[1 + sizeof(uint)];
         data[0] = (byte)proofInstruction;
         BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(1), proofDataOffset);
-        return new Instruction { ProgramId = ProgramId, Accounts = accounts, Data = data };
+        return new() { ProgramId = ProgramId, Accounts = accounts, Data = data };
     }
 
     /// <summary>Decodes the instruction discriminator from native proof-program data.</summary>

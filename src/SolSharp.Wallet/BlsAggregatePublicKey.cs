@@ -12,7 +12,7 @@ public sealed class BlsAggregatePublicKey : IEquatable<BlsAggregatePublicKey>
 
     private BlsAggregatePublicKey(ReadOnlySpan<byte> bytes)
     {
-        _bytes = bytes.ToArray();
+        _bytes = [.. bytes];
     }
 
     /// <summary>
@@ -31,14 +31,14 @@ public sealed class BlsAggregatePublicKey : IEquatable<BlsAggregatePublicKey>
         ArgumentNullException.ThrowIfNull(publicKeys);
         if (publicKeys.Count == 0)
             throw new ArgumentException("At least one proof-verified BLS public key is required for aggregation.", nameof(publicKeys));
-        if (publicKeys.Any(publicKey => publicKey is null))
+        if (publicKeys.Any(static publicKey => publicKey is null))
             throw new ArgumentException("BLS public-key aggregation cannot contain null entries.", nameof(publicKeys));
 
         var aggregate = BlsOperations.AggregatePublicKeys(publicKeys);
         if (!BlsOperations.IsValidPublicKey(aggregate))
             throw new ArgumentException("BLS public keys must not aggregate to the point at infinity.", nameof(publicKeys));
 
-        return new BlsAggregatePublicKey(aggregate);
+        return new(aggregate);
     }
 
     /// <summary>Verifies a signature aggregate over one shared message with the pinned Solana signature DST.</summary>

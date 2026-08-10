@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using SolSharp.Core.Primitives;
 using SolSharp.Rpc.Protocol;
 
 namespace SolSharp.Rpc.Models.Parsed;
@@ -59,10 +58,10 @@ internal sealed class ParsedAccountInfoJsonConverter : JsonConverter<ParsedAccou
         var topLevelSpace = AccountInfoJsonConverter.ReadOptionalSpace(root);
         space ??= topLevelSpace;
 
-        return new ParsedAccountInfo
+        return new()
         {
             Lamports = root.GetProperty("lamports").GetUInt64(),
-            Owner = new PublicKey(root.GetProperty("owner").GetString()!),
+            Owner = new(root.GetProperty("owner").GetString()!),
             Executable = root.GetProperty("executable").GetBoolean(),
             RentEpoch = root.GetProperty("rentEpoch").GetUInt64(),
             Space = space,

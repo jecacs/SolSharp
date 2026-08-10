@@ -32,7 +32,7 @@ public sealed class LoaderV4State
         Slot = slot;
         AuthorityOrNextVersion = authorityOrNextVersion;
         Status = status;
-        _programBytes = programBytes.ToArray();
+        _programBytes = [.. programBytes];
     }
 
     /// <summary>The slot in which the account was last deployed, retracted, or initialized.</summary>
@@ -61,9 +61,9 @@ public sealed class LoaderV4State
         if (statusValue > (ulong)LoaderV4Status.Finalized)
             throw new FormatException($"Unknown Loader V4 status {statusValue}.");
 
-        return new LoaderV4State(
+        return new(
             BinaryPrimitives.ReadUInt64LittleEndian(data),
-            new PublicKey(data.Slice(8, PublicKey.Length)),
+            new(data.Slice(8, PublicKey.Length)),
             (LoaderV4Status)statusValue,
             data[MetadataLength..]);
     }

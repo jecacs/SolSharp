@@ -102,7 +102,7 @@ public static class EpochRewardsSysvarStateTests
             // Assert
             state.DistributionStartingBlockHeight.Should().Be(1);
             state.NumberOfPartitions.Should().Be(2);
-            state.ParentBlockhash.ToBytes().Should().OnlyContain(value => value == 3);
+            state.ParentBlockhash.ToBytes().Should().OnlyContain(static value => value == 3);
             state.TotalPoints.Should().Be(((UInt128)5 << 64) | 4);
             state.TotalRewards.Should().Be(6);
             state.DistributedRewards.Should().Be(7);

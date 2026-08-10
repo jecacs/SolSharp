@@ -10,8 +10,7 @@ public static class StakeProgram
     public const int AccountDataLength = StakeAccountState.AccountDataLength;
 
     /// <summary>The native Stake program address.</summary>
-    public static readonly PublicKey ProgramId =
-        PublicKey.Parse("Stake11111111111111111111111111111111111111");
+    public static readonly PublicKey ProgramId = PublicKey.Parse("Stake11111111111111111111111111111111111111");
 
     private const uint InitializeDiscriminator = 0;
     private const uint AuthorizeDiscriminator = 1;
@@ -33,11 +32,9 @@ public static class StakeProgram
 
     private static readonly PublicKey ClockSysvar = PublicKey.Parse(Sysvars.Clock);
     private static readonly PublicKey RentSysvar = PublicKey.Parse(Sysvars.Rent);
-    private static readonly PublicKey StakeHistorySysvar =
-        PublicKey.Parse("SysvarStakeHistory1111111111111111111111111");
+    private static readonly PublicKey StakeHistorySysvar = PublicKey.Parse("SysvarStakeHistory1111111111111111111111111");
 
-    private static readonly PublicKey StakeConfig =
-        PublicKey.Parse("StakeConfig11111111111111111111111111111111");
+    private static readonly PublicKey StakeConfig = PublicKey.Parse("StakeConfig11111111111111111111111111111111");
 
     /// <summary>Initializes an allocated stake account with authorities and a lockup.</summary>
     /// <param name="stakeAccount">The uninitialized writable stake account.</param>
