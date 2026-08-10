@@ -5,6 +5,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <PublishAot>true</PublishAot>
     <PublishAotUsingRuntimePack>true</PublishAotUsingRuntimePack>
+    <UseDefaultPublishRuntimeIdentifier>false</UseDefaultPublishRuntimeIdentifier>
     <InvariantGlobalization>true</InvariantGlobalization>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
