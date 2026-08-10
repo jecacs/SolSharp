@@ -7,6 +7,104 @@ namespace SolSharp.Programs.Tests;
 
 public static class VoteStateVersionsTests
 {
+    private static byte[] BuildLegacyVector(VoteStateVersion version)
+    {
+        using var stream = new MemoryStream();
+        WriteUInt32(stream, (uint)version);
+        WriteRepeated(stream, 1, 32);
+        WriteRepeated(stream, 2, 32);
+        stream.WriteByte(3);
+        WriteUInt64(stream, 1);
+        if (version is VoteStateVersion.V3)
+            stream.WriteByte(17);
+        WriteUInt64(stream, 4);
+        WriteUInt32(stream, 5);
+        stream.WriteByte(1);
+        WriteUInt64(stream, 6);
+        WriteUInt64(stream, 1);
+        WriteUInt64(stream, 7);
+        WriteRepeated(stream, 8, 32);
+        WriteRepeated(stream, 9, 32);
+        WriteUInt64(stream, 10);
+        WriteUInt64(stream, 11);
+        for (var i = 1; i < VoteStateVersions.PriorVoterEntries; i++)
+            WriteRepeated(stream, 0, 48);
+        WriteUInt64(stream, 31);
+        stream.WriteByte(0);
+        WriteUInt64(stream, 1);
+        WriteUInt64(stream, 12);
+        WriteUInt64(stream, 13);
+        WriteUInt64(stream, 14);
+        WriteUInt64(stream, 15);
+        WriteInt64(stream, -16);
+        return stream.ToArray();
+    }
+
+    private static byte[] BuildV4Vector()
+    {
+        using var stream = new MemoryStream();
+        WriteUInt32(stream, (uint)VoteStateVersion.V4);
+        WriteRepeated(stream, 21, 32);
+        WriteRepeated(stream, 22, 32);
+        WriteRepeated(stream, 23, 32);
+        WriteRepeated(stream, 24, 32);
+        WriteUInt16(stream, 2_526);
+        WriteUInt16(stream, 2_728);
+        WriteUInt64(stream, 29);
+        stream.WriteByte(1);
+        WriteRepeated(stream, 30, VoteStateVersions.BlsPublicKeyLength);
+        WriteUInt64(stream, 1);
+        stream.WriteByte(31);
+        WriteUInt64(stream, 32);
+        WriteUInt32(stream, 33);
+        stream.WriteByte(1);
+        WriteUInt64(stream, 34);
+        WriteUInt64(stream, 1);
+        WriteUInt64(stream, 35);
+        WriteRepeated(stream, 36, 32);
+        WriteUInt64(stream, 1);
+        WriteUInt64(stream, 37);
+        WriteUInt64(stream, 38);
+        WriteUInt64(stream, 39);
+        WriteUInt64(stream, 40);
+        WriteInt64(stream, -41);
+        return stream.ToArray();
+    }
+
+    private static void WriteRepeated(MemoryStream stream, byte value, int length)
+    {
+        for (var i = 0; i < length; i++)
+            stream.WriteByte(value);
+    }
+
+    private static void WriteUInt16(MemoryStream stream, ushort value)
+    {
+        Span<byte> bytes = stackalloc byte[sizeof(ushort)];
+        BinaryPrimitives.WriteUInt16LittleEndian(bytes, value);
+        stream.Write(bytes);
+    }
+
+    private static void WriteUInt32(MemoryStream stream, uint value)
+    {
+        Span<byte> bytes = stackalloc byte[sizeof(uint)];
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes, value);
+        stream.Write(bytes);
+    }
+
+    private static void WriteUInt64(MemoryStream stream, ulong value)
+    {
+        Span<byte> bytes = stackalloc byte[sizeof(ulong)];
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes, value);
+        stream.Write(bytes);
+    }
+
+    private static void WriteInt64(MemoryStream stream, long value)
+    {
+        Span<byte> bytes = stackalloc byte[sizeof(long)];
+        BinaryPrimitives.WriteInt64LittleEndian(bytes, value);
+        stream.Write(bytes);
+    }
+
     [TestFixture]
     public sealed class Parse
     {
@@ -160,103 +258,5 @@ public static class VoteStateVersionsTests
             VoteStateVersions.IsCorrectSizeAndInitialized(v4).Should().BeTrue();
             VoteStateVersions.IsCorrectSizeAndInitialized(v4.AsSpan(0, v4.Length - 1)).Should().BeFalse();
         }
-    }
-
-    private static byte[] BuildLegacyVector(VoteStateVersion version)
-    {
-        using var stream = new MemoryStream();
-        WriteUInt32(stream, (uint)version);
-        WriteRepeated(stream, 1, 32);
-        WriteRepeated(stream, 2, 32);
-        stream.WriteByte(3);
-        WriteUInt64(stream, 1);
-        if (version is VoteStateVersion.V3)
-            stream.WriteByte(17);
-        WriteUInt64(stream, 4);
-        WriteUInt32(stream, 5);
-        stream.WriteByte(1);
-        WriteUInt64(stream, 6);
-        WriteUInt64(stream, 1);
-        WriteUInt64(stream, 7);
-        WriteRepeated(stream, 8, 32);
-        WriteRepeated(stream, 9, 32);
-        WriteUInt64(stream, 10);
-        WriteUInt64(stream, 11);
-        for (var i = 1; i < VoteStateVersions.PriorVoterEntries; i++)
-            WriteRepeated(stream, 0, 48);
-        WriteUInt64(stream, 31);
-        stream.WriteByte(0);
-        WriteUInt64(stream, 1);
-        WriteUInt64(stream, 12);
-        WriteUInt64(stream, 13);
-        WriteUInt64(stream, 14);
-        WriteUInt64(stream, 15);
-        WriteInt64(stream, -16);
-        return stream.ToArray();
-    }
-
-    private static byte[] BuildV4Vector()
-    {
-        using var stream = new MemoryStream();
-        WriteUInt32(stream, (uint)VoteStateVersion.V4);
-        WriteRepeated(stream, 21, 32);
-        WriteRepeated(stream, 22, 32);
-        WriteRepeated(stream, 23, 32);
-        WriteRepeated(stream, 24, 32);
-        WriteUInt16(stream, 2_526);
-        WriteUInt16(stream, 2_728);
-        WriteUInt64(stream, 29);
-        stream.WriteByte(1);
-        WriteRepeated(stream, 30, VoteStateVersions.BlsPublicKeyLength);
-        WriteUInt64(stream, 1);
-        stream.WriteByte(31);
-        WriteUInt64(stream, 32);
-        WriteUInt32(stream, 33);
-        stream.WriteByte(1);
-        WriteUInt64(stream, 34);
-        WriteUInt64(stream, 1);
-        WriteUInt64(stream, 35);
-        WriteRepeated(stream, 36, 32);
-        WriteUInt64(stream, 1);
-        WriteUInt64(stream, 37);
-        WriteUInt64(stream, 38);
-        WriteUInt64(stream, 39);
-        WriteUInt64(stream, 40);
-        WriteInt64(stream, -41);
-        return stream.ToArray();
-    }
-
-    private static void WriteRepeated(MemoryStream stream, byte value, int length)
-    {
-        for (var i = 0; i < length; i++)
-            stream.WriteByte(value);
-    }
-
-    private static void WriteUInt16(MemoryStream stream, ushort value)
-    {
-        Span<byte> bytes = stackalloc byte[sizeof(ushort)];
-        BinaryPrimitives.WriteUInt16LittleEndian(bytes, value);
-        stream.Write(bytes);
-    }
-
-    private static void WriteUInt32(MemoryStream stream, uint value)
-    {
-        Span<byte> bytes = stackalloc byte[sizeof(uint)];
-        BinaryPrimitives.WriteUInt32LittleEndian(bytes, value);
-        stream.Write(bytes);
-    }
-
-    private static void WriteUInt64(MemoryStream stream, ulong value)
-    {
-        Span<byte> bytes = stackalloc byte[sizeof(ulong)];
-        BinaryPrimitives.WriteUInt64LittleEndian(bytes, value);
-        stream.Write(bytes);
-    }
-
-    private static void WriteInt64(MemoryStream stream, long value)
-    {
-        Span<byte> bytes = stackalloc byte[sizeof(long)];
-        BinaryPrimitives.WriteInt64LittleEndian(bytes, value);
-        stream.Write(bytes);
     }
 }

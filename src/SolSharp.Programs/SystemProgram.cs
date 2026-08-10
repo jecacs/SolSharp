@@ -11,6 +11,9 @@ namespace SolSharp.Programs;
 /// </summary>
 public static class SystemProgram
 {
+    /// <summary>The serialized size of a durable nonce account, in bytes (80).</summary>
+    public const int NonceAccountLength = 80;
+
     /// <summary>The System program's address.</summary>
     public static readonly PublicKey ProgramId = PublicKey.Parse(SolanaProgramIds.SystemProgram);
 
@@ -29,9 +32,6 @@ public static class SystemProgram
     private const uint UpgradeNonceAccountDiscriminator = 12;
     private const uint CreateAccountAllowPrefundDiscriminator = 13;
     private const int MaxSeedLength = 32;
-
-    /// <summary>The serialized size of a durable nonce account, in bytes (80).</summary>
-    public const int NonceAccountLength = 80;
 
     private static readonly PublicKey RentSysvar = PublicKey.Parse(Sysvars.Rent);
     private static readonly PublicKey RecentBlockhashesSysvar = PublicKey.Parse(Sysvars.RecentBlockhashes);

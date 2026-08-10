@@ -42,7 +42,7 @@ WebSocket subscriptions, confirmation, Native AOT publishing, and more.
 
 When this was started, the .NET options for Solana were either unmaintained and stale or
 heavy and not built for performance — there was no modern, fast, actively-developed client.
-SolSharp is an independently written C# 12 answer: allocation-conscious, tuned for
+SolSharp is an independently written C# 14 answer: allocation-conscious, tuned for
 latency-sensitive workloads, and engineered from the Rust implementations that define the
 network's actual wire behavior rather than from prose documentation alone.
 
@@ -70,7 +70,7 @@ sources. See [third-party notices](THIRD_PARTY_NOTICES.md) for attribution and l
   codecs — the part most SDKs hide — with Ed25519 signing on a vetted crypto library and exact
   vectors derived from the pinned Rust contracts.
 - **Latency-minded.** Value types, allocation-free hot paths, span-based APIs.
-- **Modern .NET 8.** C# 12, nullable reference types, code style enforced on build.
+- **Modern .NET 10.** C# 14, nullable reference types, code style enforced on build.
 
 ## How it compares to Solnet
 
@@ -318,8 +318,8 @@ var signature = await rpc.SendTransactionAsync(tx.Serialize());
 
 ## Requirements
 
-- .NET 8 SDK or later. `global.json` selects the lowest available compatible major beginning at
-  .NET 8, so CI proves the minimum while newer local SDKs remain usable.
+- .NET 10 SDK. `global.json` selects the latest installed stable .NET 10 feature band beginning at
+  SDK 10.0.100, and CI asserts that the resolver actually selected .NET 10.
 - Calling the BLS12-381 API requires one of the native RIDs shipped by `Nethermind.Crypto.Bls` 1.0.5:
   `linux-x64`, `linux-arm64`, `osx-x64`, `osx-arm64`, or `win-x64`. All non-BLS SolSharp APIs remain
   managed and do not load that native backend.
@@ -374,7 +374,7 @@ SolSharp/
   .github/workflows/   CI, coverage, dependency/security review, Scorecard, and trusted publishing
   assets/              package icon and README logo
   .editorconfig        modern C# style, enforced on build
-  global.json          .NET 8 minimum policy with local roll-forward (CI asserts SDK 8)
+  global.json          .NET 10 SDK policy with feature-band roll-forward (CI asserts SDK 10)
   Directory.Build.props
   THIRD_PARTY_NOTICES.md exact compatibility pins and native BLS attribution
   CLAUDE.md            conventions and decisions for contributors/agents
@@ -384,7 +384,7 @@ SolSharp/
 
 ## Quality gates
 
-The four unit-test suites' reproducible .NET 8 Linux coverage baseline across `SolSharp.Core`,
+The four unit-test suites' reproducible .NET 10 Linux coverage baseline across `SolSharp.Core`,
 `SolSharp.Rpc`, `SolSharp.Wallet`, and `SolSharp.Programs` is
 **93.7% of lines**. Build outputs under `obj/**` and generated `*.g.cs` pseudo-sources are excluded;
 overlapping lower-layer hits are merged rather than counted twice. CI publishes the merged Cobertura

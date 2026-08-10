@@ -74,8 +74,6 @@ public sealed class RpcTransactionVersionJsonConverter : JsonConverter<RpcTransa
 /// <seealso href="https://solana.com/docs/rpc/http/gettransaction">getTransaction</seealso>
 public sealed record TransactionResponse
 {
-    private byte[]? _transaction;
-
     /// <summary>The slot the transaction was processed in.</summary>
     [JsonPropertyName("slot")]
     [JsonRequired]
@@ -106,8 +104,8 @@ public sealed record TransactionResponse
     [JsonRequired]
     public byte[] Transaction
     {
-        get => _transaction!;
-        init => _transaction = value ?? throw new JsonException("A transaction response must carry non-null wire bytes.");
+        get => field!;
+        init => field = value ?? throw new JsonException("A transaction response must carry non-null wire bytes.");
     }
 
     /// <summary>Execution metadata: fee, balances, token balances, logs, inner instructions, and any error.</summary>
@@ -120,10 +118,6 @@ public sealed record TransactionResponse
 /// <seealso href="https://solana.com/docs/rpc/http/gettransaction">getTransaction</seealso>
 public sealed record TransactionMeta : IJsonOnDeserialized
 {
-    private JsonElement _status;
-    private IReadOnlyList<ulong>? _preBalances;
-    private IReadOnlyList<ulong>? _postBalances;
-
     /// <summary>The transaction error, or <c>null</c> if it succeeded.</summary>
     [JsonPropertyName("err")]
     [JsonRequired]
@@ -137,8 +131,8 @@ public sealed record TransactionMeta : IJsonOnDeserialized
     [JsonRequired]
     public JsonElement Status
     {
-        get => _status;
-        init => _status = value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
+        get;
+        init => field = value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
             ? throw new JsonException("Transaction metadata must carry a non-null status.")
             : value;
     }
@@ -153,8 +147,8 @@ public sealed record TransactionMeta : IJsonOnDeserialized
     [JsonRequired]
     public IReadOnlyList<ulong> PreBalances
     {
-        get => _preBalances!;
-        init => _preBalances = value ?? throw new JsonException("Transaction metadata must carry pre-balances.");
+        get => field!;
+        init => field = value ?? throw new JsonException("Transaction metadata must carry pre-balances.");
     }
 
     /// <summary>Account lamport balances after the transaction, indexed by the message's account list.</summary>
@@ -162,8 +156,8 @@ public sealed record TransactionMeta : IJsonOnDeserialized
     [JsonRequired]
     public IReadOnlyList<ulong> PostBalances
     {
-        get => _postBalances!;
-        init => _postBalances = value ?? throw new JsonException("Transaction metadata must carry post-balances.");
+        get => field!;
+        init => field = value ?? throw new JsonException("Transaction metadata must carry post-balances.");
     }
 
     /// <summary>SPL token balances before the transaction, for the accounts that hold tokens.</summary>
@@ -226,8 +220,6 @@ public sealed record TransactionMeta : IJsonOnDeserialized
 /// <seealso href="https://solana.com/docs/rpc/json-structures">Solana RPC JSON structures</seealso>
 public sealed record TokenBalance
 {
-    private TokenAmount? _uiTokenAmount;
-
     /// <summary>The index, into the transaction's account list, of the token account this balance is for.</summary>
     [JsonPropertyName("accountIndex")]
     [JsonRequired]
@@ -251,8 +243,8 @@ public sealed record TokenBalance
     [JsonRequired]
     public TokenAmount UiTokenAmount
     {
-        get => _uiTokenAmount!;
-        init => _uiTokenAmount = value ?? throw new JsonException("A token balance must carry a UI token amount.");
+        get => field!;
+        init => field = value ?? throw new JsonException("A token balance must carry a UI token amount.");
     }
 }
 
@@ -260,8 +252,6 @@ public sealed record TokenBalance
 /// <seealso href="https://solana.com/docs/rpc/json-structures">Solana RPC JSON structures</seealso>
 public sealed record InnerInstructionGroup
 {
-    private IReadOnlyList<InnerInstruction>? _instructions;
-
     /// <summary>The index of the top-level instruction these inner instructions were invoked from.</summary>
     [JsonPropertyName("index")]
     [JsonRequired]
@@ -272,13 +262,13 @@ public sealed record InnerInstructionGroup
     [JsonRequired]
     public IReadOnlyList<InnerInstruction> Instructions
     {
-        get => _instructions!;
+        get => field!;
         init
         {
             if (value is null || value.Any(static instruction => instruction is null))
                 throw new JsonException("Inner instructions must carry only non-null instructions.");
 
-            _instructions = value;
+            field = value;
         }
     }
 }
@@ -287,9 +277,6 @@ public sealed record InnerInstructionGroup
 /// <seealso href="https://solana.com/docs/rpc/json-structures">Solana RPC JSON structures</seealso>
 public sealed record InnerInstruction
 {
-    private IReadOnlyList<byte>? _accounts;
-    private string? _data;
-
     /// <summary>The index, into the transaction's account list, of the invoked program.</summary>
     [JsonPropertyName("programIdIndex")]
     [JsonRequired]
@@ -300,8 +287,8 @@ public sealed record InnerInstruction
     [JsonRequired]
     public IReadOnlyList<byte> Accounts
     {
-        get => _accounts!;
-        init => _accounts = value ?? throw new JsonException("A compiled instruction must carry account indexes.");
+        get => field!;
+        init => field = value ?? throw new JsonException("A compiled instruction must carry account indexes.");
     }
 
     /// <summary>The instruction data, base58-encoded.</summary>
@@ -309,8 +296,8 @@ public sealed record InnerInstruction
     [JsonRequired]
     public string Data
     {
-        get => _data!;
-        init => _data = value ?? throw new JsonException("A compiled instruction must carry data.");
+        get => field!;
+        init => field = value ?? throw new JsonException("A compiled instruction must carry data.");
     }
 
     /// <summary>The CPI stack height at which the instruction ran, if the node reported it.</summary>
@@ -323,16 +310,13 @@ public sealed record InnerInstruction
 /// <seealso href="https://solana.com/docs/rpc/json-structures">Solana RPC JSON structures</seealso>
 public sealed record LoadedAddresses
 {
-    private IReadOnlyList<PublicKey>? _writable;
-    private IReadOnlyList<PublicKey>? _readonly;
-
     /// <summary>The writable accounts loaded from lookup tables.</summary>
     [JsonPropertyName("writable")]
     [JsonRequired]
     public IReadOnlyList<PublicKey> Writable
     {
-        get => _writable!;
-        init => _writable = value ?? throw new JsonException("Loaded addresses must carry a writable list.");
+        get => field!;
+        init => field = value ?? throw new JsonException("Loaded addresses must carry a writable list.");
     }
 
     /// <summary>The read-only accounts loaded from lookup tables.</summary>
@@ -340,8 +324,8 @@ public sealed record LoadedAddresses
     [JsonRequired]
     public IReadOnlyList<PublicKey> Readonly
     {
-        get => _readonly!;
-        init => _readonly = value ?? throw new JsonException("Loaded addresses must carry a read-only list.");
+        get => field!;
+        init => field = value ?? throw new JsonException("Loaded addresses must carry a read-only list.");
     }
 }
 

@@ -13,8 +13,6 @@ namespace SolSharp.IntegrationTests;
 /// </summary>
 internal static class IntegrationEnvironment
 {
-    private const string StrictModeVariable = "SOLSHARP_INTEGRATION_STRICT";
-
     /// <summary>The public mainnet JSON-RPC endpoint used when <c>SOLSHARP_RPC_URL</c> is not set.</summary>
     public const string DefaultHttpEndpoint = "https://api.mainnet-beta.solana.com";
 
@@ -26,6 +24,7 @@ internal static class IntegrationEnvironment
 
     /// <summary>The canonical genesis hash of the Solana devnet cluster.</summary>
     public const string DevnetGenesisHash = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG";
+    private const string StrictModeVariable = "SOLSHARP_INTEGRATION_STRICT";
 
     /// <summary>The HTTP JSON-RPC endpoint the read tests talk to.</summary>
     public static string HttpEndpoint => Resolve("SOLSHARP_RPC_URL", DefaultHttpEndpoint);
@@ -42,9 +41,6 @@ internal static class IntegrationEnvironment
     private static bool IsStrict =>
         Environment.GetEnvironmentVariable(StrictModeVariable) is { } value
         && (value.Equals("true", StringComparison.OrdinalIgnoreCase) || value == "1");
-
-    private static string Resolve(string variable, string fallback)
-        => Environment.GetEnvironmentVariable(variable) is { Length: > 0 } value ? value : fallback;
 
     /// <summary>
     /// Runs an RPC call, turning a transient failure (a rate limit, timeout, or node hiccup) into an
@@ -119,6 +115,9 @@ internal static class IntegrationEnvironment
         else
             ExceptionDispatchInfo.Capture(exception).Throw();
     }
+
+    private static string Resolve(string variable, string fallback)
+        => Environment.GetEnvironmentVariable(variable) is { Length: > 0 } value ? value : fallback;
 
     private static string Describe(Exception exception) => $"{exception.GetType().Name}: {exception.Message}";
 }

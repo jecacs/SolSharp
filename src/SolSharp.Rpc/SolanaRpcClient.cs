@@ -25,6 +25,10 @@ public class SolanaRpcClient
     private static readonly PublicKey Token2022ProgramOwner = PublicKey.Parse(SolanaProgramIds.Token2022Program);
     private static readonly PublicKey AddressLookupTableProgramOwner = PublicKey.Parse(SolanaProgramIds.AddressLookupTableProgram);
 
+    private static readonly TimeSpan DefaultConfirmationTimeout = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan ConfirmationPollInterval = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan MaximumTimerDelay = TimeSpan.FromMilliseconds(uint.MaxValue - 1d);
+
     private readonly HttpClient _httpClient;
     private readonly int _maximumResponseContentLength;
 
@@ -1309,61 +1313,6 @@ public class SolanaRpcClient
         return signature;
     }
 
-    // processed < confirmed < finalized; the Commitment enum is not declared in that order, so rank explicitly.
-    private static int CommitmentRank(Commitment commitment) => commitment switch
-    {
-        Commitment.Processed => 0,
-        Commitment.Confirmed => 1,
-        Commitment.Finalized => 2,
-        _ => 1
-    };
-
-    private static int StatusRank(SignatureStatus status)
-    {
-        if (status.ConfirmationStatus is not null)
-        {
-            return status.ConfirmationStatus switch
-            {
-                "processed" => 0,
-                "confirmed" => 1,
-                "finalized" => 2,
-                _ => -1
-            };
-        }
-
-        // Older nodes omitted confirmationStatus. Match the upstream confirmation loop exactly:
-        // zero or one confirmation is still processed, more than one is confirmed, and null is rooted/finalized.
-        return status.Confirmations switch
-        {
-            null => 2,
-            > 1 => 1,
-            _ => 0
-        };
-    }
-
-    private static readonly TimeSpan DefaultConfirmationTimeout = TimeSpan.FromSeconds(60);
-    private static readonly TimeSpan ConfirmationPollInterval = TimeSpan.FromSeconds(1);
-    private static readonly TimeSpan MaximumTimerDelay = TimeSpan.FromMilliseconds(uint.MaxValue - 1d);
-
-    private static async Task CancelAfterAsync(CancellationTokenSource source, TimeSpan timeout)
-    {
-        try
-        {
-            while (timeout > MaximumTimerDelay)
-            {
-                await Task.Delay(MaximumTimerDelay, source.Token);
-                timeout -= MaximumTimerDelay;
-            }
-
-            await Task.Delay(timeout, source.Token);
-            await source.CancelAsync();
-        }
-        catch (OperationCanceledException) when (source.IsCancellationRequested)
-        {
-            // Confirmation finished or caller cancellation won; the timeout task only needs to stop.
-        }
-    }
-
     /// <summary>
     /// Fetches and decodes a classic Token or Token-2022 mint account, or returns <c>null</c> if nothing
     /// exists at <paramref name="mint"/> or its owner and data layout do not identify a mint.
@@ -1647,14 +1596,6 @@ public class SolanaRpcClient
         return RequireConfirmedParsedTransaction(transaction);
     }
 
-    private static ParsedTransaction? RequireConfirmedParsedTransaction(ParsedTransaction? transaction)
-    {
-        if (transaction is not null && transaction.Slot is null)
-            throw new JsonException("A getTransaction response must carry a slot and block-time member.");
-
-        return transaction;
-    }
-
     /// <summary>
     /// Returns a confirmed block whose transactions are decoded by the node into <c>jsonParsed</c> form, or
     /// <c>null</c> if the slot was skipped. Each transaction's <see cref="ParsedTransaction.Slot"/> and
@@ -1692,36 +1633,6 @@ public class SolanaRpcClient
         Commitment? commitment = null,
         CancellationToken cancellationToken = default)
         => await GetParsedBlockCoreAsync(slot, maxSupportedTransactionVersion, commitment, cancellationToken);
-
-    private async Task<ParsedBlock?> GetParsedBlockCoreAsync(
-        ulong slot,
-        byte maxSupportedTransactionVersion,
-        Commitment? commitment,
-        CancellationToken cancellationToken)
-    {
-        var block = await SendNullableAsync<ParsedBlock?>(
-            RpcRequests.GetParsedBlock(
-                slot,
-                commitment ?? Commitment.Confirmed,
-                maxSupportedTransactionVersion),
-            cancellationToken);
-
-        if (block is null)
-            return null;
-
-        // getBlock emits the flattened transaction vector in ledger order. Upstream derives
-        // transactionIndex from this same zero-based order when serving getTransaction.
-        var transactions = block.Transactions
-            .Select((transaction, index) => transaction with
-            {
-                Slot = slot,
-                BlockTime = block.BlockTime,
-                TransactionIndex = (uint)index
-            })
-            .ToArray();
-
-        return block with { Transactions = transactions };
-    }
 
     /// <summary>
     /// Returns the cluster's vote accounts, split into current and delinquent.
@@ -2478,31 +2389,63 @@ public class SolanaRpcClient
         return document.RootElement.Clone();
     }
 
-    private async Task<T> SendAsync<T>(RpcRequest request, CancellationToken cancellationToken)
-        => await SendCoreAsync<T>(request, allowNullResult: false, cancellationToken);
-
-    private async Task<T> SendNullableAsync<T>(RpcRequest request, CancellationToken cancellationToken)
-        => await SendCoreAsync<T>(request, allowNullResult: true, cancellationToken);
-
-    private async Task<T> SendCoreAsync<T>(
-        RpcRequest request,
-        bool allowNullResult,
-        CancellationToken cancellationToken)
+    // processed < confirmed < finalized; the Commitment enum is not declared in that order, so rank explicitly.
+    private static int CommitmentRank(Commitment commitment) => commitment switch
     {
-        using var message = new HttpRequestMessage(HttpMethod.Post, string.Empty)
+        Commitment.Processed => 0,
+        Commitment.Confirmed => 1,
+        Commitment.Finalized => 2,
+        _ => 1
+    };
+
+    private static int StatusRank(SignatureStatus status)
+    {
+        if (status.ConfirmationStatus is not null)
         {
-            Content = JsonContent.Create(request, RpcJson.TypeInfo<RpcRequest>())
+            return status.ConfirmationStatus switch
+            {
+                "processed" => 0,
+                "confirmed" => 1,
+                "finalized" => 2,
+                _ => -1
+            };
+        }
+
+        // Older nodes omitted confirmationStatus. Match the upstream confirmation loop exactly:
+        // zero or one confirmation is still processed, more than one is confirmed, and null is rooted/finalized.
+        return status.Confirmations switch
+        {
+            null => 2,
+            > 1 => 1,
+            _ => 0
         };
-        if (request.Method == RpcMethods.RequestAirdrop)
-            message.Options.Set(DisableRetriesKey, true);
+    }
 
-        using var response = await _httpClient.SendAsync(
-            message, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+    private static async Task CancelAfterAsync(CancellationTokenSource source, TimeSpan timeout)
+    {
+        try
+        {
+            while (timeout > MaximumTimerDelay)
+            {
+                await Task.Delay(MaximumTimerDelay, source.Token);
+                timeout -= MaximumTimerDelay;
+            }
 
-        response.EnsureSuccessStatusCode();
+            await Task.Delay(timeout, source.Token);
+            await source.CancelAsync();
+        }
+        catch (OperationCanceledException) when (source.IsCancellationRequested)
+        {
+            // Confirmation finished or caller cancellation won; the timeout task only needs to stop.
+        }
+    }
 
-        var body = await ReadResponseBodyAsync(response.Content, cancellationToken);
-        return DeserializeEnvelope<T>(body.Span, request.Id, allowNullResult);
+    private static ParsedTransaction? RequireConfirmedParsedTransaction(ParsedTransaction? transaction)
+    {
+        if (transaction is not null && transaction.Slot is null)
+            throw new JsonException("A getTransaction response must carry a slot and block-time member.");
+
+        return transaction;
     }
 
     private static T[] RequireNonNullKeyedAccounts<T>(T[]? accounts)
@@ -2536,49 +2479,6 @@ public class SolanaRpcClient
 
         return result.Value;
     }
-
-    private async Task<ReadOnlyMemory<byte>> ReadResponseBodyAsync(HttpContent content, CancellationToken cancellationToken)
-    {
-        var contentLength = content.Headers.ContentLength;
-        if (contentLength is { } declaredLength && declaredLength > _maximumResponseContentLength)
-            throw ResponseTooLarge(declaredLength);
-
-        await using var stream = await content.ReadAsStreamAsync(cancellationToken);
-        var initialCapacity = contentLength is > 0
-            ? Math.Min((int)contentLength.Value, 64 * 1024)
-            : Math.Min(16 * 1024, _maximumResponseContentLength);
-        using var body = new MemoryStream(initialCapacity);
-        var buffer = ArrayPool<byte>.Shared.Rent(64 * 1024);
-
-        try
-        {
-            long total = 0;
-            while (true)
-            {
-                var remaining = _maximumResponseContentLength - total;
-                var requested = (int)Math.Min(buffer.Length, remaining + 1);
-                var read = await stream.ReadAsync(
-                    buffer.AsMemory(0, requested), cancellationToken);
-                if (read == 0)
-                    return body.GetBuffer().AsMemory(0, checked((int)total));
-
-                total += read;
-                if (total > _maximumResponseContentLength)
-                    throw ResponseTooLarge(total);
-
-                body.Write(buffer, 0, read);
-            }
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(buffer);
-        }
-    }
-
-    private HttpRequestException ResponseTooLarge(long receivedLength)
-        => new(
-            $"The JSON-RPC response body is {receivedLength} bytes, exceeding the configured "
-            + $"{_maximumResponseContentLength}-byte limit ({nameof(SolanaRpcOptions.MaximumResponseContentLength)}).");
 
     // Validates the envelope and extracts the result in a single pass: a Utf8JsonReader walk checks
     // jsonrpc/id/error and records the span of the result value, which is then deserialized directly -
@@ -2704,4 +2604,104 @@ public class SolanaRpcClient
 
         return result!;
     }
+
+    private async Task<ParsedBlock?> GetParsedBlockCoreAsync(
+        ulong slot,
+        byte maxSupportedTransactionVersion,
+        Commitment? commitment,
+        CancellationToken cancellationToken)
+    {
+        var block = await SendNullableAsync<ParsedBlock?>(
+            RpcRequests.GetParsedBlock(
+                slot,
+                commitment ?? Commitment.Confirmed,
+                maxSupportedTransactionVersion),
+            cancellationToken);
+
+        if (block is null)
+            return null;
+
+        // getBlock emits the flattened transaction vector in ledger order. Upstream derives
+        // transactionIndex from this same zero-based order when serving getTransaction.
+        var transactions = block.Transactions
+            .Select((transaction, index) => transaction with
+            {
+                Slot = slot,
+                BlockTime = block.BlockTime,
+                TransactionIndex = (uint)index
+            })
+            .ToArray();
+
+        return block with { Transactions = transactions };
+    }
+
+    private async Task<T> SendAsync<T>(RpcRequest request, CancellationToken cancellationToken)
+        => await SendCoreAsync<T>(request, allowNullResult: false, cancellationToken);
+
+    private async Task<T> SendNullableAsync<T>(RpcRequest request, CancellationToken cancellationToken)
+        => await SendCoreAsync<T>(request, allowNullResult: true, cancellationToken);
+
+    private async Task<T> SendCoreAsync<T>(
+        RpcRequest request,
+        bool allowNullResult,
+        CancellationToken cancellationToken)
+    {
+        using var message = new HttpRequestMessage(HttpMethod.Post, string.Empty)
+        {
+            Content = JsonContent.Create(request, RpcJson.TypeInfo<RpcRequest>())
+        };
+        if (request.Method == RpcMethods.RequestAirdrop)
+            message.Options.Set(DisableRetriesKey, true);
+
+        using var response = await _httpClient.SendAsync(
+            message, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        var body = await ReadResponseBodyAsync(response.Content, cancellationToken);
+        return DeserializeEnvelope<T>(body.Span, request.Id, allowNullResult);
+    }
+
+    private async Task<ReadOnlyMemory<byte>> ReadResponseBodyAsync(HttpContent content, CancellationToken cancellationToken)
+    {
+        var contentLength = content.Headers.ContentLength;
+        if (contentLength is { } declaredLength && declaredLength > _maximumResponseContentLength)
+            throw ResponseTooLarge(declaredLength);
+
+        await using var stream = await content.ReadAsStreamAsync(cancellationToken);
+        var initialCapacity = contentLength is > 0
+            ? Math.Min((int)contentLength.Value, 64 * 1024)
+            : Math.Min(16 * 1024, _maximumResponseContentLength);
+        using var body = new MemoryStream(initialCapacity);
+        var buffer = ArrayPool<byte>.Shared.Rent(64 * 1024);
+
+        try
+        {
+            long total = 0;
+            while (true)
+            {
+                var remaining = _maximumResponseContentLength - total;
+                var requested = (int)Math.Min(buffer.Length, remaining + 1);
+                var read = await stream.ReadAsync(
+                    buffer.AsMemory(0, requested), cancellationToken);
+                if (read == 0)
+                    return body.GetBuffer().AsMemory(0, checked((int)total));
+
+                total += read;
+                if (total > _maximumResponseContentLength)
+                    throw ResponseTooLarge(total);
+
+                body.Write(buffer, 0, read);
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    private HttpRequestException ResponseTooLarge(long receivedLength)
+        => new(
+            $"The JSON-RPC response body is {receivedLength} bytes, exceeding the configured "
+            + $"{_maximumResponseContentLength}-byte limit ({nameof(SolanaRpcOptions.MaximumResponseContentLength)}).");
 }

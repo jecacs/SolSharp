@@ -11,10 +11,6 @@ namespace SolSharp.Rpc.Streaming;
 /// <seealso href="https://solana.com/docs/rpc/websocket/votesubscribe">voteSubscribe</seealso>
 public sealed record VoteNotification
 {
-    private IReadOnlyList<ulong>? _slots;
-    private string? _hash;
-    private string? _signature;
-
     /// <summary>The vote-account address that produced the vote.</summary>
     [JsonPropertyName("votePubkey")]
     [JsonRequired]
@@ -25,8 +21,8 @@ public sealed record VoteNotification
     [JsonRequired]
     public IReadOnlyList<ulong> Slots
     {
-        get => _slots ?? throw new InvalidOperationException("The voted slots have not been initialized.");
-        init => _slots = value ?? throw new JsonException("A vote notification must carry its voted slots.");
+        get => field ?? throw new InvalidOperationException("The voted slots have not been initialized.");
+        init => field = value ?? throw new JsonException("A vote notification must carry its voted slots.");
     }
 
     /// <summary>The hash the vote is for (base58).</summary>
@@ -34,8 +30,8 @@ public sealed record VoteNotification
     [JsonRequired]
     public string Hash
     {
-        get => _hash ?? throw new InvalidOperationException("The vote hash has not been initialized.");
-        init => _hash = value ?? throw new JsonException("A vote notification must carry a vote hash.");
+        get => field ?? throw new InvalidOperationException("The vote hash has not been initialized.");
+        init => field = value ?? throw new JsonException("A vote notification must carry a vote hash.");
     }
 
     /// <summary>The vote's Unix timestamp in seconds, when the validator attached one.</summary>
@@ -48,7 +44,7 @@ public sealed record VoteNotification
     [JsonRequired]
     public string Signature
     {
-        get => _signature ?? throw new InvalidOperationException("The vote signature has not been initialized.");
-        init => _signature = value ?? throw new JsonException("A vote notification must carry a signature.");
+        get => field ?? throw new InvalidOperationException("The vote signature has not been initialized.");
+        init => field = value ?? throw new JsonException("A vote notification must carry a signature.");
     }
 }

@@ -1,5 +1,5 @@
 # SolSharp - editorconfig
-# Modern C# 12. The meaningful modernizers are warnings, not hints, so legacy
+# Modern C# 14. The meaningful modernizers are warnings, not hints, so legacy
 # patterns surface on build (EnforceCodeStyleInBuild is set in Directory.Build.props).
 
 root = true
@@ -62,12 +62,18 @@ csharp_style_expression_bodied_accessors = true:warning
 csharp_style_expression_bodied_lambdas = true:warning
 csharp_style_expression_bodied_local_functions = true:suggestion
 
-# C# 12+ : primary constructors, collection expressions, target-typed new
+# Modern language features: primary constructors, collection expressions, target-typed new
 csharp_style_prefer_primary_constructors = true:warning
 dotnet_style_prefer_collection_expression = when_types_loosely_match:warning
 dotnet_style_object_initializer = true:warning
 dotnet_style_collection_initializer = true:warning
 csharp_style_implicit_object_creation_when_type_is_apparent = true:warning
+# Keep Rider/ReSharper aligned with Roslyn even when a developer's global IDE
+# preference requires an explicit type in object creation expressions.
+resharper_csharp_object_creation_when_type_evident = target_typed
+resharper_csharp_object_creation_when_type_not_evident = target_typed
+resharper_arrange_object_creation_when_type_evident_highlighting = warning
+resharper_arrange_object_creation_when_type_not_evident_highlighting = warning
 csharp_prefer_simple_default_expression = true:warning
 
 # Pattern matching / switch expressions over the old ways
@@ -157,15 +163,19 @@ dotnet_diagnostic.SA1623.severity = none
 dotnet_diagnostic.SA1642.severity = none
 dotnet_diagnostic.SA1643.severity = none
 
-# Preserve the existing compact, domain-oriented file/member layout. These are
-# stylistic preferences rather than correctness or readability diagnostics.
+# Keep members in the explicit StyleCop order from stylecop.json:
+# kind -> accessibility -> constant -> static -> readonly. This groups fields,
+# constructors, properties, methods, and nested types; within each kind the
+# public API comes first and private implementation details come last.
+dotnet_diagnostic.SA1201.severity = warning
+dotnet_diagnostic.SA1202.severity = warning
+dotnet_diagnostic.SA1203.severity = warning
+dotnet_diagnostic.SA1204.severity = warning
+dotnet_diagnostic.SA1214.severity = warning
+
+# Remaining legacy layout preferences are not part of the repository contract.
 dotnet_diagnostic.SA1122.severity = none
 dotnet_diagnostic.SA1128.severity = none
-dotnet_diagnostic.SA1201.severity = none
-dotnet_diagnostic.SA1202.severity = none
-dotnet_diagnostic.SA1203.severity = none
-dotnet_diagnostic.SA1204.severity = none
-dotnet_diagnostic.SA1214.severity = none
 dotnet_diagnostic.SA1402.severity = none
 dotnet_diagnostic.SA1413.severity = none
 dotnet_diagnostic.SA1515.severity = none

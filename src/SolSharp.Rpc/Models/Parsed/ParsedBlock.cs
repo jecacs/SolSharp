@@ -10,17 +10,13 @@ namespace SolSharp.Rpc.Models.Parsed;
 /// <seealso href="https://solana.com/docs/rpc/http/getblock">getBlock</seealso>
 public sealed record ParsedBlock
 {
-    private string? _blockhash;
-    private string? _previousBlockhash;
-    private IReadOnlyList<ParsedTransaction>? _transactions;
-
     /// <summary>The block's blockhash (base58).</summary>
     [JsonPropertyName("blockhash")]
     [JsonRequired]
     public string Blockhash
     {
-        get => _blockhash!;
-        init => _blockhash = value ?? throw new JsonException("A parsed block must carry a blockhash.");
+        get => field!;
+        init => field = value ?? throw new JsonException("A parsed block must carry a blockhash.");
     }
 
     /// <summary>The blockhash of this block's parent (base58).</summary>
@@ -28,8 +24,8 @@ public sealed record ParsedBlock
     [JsonRequired]
     public string PreviousBlockhash
     {
-        get => _previousBlockhash!;
-        init => _previousBlockhash = value ?? throw new JsonException("A parsed block must carry a previous blockhash.");
+        get => field!;
+        init => field = value ?? throw new JsonException("A parsed block must carry a previous blockhash.");
     }
 
     /// <summary>The slot of this block's parent.</summary>
@@ -60,13 +56,13 @@ public sealed record ParsedBlock
     [JsonRequired]
     public IReadOnlyList<ParsedTransaction> Transactions
     {
-        get => _transactions!;
+        get => field!;
         init
         {
             if (value is null || value.Any(static transaction => transaction is null))
                 throw new JsonException("A parsed block must carry only non-null transactions.");
 
-            _transactions = value;
+            field = value;
         }
     }
 }

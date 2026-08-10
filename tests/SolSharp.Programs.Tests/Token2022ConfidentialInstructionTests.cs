@@ -6,21 +6,6 @@ using static SolSharp.Programs.Tests.Token2022ConfidentialTestHelpers;
 
 namespace SolSharp.Programs.Tests;
 
-internal static class Token2022ConfidentialTestHelpers
-{
-    internal static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
-
-    internal static byte[] Pod(byte value, int length) => [.. Enumerable.Repeat(value, length)];
-
-    internal static string Hex(Instruction instruction) => Convert.ToHexString(instruction.Data).ToLowerInvariant();
-
-    internal static string RepeatedHex(byte value, int length)
-        => string.Concat(Enumerable.Repeat(value.ToString("x2"), length));
-
-    internal static (PublicKey, bool, bool)[] Metas(Instruction instruction)
-        => [.. instruction.Accounts.Select(account => (account.PublicKey, account.IsSigner, account.IsWritable))];
-}
-
 public static class Token2022ConfidentialInstructionTests
 {
     [TestFixture]
@@ -506,4 +491,19 @@ public static class ElGamalRegistryProgramTests
             state.ElGamalPublicKey.ToArray().Should().Equal(Pod(4, 32));
         }
     }
+}
+
+internal static class Token2022ConfidentialTestHelpers
+{
+    internal static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
+
+    internal static byte[] Pod(byte value, int length) => [.. Enumerable.Repeat(value, length)];
+
+    internal static string Hex(Instruction instruction) => Convert.ToHexString(instruction.Data).ToLowerInvariant();
+
+    internal static string RepeatedHex(byte value, int length)
+        => string.Concat(Enumerable.Repeat(value.ToString("x2"), length));
+
+    internal static (PublicKey, bool, bool)[] Metas(Instruction instruction)
+        => [.. instruction.Accounts.Select(account => (account.PublicKey, account.IsSigner, account.IsWritable))];
 }

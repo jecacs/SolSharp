@@ -13,6 +13,58 @@ namespace SolSharp.Rpc.Tests.Streaming;
 
 public static class SolanaWsClientTests
 {
+    private static int RequestId(string request)
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(request);
+        return document.RootElement.GetProperty("id").GetInt32();
+    }
+
+    private static string Acknowledgement(int requestId, ulong subscriptionId) =>
+        $$"""{"jsonrpc":"2.0","result":{{subscriptionId}},"id":{{requestId}}}""";
+
+    private static void AcknowledgeAccountRequest(
+        FakeWebSocketConnection connection,
+        string request,
+        PublicKey accountA,
+        ulong serverIdA,
+        ulong serverIdB)
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(request);
+        var root = document.RootElement;
+        var subscribedAccount = root.GetProperty("params")[0].GetString();
+        var serverId = subscribedAccount == accountA.ToString() ? serverIdA : serverIdB;
+        connection.PushFromServer(Acknowledgement(root.GetProperty("id").GetInt32(), serverId));
+    }
+
+    // A plain (non-interpolated) raw string so the four trailing literal braces stay content; the two
+    // values are substituted afterwards (an interpolated raw string cannot mix {{ }} holes with }}}} here).
+    private static string AccountNotification(ulong subscription, ulong lamports) =>
+        """{"jsonrpc":"2.0","method":"accountNotification","params":{"subscription":__SUB__,"result":{"context":{"slot":1},"value":{"data":["","base64"],"executable":false,"lamports":__LAMP__,"owner":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA","rentEpoch":0,"space":0}}}}"""
+            .Replace("__SUB__", subscription.ToString(CultureInfo.InvariantCulture))
+            .Replace("__LAMP__", lamports.ToString(CultureInfo.InvariantCulture));
+
+    private static string LogNotification(ulong subscription, string signature) =>
+        """{"jsonrpc":"2.0","method":"logsNotification","params":{"subscription":__SUB__,"result":{"context":{"slot":1},"value":{"signature":"__SIG__","err":null,"logs":[]}}}}"""
+            .Replace("__SUB__", subscription.ToString(CultureInfo.InvariantCulture))
+            .Replace("__SIG__", signature, StringComparison.Ordinal);
+
+    private static string ProgramNotification(long subscription, ulong lamports) =>
+        """{"jsonrpc":"2.0","method":"programNotification","params":{"subscription":__SUB__,"result":{"context":{"slot":1},"value":{"pubkey":"11111111111111111111111111111111","account":{"data":["AQID","base64"],"executable":false,"lamports":__LAMP__,"owner":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA","rentEpoch":0,"space":3}}}}}"""
+            .Replace("__SUB__", subscription.ToString(CultureInfo.InvariantCulture))
+            .Replace("__LAMP__", lamports.ToString(CultureInfo.InvariantCulture));
+
+    private static async Task WaitUntil(Func<bool> condition)
+    {
+        for (var attempt = 0; attempt < 100; attempt++)
+        {
+            if (condition())
+                return;
+            await Task.Delay(10);
+        }
+
+        Assert.Fail("Condition was not met within one second.");
+    }
+
     [TestFixture]
     public sealed class SubscribeSlots
     {
@@ -1905,6 +1957,9 @@ public static class SolanaWsClientTests
     [TestFixture]
     public sealed class SubscribeParsedBlocks
     {
+        private const string NotificationJson =
+            """{"jsonrpc":"2.0","method":"blockNotification","params":{"subscription":9,"result":{"context":{"slot":120},"value":{"slot":120,"err":null,"block":{"blockhash":"Pblk1111111111111111111111111111111111111111","previousBlockhash":"Pprev111111111111111111111111111111111111111","parentSlot":119,"blockHeight":100,"blockTime":1700000010,"transactions":[{"transaction":{"signatures":["psig1"],"message":{"accountKeys":[{"pubkey":"3x9az88Dkbxa6tkKByxqEn7jBTJCJCD4dVvou49L24ET","signer":true,"writable":true,"source":"transaction"},{"pubkey":"11111111111111111111111111111111","signer":false,"writable":false,"source":"transaction"}],"instructions":[{"program":"system","programId":"11111111111111111111111111111111","parsed":{"type":"transfer","info":{"lamports":7}},"stackHeight":null}],"recentBlockhash":"Prbh1111111111111111111111111111111111111111"}},"meta":null,"version":"legacy"}]}}}}}""";
+
         [Test]
         public async Task DeliversParsedBlock_WithDecodedInstructions()
         {
@@ -1940,14 +1995,14 @@ public static class SolanaWsClientTests
 
             await cts.CancelAsync();
         }
-
-        private const string NotificationJson =
-            """{"jsonrpc":"2.0","method":"blockNotification","params":{"subscription":9,"result":{"context":{"slot":120},"value":{"slot":120,"err":null,"block":{"blockhash":"Pblk1111111111111111111111111111111111111111","previousBlockhash":"Pprev111111111111111111111111111111111111111","parentSlot":119,"blockHeight":100,"blockTime":1700000010,"transactions":[{"transaction":{"signatures":["psig1"],"message":{"accountKeys":[{"pubkey":"3x9az88Dkbxa6tkKByxqEn7jBTJCJCD4dVvou49L24ET","signer":true,"writable":true,"source":"transaction"},{"pubkey":"11111111111111111111111111111111","signer":false,"writable":false,"source":"transaction"}],"instructions":[{"program":"system","programId":"11111111111111111111111111111111","parsed":{"type":"transfer","info":{"lamports":7}},"stackHeight":null}],"recentBlockhash":"Prbh1111111111111111111111111111111111111111"}},"meta":null,"version":"legacy"}]}}}}}""";
     }
 
     [TestFixture]
     public sealed class SubscribeParsedAccount
     {
+        private const string AccountNotificationJson =
+            """{"jsonrpc":"2.0","method":"accountNotification","params":{"subscription":11,"result":{"context":{"slot":250},"value":{"lamports":2039280,"owner":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA","executable":false,"rentEpoch":18446744073709551615,"space":165,"data":{"program":"spl-token","parsed":{"type":"account","info":{"mint":"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v","owner":"67vHA8qZGCJKw1UNGUJZME4MwEWDRGWzp7MGvsut43A8","tokenAmount":{"amount":"1000000","decimals":6,"uiAmount":1.0,"uiAmountString":"1"},"state":"initialized"}},"space":165}}}}}""";
+
         [Test]
         public async Task NullAccountValue_FaultsSubscription()
         {
@@ -2000,9 +2055,6 @@ public static class SolanaWsClientTests
 
             await cts.CancelAsync();
         }
-
-        private const string AccountNotificationJson =
-            """{"jsonrpc":"2.0","method":"accountNotification","params":{"subscription":11,"result":{"context":{"slot":250},"value":{"lamports":2039280,"owner":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA","executable":false,"rentEpoch":18446744073709551615,"space":165,"data":{"program":"spl-token","parsed":{"type":"account","info":{"mint":"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v","owner":"67vHA8qZGCJKw1UNGUJZME4MwEWDRGWzp7MGvsut43A8","tokenAmount":{"amount":"1000000","decimals":6,"uiAmount":1.0,"uiAmountString":"1"},"state":"initialized"}},"space":165}}}}}""";
     }
 
     [TestFixture]
@@ -2623,57 +2675,5 @@ public static class SolanaWsClientTests
                 SetSynchronizationContext(previousContext);
             }
         }
-    }
-
-    private static int RequestId(string request)
-    {
-        using var document = System.Text.Json.JsonDocument.Parse(request);
-        return document.RootElement.GetProperty("id").GetInt32();
-    }
-
-    private static string Acknowledgement(int requestId, ulong subscriptionId) =>
-        $$"""{"jsonrpc":"2.0","result":{{subscriptionId}},"id":{{requestId}}}""";
-
-    private static void AcknowledgeAccountRequest(
-        FakeWebSocketConnection connection,
-        string request,
-        PublicKey accountA,
-        ulong serverIdA,
-        ulong serverIdB)
-    {
-        using var document = System.Text.Json.JsonDocument.Parse(request);
-        var root = document.RootElement;
-        var subscribedAccount = root.GetProperty("params")[0].GetString();
-        var serverId = subscribedAccount == accountA.ToString() ? serverIdA : serverIdB;
-        connection.PushFromServer(Acknowledgement(root.GetProperty("id").GetInt32(), serverId));
-    }
-
-    // A plain (non-interpolated) raw string so the four trailing literal braces stay content; the two
-    // values are substituted afterwards (an interpolated raw string cannot mix {{ }} holes with }}}} here).
-    private static string AccountNotification(ulong subscription, ulong lamports) =>
-        """{"jsonrpc":"2.0","method":"accountNotification","params":{"subscription":__SUB__,"result":{"context":{"slot":1},"value":{"data":["","base64"],"executable":false,"lamports":__LAMP__,"owner":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA","rentEpoch":0,"space":0}}}}"""
-            .Replace("__SUB__", subscription.ToString(CultureInfo.InvariantCulture))
-            .Replace("__LAMP__", lamports.ToString(CultureInfo.InvariantCulture));
-
-    private static string LogNotification(ulong subscription, string signature) =>
-        """{"jsonrpc":"2.0","method":"logsNotification","params":{"subscription":__SUB__,"result":{"context":{"slot":1},"value":{"signature":"__SIG__","err":null,"logs":[]}}}}"""
-            .Replace("__SUB__", subscription.ToString(CultureInfo.InvariantCulture))
-            .Replace("__SIG__", signature, StringComparison.Ordinal);
-
-    private static string ProgramNotification(long subscription, ulong lamports) =>
-        """{"jsonrpc":"2.0","method":"programNotification","params":{"subscription":__SUB__,"result":{"context":{"slot":1},"value":{"pubkey":"11111111111111111111111111111111","account":{"data":["AQID","base64"],"executable":false,"lamports":__LAMP__,"owner":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA","rentEpoch":0,"space":3}}}}}"""
-            .Replace("__SUB__", subscription.ToString(CultureInfo.InvariantCulture))
-            .Replace("__LAMP__", lamports.ToString(CultureInfo.InvariantCulture));
-
-    private static async Task WaitUntil(Func<bool> condition)
-    {
-        for (var attempt = 0; attempt < 100; attempt++)
-        {
-            if (condition())
-                return;
-            await Task.Delay(10);
-        }
-
-        Assert.Fail("Condition was not met within one second.");
     }
 }

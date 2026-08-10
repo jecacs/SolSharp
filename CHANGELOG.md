@@ -5,6 +5,16 @@ All notable changes to SolSharp are documented here. The format is loosely based
 [semantic versioning](https://semver.org) — from 1.0.0 breaking changes only come with a major
 version (on the earlier 0.x releases, minor versions could carry them).
 
+## [Unreleased]
+
+### Changed
+
+- Raised every library, test, benchmark, and Native AOT sample project to .NET 10 and the latest stable
+  C# language version supported by the .NET 10 SDK. CI, release automation, package validation, dependency
+  locks, and documentation now enforce the same minimum toolchain and target framework.
+- Enforced deterministic member ordering for fields, constructors, properties, methods, and nested types,
+  including public-to-private accessibility and constant/static/readonly precedence.
+
 ## [2.0.0] - 2026-08-09
 
 ### Added

@@ -11,6 +11,22 @@ public static class SolanaRpcClientClusterReadsTests
     private const string Node = "7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67";
     private const string Vote = "9jLkNAaW9E47LQMHvjohy2uAAyr1331bAxgJKFRU7wF6";
 
+    private const string Votes =
+        """{"jsonrpc":"2.0","result":{"current":[{"votePubkey":"9jLkNAaW9E47LQMHvjohy2uAAyr1331bAxgJKFRU7wF6","nodePubkey":"7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67","activatedStake":42000000,"epochVoteAccount":true,"commission":7,"inflationRewardsCommissionBps":725,"lastVote":250000,"rootSlot":249968,"epochCredits":[[600,1000,900],[18446744073709551615,9223372036854775808,18446744073709551615]]}],"delinquent":[]},"id":1}""";
+
+    private const string Inflation =
+        """{"jsonrpc":"2.0","result":[{"epoch":600,"effectiveSlot":259200000,"amount":2500,"postBalance":1002500,"commission":null,"commissionBps":725},null],"id":1}""";
+
+    private const string Schedule =
+        """{"jsonrpc":"2.0","result":{"7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67":[0,1,2,3,4,5,6,7]},"id":1}""";
+
+    private const string ScheduleNull = """{"jsonrpc":"2.0","result":null,"id":1}""";
+
+    private const string Blocks = """{"jsonrpc":"2.0","result":[100,101,103,104],"id":1}""";
+
+    private const string Nodes =
+        """{"jsonrpc":"2.0","result":[{"pubkey":"7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67","gossip":"10.0.0.1:8001","tvu":"10.0.0.1:8002","tpu":"10.0.0.1:8003","tpuQuic":"10.0.0.1:8004","tpuForwards":"10.0.0.1:8005","tpuForwardsQuic":"10.0.0.1:8006","tpuVote":"10.0.0.1:8007","serveRepair":"10.0.0.1:8008","rpc":"10.0.0.1:8899","pubsub":"10.0.0.1:8900","version":"1.18.5","clientId":"agave","featureSet":4294967295,"shredVersion":65535}],"id":1}""";
+
     private static (SolanaRpcClient Client, FakeHttpMessageHandler Handler) Make(string responseJson)
     {
         var handler = new FakeHttpMessageHandler(responseJson);
@@ -287,20 +303,4 @@ public static class SolanaRpcClientClusterReadsTests
             await act.Should().ThrowAsync<JsonException>();
         }
     }
-
-    private const string Votes =
-        """{"jsonrpc":"2.0","result":{"current":[{"votePubkey":"9jLkNAaW9E47LQMHvjohy2uAAyr1331bAxgJKFRU7wF6","nodePubkey":"7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67","activatedStake":42000000,"epochVoteAccount":true,"commission":7,"inflationRewardsCommissionBps":725,"lastVote":250000,"rootSlot":249968,"epochCredits":[[600,1000,900],[18446744073709551615,9223372036854775808,18446744073709551615]]}],"delinquent":[]},"id":1}""";
-
-    private const string Inflation =
-        """{"jsonrpc":"2.0","result":[{"epoch":600,"effectiveSlot":259200000,"amount":2500,"postBalance":1002500,"commission":null,"commissionBps":725},null],"id":1}""";
-
-    private const string Schedule =
-        """{"jsonrpc":"2.0","result":{"7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67":[0,1,2,3,4,5,6,7]},"id":1}""";
-
-    private const string ScheduleNull = """{"jsonrpc":"2.0","result":null,"id":1}""";
-
-    private const string Blocks = """{"jsonrpc":"2.0","result":[100,101,103,104],"id":1}""";
-
-    private const string Nodes =
-        """{"jsonrpc":"2.0","result":[{"pubkey":"7QMhYQAPfkoURcrQFxgHKXbipaYL4Sj34kweHx3d3J67","gossip":"10.0.0.1:8001","tvu":"10.0.0.1:8002","tpu":"10.0.0.1:8003","tpuQuic":"10.0.0.1:8004","tpuForwards":"10.0.0.1:8005","tpuForwardsQuic":"10.0.0.1:8006","tpuVote":"10.0.0.1:8007","serveRepair":"10.0.0.1:8008","rpc":"10.0.0.1:8899","pubsub":"10.0.0.1:8900","version":"1.18.5","clientId":"agave","featureSet":4294967295,"shredVersion":65535}],"id":1}""";
 }

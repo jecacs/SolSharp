@@ -11,6 +11,16 @@ public static class AccountFilterTests
 {
     private const string ProgramId = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 
+    private static async Task<string> NextRequestAsync(FakeWebSocketConnection connection)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(1);
+        while (connection.SentCount == 0 && DateTime.UtcNow < deadline)
+            await Task.Yield();
+
+        connection.SentCount.Should().BeGreaterThan(0);
+        return connection.SentSnapshot()[0];
+    }
+
     [TestFixture]
     public sealed class MemoryCompare
     {
@@ -274,15 +284,5 @@ public static class AccountFilterTests
             request.Should().Be(
                 """{"jsonrpc":"2.0","id":1,"method":"programSubscribe","params":["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",{"encoding":"base64","filters":[{"memcmp":{"offset":18446744073709551615,"bytes":"3Mc6vR","encoding":"base58"}},{"memcmp":{"offset":8,"bytes":"AQID","encoding":"base64"}},{"memcmp":{"offset":9,"bytes":[0,1,2,255],"encoding":"bytes"}},{"dataSize":18446744073709551615},"tokenAccountState"]}]}""");
         }
-    }
-
-    private static async Task<string> NextRequestAsync(FakeWebSocketConnection connection)
-    {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(1);
-        while (connection.SentCount == 0 && DateTime.UtcNow < deadline)
-            await Task.Yield();
-
-        connection.SentCount.Should().BeGreaterThan(0);
-        return connection.SentSnapshot()[0];
     }
 }

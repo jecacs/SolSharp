@@ -6,10 +6,9 @@ namespace SolSharp.Programs;
 /// <summary>Builds instructions for the SPL Memo program: attaches a UTF-8 memo to a transaction, optionally signed.</summary>
 public static class MemoProgram
 {
-    private static readonly UTF8Encoding StrictUtf8 = new(false, true);
-
     /// <summary>The SPL Memo program's address.</summary>
     public static readonly PublicKey ProgramId = PublicKey.Parse("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+    private static readonly UTF8Encoding StrictUtf8 = new(false, true);
 
     /// <summary>
     /// Builds a memo instruction whose data is <paramref name="text"/> encoded as UTF-8. Any

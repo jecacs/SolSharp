@@ -26,9 +26,30 @@ public enum VoteAuthorizationKind : uint
     VoterWithBls = 2
 }
 
+/// <summary>Initialization values for the legacy vote-account state.</summary>
+/// <param name="Node">The validator identity.</param>
+/// <param name="AuthorizedVoter">The initial vote authority.</param>
+/// <param name="AuthorizedWithdrawer">The withdrawal authority.</param>
+/// <param name="Commission">The commission percentage.</param>
+public readonly record struct VoteInitialize(
+    PublicKey Node,
+    PublicKey AuthorizedVoter,
+    PublicKey AuthorizedWithdrawer,
+    byte Commission);
+
+/// <summary>A slot and its tower confirmation count.</summary>
+/// <param name="Slot">The voted slot.</param>
+/// <param name="ConfirmationCount">The confirmation count.</param>
+public readonly record struct VoteLockout(ulong Slot, uint ConfirmationCount);
+
 /// <summary>A vote authorization selector, including optional BLS credentials.</summary>
 public sealed class VoteAuthorization
 {
+    /// <summary>The compressed BLS public-key length.</summary>
+    public const int BlsPublicKeyLength = 48;
+
+    /// <summary>The compressed BLS proof-of-possession length.</summary>
+    public const int BlsProofOfPossessionLength = 96;
     private readonly byte[] _blsPublicKey;
     private readonly byte[] _blsProofOfPossession;
     private readonly BlsPublicKey? _validatedPublicKey;
@@ -55,12 +76,6 @@ public sealed class VoteAuthorization
         _validatedPublicKey = validatedPublicKey;
         _validatedProof = validatedProof;
     }
-
-    /// <summary>The compressed BLS public-key length.</summary>
-    public const int BlsPublicKeyLength = 48;
-
-    /// <summary>The compressed BLS proof-of-possession length.</summary>
-    public const int BlsProofOfPossessionLength = 96;
 
     /// <summary>Selects the ordinary vote authority.</summary>
     public static VoteAuthorization Voter { get; } = new(VoteAuthorizationKind.Voter, [], []);
@@ -143,17 +158,6 @@ public sealed class VoteAuthorization
     }
 }
 
-/// <summary>Initialization values for the legacy vote-account state.</summary>
-/// <param name="Node">The validator identity.</param>
-/// <param name="AuthorizedVoter">The initial vote authority.</param>
-/// <param name="AuthorizedWithdrawer">The withdrawal authority.</param>
-/// <param name="Commission">The commission percentage.</param>
-public readonly record struct VoteInitialize(
-    PublicKey Node,
-    PublicKey AuthorizedVoter,
-    PublicKey AuthorizedWithdrawer,
-    byte Commission);
-
 /// <summary>Initialization values for vote state V4, including BLS credentials and basis-point commissions.</summary>
 public sealed class VoteInitializeV2
 {
@@ -197,28 +201,6 @@ public sealed class VoteInitializeV2
     {
     }
 
-    private VoteInitializeV2(
-        PublicKey node,
-        PublicKey authorizedVoter,
-        byte[] blsPublicKey,
-        byte[] blsProofOfPossession,
-        PublicKey authorizedWithdrawer,
-        ushort inflationRewardsCommissionBps,
-        ushort blockRevenueCommissionBps,
-        BlsPublicKey? validatedPublicKey,
-        BlsProofOfPossession? validatedProof)
-    {
-        Node = node;
-        AuthorizedVoter = authorizedVoter;
-        _blsPublicKey = blsPublicKey;
-        _blsProofOfPossession = blsProofOfPossession;
-        AuthorizedWithdrawer = authorizedWithdrawer;
-        InflationRewardsCommissionBps = inflationRewardsCommissionBps;
-        BlockRevenueCommissionBps = blockRevenueCommissionBps;
-        _validatedPublicKey = validatedPublicKey;
-        _validatedProof = validatedProof;
-    }
-
     /// <summary>
     /// Creates V4 initialization values from validated BLS points. Vote instruction builders verify
     /// that the proof matches both this key and the actual vote account before serialization.
@@ -251,6 +233,28 @@ public sealed class VoteInitializeV2
     {
     }
 
+    private VoteInitializeV2(
+        PublicKey node,
+        PublicKey authorizedVoter,
+        byte[] blsPublicKey,
+        byte[] blsProofOfPossession,
+        PublicKey authorizedWithdrawer,
+        ushort inflationRewardsCommissionBps,
+        ushort blockRevenueCommissionBps,
+        BlsPublicKey? validatedPublicKey,
+        BlsProofOfPossession? validatedProof)
+    {
+        Node = node;
+        AuthorizedVoter = authorizedVoter;
+        _blsPublicKey = blsPublicKey;
+        _blsProofOfPossession = blsProofOfPossession;
+        AuthorizedWithdrawer = authorizedWithdrawer;
+        InflationRewardsCommissionBps = inflationRewardsCommissionBps;
+        BlockRevenueCommissionBps = blockRevenueCommissionBps;
+        _validatedPublicKey = validatedPublicKey;
+        _validatedProof = validatedProof;
+    }
+
     /// <summary>The validator identity.</summary>
     public PublicKey Node { get; }
 
@@ -263,10 +267,6 @@ public sealed class VoteInitializeV2
     /// <summary>A defensive copy of the compressed BLS proof of possession.</summary>
     public ReadOnlyMemory<byte> BlsProofOfPossession => new([.. _blsProofOfPossession]);
 
-    internal ReadOnlySpan<byte> BlsPublicKeySpan => _blsPublicKey;
-
-    internal ReadOnlySpan<byte> BlsProofOfPossessionSpan => _blsProofOfPossession;
-
     /// <summary>The withdrawal authority.</summary>
     public PublicKey AuthorizedWithdrawer { get; }
 
@@ -275,6 +275,10 @@ public sealed class VoteInitializeV2
 
     /// <summary>The block-revenue commission in basis points.</summary>
     public ushort BlockRevenueCommissionBps { get; }
+
+    internal ReadOnlySpan<byte> BlsPublicKeySpan => _blsPublicKey;
+
+    internal ReadOnlySpan<byte> BlsProofOfPossessionSpan => _blsProofOfPossession;
 
     internal void ValidateProofForVoteAccount(PublicKey voteAccount)
     {
@@ -309,11 +313,6 @@ public sealed class VoteInitializeV2
     private static BlsProofOfPossession RequireProof(BlsProofOfPossession proof) =>
         proof ?? throw new ArgumentNullException(nameof(proof));
 }
-
-/// <summary>A slot and its tower confirmation count.</summary>
-/// <param name="Slot">The voted slot.</param>
-/// <param name="ConfirmationCount">The confirmation count.</param>
-public readonly record struct VoteLockout(ulong Slot, uint ConfirmationCount);
 
 /// <summary>A legacy vote payload containing recent slots.</summary>
 /// <param name="Slots">Slots ordered from oldest to newest.</param>

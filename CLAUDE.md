@@ -15,9 +15,9 @@ and devnet write paths against real nodes.
 
 Run from the repo root (where `SolSharp.sln` lives):
 
-- `dotnet build` — Roslyn and StyleCop code style is enforced on build (`EnforceCodeStyleInBuild`), so actionable style violations surface as warnings. Repository-specific StyleCop suppressions and the shared Rider/Roslyn modifier order live in `.editorconfig`.
+- `dotnet build` — Roslyn and StyleCop code style is enforced on build (`EnforceCodeStyleInBuild`), so actionable style violations surface as warnings. Repository-specific StyleCop severities live in `.editorconfig`; the member-order precedence is explicit in `stylecop.json`.
 - `dotnet test` — NUnit suite.
-- `dotnet format` — auto-applies the style. Note: it cannot auto-fix naming (IDE1006); fix those by hand.
+- `dotnet format` — applies supported style fixes. It cannot reorder members (SA1201/SA1202/SA1203/SA1204/SA1214) or fix naming (IDE1006); move or rename those by hand.
 
 ## Hard rules
 
@@ -26,13 +26,14 @@ Run from the repo root (where `SolSharp.sln` lives):
 - **Comments earn their place.** Explain *why* — non-obvious rationale, wire-format quirks, gotchas — never restate what the code already says. No filler, decorative, or obvious comments. Public API carries full XML docs (summary, every `<param>`, `<returns>`, and thrown `<exception>`); inline noise does not.
 - **Default to `internal`; `public` is a deliberate contract.** This is a library, so the public surface is an API others depend on — keep it minimal. A type is `public` only when a consumer constructs, receives, or catches it (i.e. it appears in a public signature). Everything else — request/response plumbing, converters, sinks, internal helpers — is `internal`, and tests reach it through `InternalsVisibleTo`.
 - **Attributes on their own line** — never inline with the member, e.g. `[JsonPropertyName("id")]` goes above the property, not beside it. `dotnet format` does not enforce this (only Rider does), so write it that way by hand.
-- **Target framework is `net8.0`.** Do not use net9-only APIs (e.g. `JsonStringEnumMemberName`,
-  `InlineArray`-based span tricks that need newer ref-safety). `global.json` starts at SDK 8.0.100
-  with `rollForward: major`, so a development machine with only a newer SDK can still build the
-  repository. Hosted runners also contain newer SDKs; after installing 8.x, every CI/release job that invokes
-  .NET asserts the resolver's actual `dotnet --version` is 8.x. Do not remove that check or CI could silently
+- **Member order is build-gated.** Group fields, constructors, finalizers, delegates, events, enums, interfaces, properties, indexers, conversions/operators, methods, and nested types in that order. Within each kind use `public`, `internal`, `protected internal`, `protected`, `private protected`, then `private`; therefore a private method never splits public methods. The remaining precedence is `const`, `static`, then `readonly`, as declared in `stylecop.json` and enforced by SA1201/SA1202/SA1203/SA1204/SA1214.
+- **Target framework is `net10.0`.** Do not use APIs that require a later target framework.
+  `global.json` starts at SDK 10.0.100 with `rollForward: latestFeature`, so development stays on the
+  latest installed stable .NET 10 feature band. Hosted runners also contain other SDKs; after installing
+  10.x, every CI/release job that invokes .NET asserts the resolver's actual `dotnet --version` is 10.x.
+  Do not remove that check or CI could silently
   stop proving the minimum if SDK selection or runner contents change.
-- **Modern C# 12 only.** File-scoped namespaces, `var`, collection expressions `[]`, primary constructors, switch expressions, pattern matching, `is null` / `is not null`. The full rule set lives in `.editorconfig` + `Directory.Build.props` — follow the analyzers, don't fight them. Do not restate style rules here.
+- **Modern C# 14 only.** `LangVersion=latest` means the latest stable language supported by the pinned .NET 10 SDK line; preview syntax is not enabled. File-scoped namespaces, `var`, collection expressions `[]`, primary constructors, switch expressions, pattern matching, `is null` / `is not null`. The full rule set lives in `.editorconfig`, `stylecop.json`, and `Directory.Build.props` — follow the analyzers, don't fight them.
 - **A feature is not done until it is documented.** Every user-facing addition or change lands in the same commit with all four documentation layers: (1) XML docs on the public API (CS1591 enforces presence on production members; full `<param>`, `<returns>`, and `<exception>` content remains a review policy); (2) `docs/USAGE.md` — a runnable example in the matching section (or a new section + `Contents` entry), with every snippet checked against the real signatures and model properties, not written from memory; (3) `README.md` — the wire-method list, feature bullets, and Layout if the shape of the repo changed (`README.nuget.md` only if the pitch/quick-start changes — it carries no method lists by design); (4) `CHANGELOG.md` under the release being prepared. Release-only extras: bump `Version` in `Directory.Build.props`, refresh `PackageReleaseNotes` in `src/SolSharp/SolSharp.csproj` (nuget.org shows only the current version's notes), and update the `Status:` line here.
 
 ## Architecture
@@ -90,10 +91,10 @@ SolSharp/
 ## Decisions
 
 - `PublicKey` is a `readonly struct` backed by four `ulong` words (32 bytes inline, value equality, no per-key heap allocation). Base58 is cached only when the key is built from a string; from-bytes stays allocation-free. No zero-copy `AsSpan()` by design — use `CopyTo` / `ToBytes`.
-- `Commitment` serializes via a custom `JsonConverter` applied as a `[JsonConverter]` attribute (net8 has no `JsonStringEnumMemberName`). The attribute makes it self-serializing under default options, not just `SolanaJsonSerializer.Options`.
+- `Commitment` serializes via a custom `JsonConverter` applied as a `[JsonConverter]` attribute. The attribute makes it self-serializing under default options, not just `SolanaJsonSerializer.Options`, and preserves the existing wire contract independently of serializer enum policy.
 - Wire enums/types follow that same pattern: self-serializing via attribute so they hold their wire form regardless of which `JsonSerializerOptions` are in play.
 - **JSON is source-generated; reflection serialization is banned in src.** All RPC/WS paths go through the internal `RpcJson.Options` (resolver: `JsonTypeInfoResolver.Combine(SolanaJsonContext, CoreJsonContext)`; `SolanaJsonContext` in `Rpc/Protocol/` holds the closed root registrations); Core's public `SolanaJsonSerializer.Options` covers only the Core primitives via the public `CoreJsonContext`, with no reflection fallback. GOTCHA: a source-gen context can only materialize a converter-attributed type if it can construct the converter - an inaccessible converter makes the generator drop the type (SYSLIB1220 + SYSLIB1030; warnings locally, errors under CI's `-warnaserror`) and every use fails at runtime with `NotSupportedException`. That is why converter-attributed Core wire converters such as `CommitmentJsonConverter`, `PublicKeyJsonConverter`, and `HashJsonConverter` are **public**: keep these converters public, and keep `CoreJsonContext` in the chain. Consequences: request `params` entries are object-typed and dispatch by **exact runtime type**, so every boxed shape (configs in `Protocol/RpcParams.cs`, primitives, arrays — collections are pinned with `ToArray()`) must be registered in the context; anonymous types cannot be used in requests; a new `SendAsync<T>`/subscription/batch root type must be added to `SolanaJsonContext` (unregistered types throw `NotSupportedException`, which the offline client tests catch); types behind hand-written converters are invisible to the generator's graph walk, so what a converter reads via `options.GetTypeInfo<T>()` needs explicit registration. Every production project sets `IsAotCompatible` — the trim/AOT analyzers plus `-warnaserror` reject `RequiresUnreferencedCode`/`RequiresDynamicCode` APIs (e.g. `JsonSerializer.Serialize(..., options)` overloads, `ValidateDataAnnotations`). CI consumes the generated nupkg for its native smoke test, so the packaging layer is covered too.
-- **Ed25519 lives in `Wallet` on `BouncyCastle.Cryptography`** — not the .NET BCL (net8/10 ship no usable cross-platform `Ed25519`: Windows unsupported, Apple's is non-conformant) and not a hand-rolled curve. Pure-managed/portable was chosen over libsodium/NSec's native dependency, since signing throughput is not the bottleneck; `ISigner` keeps the backend swappable.
+- **Ed25519 lives in `Wallet` on `BouncyCastle.Cryptography`** — not the .NET BCL (.NET 10 ships no usable cross-platform `Ed25519`: Windows unsupported, Apple's is non-conformant) and not a hand-rolled curve. Pure-managed/portable was chosen over libsodium/NSec's native dependency, since signing throughput is not the bottleneck; `ISigner` keeps the backend swappable.
 - **BLS12-381 lives in `Wallet` on `Nethermind.Crypto.Bls` 1.0.5 / Supranational `blst`** — the pinned Solana min-pk POP ciphersuite is implemented over a vetted native backend, never hand-rolled. Parse and verify paths require canonical subgroup points and reject infinity; secrets are canonical little-endian scalars and are zeroed. Supported packaged RIDs are Linux x64/arm64, macOS x64/arm64, and Windows x64; keep the facade dependency and `THIRD_PARTY_NOTICES.md` in sync.
 - `Keypair` is one word to match the Solana ecosystem (`solana-keygen`, web3.js `Keypair`), not .NET's `KeyPair`. It stores only the 32-byte seed, derives the public key once, and zeroes the seed on `Dispose`.
 - Solana version-0 signed off-chain messages live in `Wallet`: they use the pinned SDK's exact
@@ -108,6 +109,6 @@ SolSharp/
   project and use `--locked-mode` in ordinary CI/release restores. The AOT smoke's packed-package graph is
   intentionally dynamic because the package is built by the current job; its separate lock belongs under
   `obj`, never in the committed project-reference lock.
-- **SDK 8 package archives are not byte-reproducible.** The release workflow therefore attests and stages the
+- **SDK 10 package archives are not byte-reproducible.** The release workflow therefore attests and stages the
   exact `.nupkg` in a durable draft GitHub Release before NuGet publishing. Retries recover those canonical
   bytes; never replace that ordering with a fresh post-publish `dotnet pack` result.

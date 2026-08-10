@@ -20,6 +20,8 @@ public sealed class BlsPublicKey : IEquatable<BlsPublicKey>
         _bytes = bytes.ToArray();
     }
 
+    internal ReadOnlySpan<byte> Bytes => _bytes;
+
     /// <summary>Parses a compressed G1 point and rejects malformed, off-curve, wrong-subgroup, and infinity encodings.</summary>
     /// <param name="compressed">The exact 48-byte compressed point.</param>
     /// <returns>The validated public key.</returns>
@@ -158,8 +160,6 @@ public sealed class BlsPublicKey : IEquatable<BlsPublicKey>
 
     /// <inheritdoc/>
     public override string ToString() => Convert.ToBase64String(_bytes);
-
-    internal ReadOnlySpan<byte> Bytes => _bytes;
 
     internal static BlsPublicKey FromValidated(ReadOnlySpan<byte> compressed) => new(compressed);
 }

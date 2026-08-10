@@ -8,8 +8,6 @@ namespace SolSharp.Rpc.Models.Parsed;
 /// <seealso href="https://solana.com/docs/rpc/json-structures">Solana RPC JSON structures</seealso>
 public sealed record ParsedAccountKey
 {
-    private string? _source;
-
     /// <summary>The account address.</summary>
     [JsonPropertyName("pubkey")]
     [JsonRequired]
@@ -33,13 +31,13 @@ public sealed record ParsedAccountKey
     [JsonRequired]
     public string? Source
     {
-        get => _source;
+        get;
         init
         {
             if (value is not null and not "transaction" and not "lookupTable")
                 throw new JsonException("A parsed account source must be transaction, lookupTable, or null.");
 
-            _source = value;
+            field = value;
         }
     }
 }

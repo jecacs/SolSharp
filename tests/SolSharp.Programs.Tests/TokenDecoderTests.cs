@@ -7,54 +7,6 @@ using static SolSharp.Programs.Tests.TokenDecoderTestHelpers;
 
 namespace SolSharp.Programs.Tests;
 
-internal static class TokenDecoderTestHelpers
-{
-    internal static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
-
-    internal static byte[] MintData()
-    {
-        var data = new byte[TokenMintState.BaseLength];
-        BinaryPrimitives.WriteUInt32LittleEndian(data, 1);
-        Key(1).CopyTo(data.AsSpan(4));
-        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(36), 500);
-        data[44] = 6;
-        data[45] = 1;
-        return data;
-    }
-
-    internal static byte[] ExtendedMintData(int length)
-    {
-        var data = new byte[length];
-        MintData().CopyTo(data, 0);
-        data[165] = 1;
-        return data;
-    }
-
-    internal static byte[] ExtendedHoldingData(int length)
-    {
-        var data = new byte[length];
-        Key(1).CopyTo(data);
-        Key(2).CopyTo(data.AsSpan(PublicKey.Length));
-        data[108] = (byte)TokenAccountStatus.Initialized;
-        data[165] = 2;
-        return data;
-    }
-
-    internal static void WriteString(List<byte> data, string value)
-    {
-        var bytes = Encoding.UTF8.GetBytes(value);
-        WriteUInt32(data, checked((uint)bytes.Length));
-        data.AddRange(bytes);
-    }
-
-    internal static void WriteUInt32(List<byte> data, uint value)
-    {
-        Span<byte> bytes = stackalloc byte[sizeof(uint)];
-        BinaryPrimitives.WriteUInt32LittleEndian(bytes, value);
-        data.AddRange(bytes.ToArray());
-    }
-}
-
 public static class TokenDecoderTests
 {
     [TestFixture]
@@ -440,5 +392,53 @@ public static class TokenMetadataStateDecoderTests
             // Act & Assert
             TokenMetadataState.Decode(data).Should().BeNull();
         }
+    }
+}
+
+internal static class TokenDecoderTestHelpers
+{
+    internal static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
+
+    internal static byte[] MintData()
+    {
+        var data = new byte[TokenMintState.BaseLength];
+        BinaryPrimitives.WriteUInt32LittleEndian(data, 1);
+        Key(1).CopyTo(data.AsSpan(4));
+        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(36), 500);
+        data[44] = 6;
+        data[45] = 1;
+        return data;
+    }
+
+    internal static byte[] ExtendedMintData(int length)
+    {
+        var data = new byte[length];
+        MintData().CopyTo(data, 0);
+        data[165] = 1;
+        return data;
+    }
+
+    internal static byte[] ExtendedHoldingData(int length)
+    {
+        var data = new byte[length];
+        Key(1).CopyTo(data);
+        Key(2).CopyTo(data.AsSpan(PublicKey.Length));
+        data[108] = (byte)TokenAccountStatus.Initialized;
+        data[165] = 2;
+        return data;
+    }
+
+    internal static void WriteString(List<byte> data, string value)
+    {
+        var bytes = Encoding.UTF8.GetBytes(value);
+        WriteUInt32(data, checked((uint)bytes.Length));
+        data.AddRange(bytes);
+    }
+
+    internal static void WriteUInt32(List<byte> data, uint value)
+    {
+        Span<byte> bytes = stackalloc byte[sizeof(uint)];
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes, value);
+        data.AddRange(bytes.ToArray());
     }
 }

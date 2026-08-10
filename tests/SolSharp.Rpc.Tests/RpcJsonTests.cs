@@ -11,6 +11,86 @@ namespace SolSharp.Rpc.Tests;
 
 public static class RpcJsonTests
 {
+    public static class SignatureNotificationJsonConverter
+    {
+        [TestFixture]
+        public sealed class Read
+        {
+            [Test]
+            public void Null_ThrowsJsonException()
+            {
+                // Act
+                Action act = () => JsonSerializer.Deserialize<SignatureNotification>("null", RpcJson.Options);
+
+                // Assert
+                act.Should().Throw<JsonException>();
+            }
+        }
+
+        [TestFixture]
+        public sealed class Write
+        {
+            [Test]
+            public void Processed_SerializesPriorCompatibleErrorObject()
+            {
+                // Arrange
+                using var errorDocument = JsonDocument.Parse("""{"InstructionError":[0,"Custom"]}""");
+                var notification = new SignatureNotification
+                {
+                    Kind = SignatureNotificationKind.Processed,
+                    Err = errorDocument.RootElement.Clone()
+                };
+
+                // Act
+                var json = JsonSerializer.Serialize(notification, RpcJson.Options);
+
+                // Assert
+                json.Should().Be("""{"err":{"InstructionError":[0,"Custom"]}}""");
+            }
+
+            [Test]
+            public void ProcessedSuccess_SerializesMandatoryNullError()
+            {
+                // Act
+                var json = JsonSerializer.Serialize(new SignatureNotification(), RpcJson.Options);
+
+                // Assert
+                json.Should().Be("""{"err":null}""");
+            }
+
+            [Test]
+            public void Received_SerializesExactUnionString()
+            {
+                // Arrange
+                var notification = new SignatureNotification { Kind = SignatureNotificationKind.Received };
+
+                // Act
+                var json = JsonSerializer.Serialize(notification, RpcJson.Options);
+
+                // Assert
+                json.Should().Be("\"receivedSignature\"");
+            }
+
+            [Test]
+            public void ReceivedWithError_ThrowsJsonException()
+            {
+                // Arrange
+                using var errorDocument = JsonDocument.Parse("1");
+                var notification = new SignatureNotification
+                {
+                    Kind = SignatureNotificationKind.Received,
+                    Err = errorDocument.RootElement.Clone()
+                };
+
+                // Act
+                Action act = () => JsonSerializer.Serialize(notification, RpcJson.Options);
+
+                // Assert
+                act.Should().Throw<JsonException>();
+            }
+        }
+    }
+
     [TestFixture]
     public sealed class Options
     {
@@ -232,86 +312,6 @@ public static class RpcJsonTests
 
             // Assert
             act.Should().Throw<JsonException>();
-        }
-    }
-
-    public static class SignatureNotificationJsonConverter
-    {
-        [TestFixture]
-        public sealed class Read
-        {
-            [Test]
-            public void Null_ThrowsJsonException()
-            {
-                // Act
-                Action act = () => JsonSerializer.Deserialize<SignatureNotification>("null", RpcJson.Options);
-
-                // Assert
-                act.Should().Throw<JsonException>();
-            }
-        }
-
-        [TestFixture]
-        public sealed class Write
-        {
-            [Test]
-            public void Processed_SerializesPriorCompatibleErrorObject()
-            {
-                // Arrange
-                using var errorDocument = JsonDocument.Parse("""{"InstructionError":[0,"Custom"]}""");
-                var notification = new SignatureNotification
-                {
-                    Kind = SignatureNotificationKind.Processed,
-                    Err = errorDocument.RootElement.Clone()
-                };
-
-                // Act
-                var json = JsonSerializer.Serialize(notification, RpcJson.Options);
-
-                // Assert
-                json.Should().Be("""{"err":{"InstructionError":[0,"Custom"]}}""");
-            }
-
-            [Test]
-            public void ProcessedSuccess_SerializesMandatoryNullError()
-            {
-                // Act
-                var json = JsonSerializer.Serialize(new SignatureNotification(), RpcJson.Options);
-
-                // Assert
-                json.Should().Be("""{"err":null}""");
-            }
-
-            [Test]
-            public void Received_SerializesExactUnionString()
-            {
-                // Arrange
-                var notification = new SignatureNotification { Kind = SignatureNotificationKind.Received };
-
-                // Act
-                var json = JsonSerializer.Serialize(notification, RpcJson.Options);
-
-                // Assert
-                json.Should().Be("\"receivedSignature\"");
-            }
-
-            [Test]
-            public void ReceivedWithError_ThrowsJsonException()
-            {
-                // Arrange
-                using var errorDocument = JsonDocument.Parse("1");
-                var notification = new SignatureNotification
-                {
-                    Kind = SignatureNotificationKind.Received,
-                    Err = errorDocument.RootElement.Clone()
-                };
-
-                // Act
-                Action act = () => JsonSerializer.Serialize(notification, RpcJson.Options);
-
-                // Assert
-                act.Should().Throw<JsonException>();
-            }
         }
     }
 }

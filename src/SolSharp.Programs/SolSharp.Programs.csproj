@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <IsAotCompatible>true</IsAotCompatible>
     <Description>Solana client programs and transaction wire formats for .NET: bounded legacy/v0/V1 compilation, signing, serialization and decoding; current native-program, SPL Token, Token-2022, ATA and ALT instruction builders and state decoders.</Description>
   </PropertyGroup>

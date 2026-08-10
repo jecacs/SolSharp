@@ -7,6 +7,17 @@ namespace SolSharp.Core.SysvarStates;
 /// <param name="Hash">The slot's block hash.</param>
 public readonly record struct SlotHashEntry(ulong Slot, Hash Hash);
 
+/// <summary>Stake activation totals recorded for one epoch.</summary>
+/// <param name="Effective">The effective stake.</param>
+/// <param name="Activating">The stake still activating.</param>
+/// <param name="Deactivating">The stake still deactivating.</param>
+public readonly record struct StakeHistoryEntry(ulong Effective, ulong Activating, ulong Deactivating);
+
+/// <summary>An epoch and its stake activation totals.</summary>
+/// <param name="Epoch">The epoch.</param>
+/// <param name="Entry">The stake totals.</param>
+public readonly record struct StakeHistoryEpoch(ulong Epoch, StakeHistoryEntry Entry);
+
 /// <summary>The bounded bincode state of the slot-hashes sysvar.</summary>
 public sealed record SlotHashesSysvarState
 {
@@ -39,17 +50,6 @@ public sealed record SlotHashesSysvarState
         return new SlotHashesSysvarState(entries);
     }
 }
-
-/// <summary>Stake activation totals recorded for one epoch.</summary>
-/// <param name="Effective">The effective stake.</param>
-/// <param name="Activating">The stake still activating.</param>
-/// <param name="Deactivating">The stake still deactivating.</param>
-public readonly record struct StakeHistoryEntry(ulong Effective, ulong Activating, ulong Deactivating);
-
-/// <summary>An epoch and its stake activation totals.</summary>
-/// <param name="Epoch">The epoch.</param>
-/// <param name="Entry">The stake totals.</param>
-public readonly record struct StakeHistoryEpoch(ulong Epoch, StakeHistoryEntry Entry);
 
 /// <summary>The bounded bincode state of the stake-history sysvar.</summary>
 public sealed record StakeHistorySysvarState

@@ -3,32 +3,6 @@ using System.Text.Json.Serialization;
 
 namespace SolSharp.Rpc.Models;
 
-/// <summary>Recent block production information, as returned by <c>getBlockProduction</c>.</summary>
-/// <seealso href="https://solana.com/docs/rpc/http/getblockproduction">getBlockProduction</seealso>
-public sealed record BlockProduction
-{
-    private IReadOnlyDictionary<string, BlockProductionCounts>? _byIdentity;
-    private BlockProductionRange? _range;
-
-    /// <summary>Production counts keyed by validator identity (base58).</summary>
-    [JsonPropertyName("byIdentity")]
-    [JsonRequired]
-    public IReadOnlyDictionary<string, BlockProductionCounts> ByIdentity
-    {
-        get => _byIdentity ?? throw new InvalidOperationException("Block-production identities have not been initialized.");
-        init => _byIdentity = value ?? throw new JsonException("Block production must carry its identity counts.");
-    }
-
-    /// <summary>The slot range the production information covers.</summary>
-    [JsonPropertyName("range")]
-    [JsonRequired]
-    public BlockProductionRange Range
-    {
-        get => _range ?? throw new InvalidOperationException("The block-production range has not been initialized.");
-        init => _range = value ?? throw new JsonException("Block production must carry its slot range.");
-    }
-}
-
 /// <summary>The exact <c>[leaderSlots, blocksProduced]</c> tuple for one validator identity.</summary>
 [JsonConverter(typeof(BlockProductionCountsJsonConverter))]
 public readonly record struct BlockProductionCounts
@@ -47,6 +21,29 @@ public readonly record struct BlockProductionCounts
 
     /// <summary>The number of assigned slots in which the validator produced a block.</summary>
     public ulong BlocksProduced { get; }
+}
+
+/// <summary>Recent block production information, as returned by <c>getBlockProduction</c>.</summary>
+/// <seealso href="https://solana.com/docs/rpc/http/getblockproduction">getBlockProduction</seealso>
+public sealed record BlockProduction
+{
+    /// <summary>Production counts keyed by validator identity (base58).</summary>
+    [JsonPropertyName("byIdentity")]
+    [JsonRequired]
+    public IReadOnlyDictionary<string, BlockProductionCounts> ByIdentity
+    {
+        get => field ?? throw new InvalidOperationException("Block-production identities have not been initialized.");
+        init => field = value ?? throw new JsonException("Block production must carry its identity counts.");
+    }
+
+    /// <summary>The slot range the production information covers.</summary>
+    [JsonPropertyName("range")]
+    [JsonRequired]
+    public BlockProductionRange Range
+    {
+        get => field ?? throw new InvalidOperationException("The block-production range has not been initialized.");
+        init => field = value ?? throw new JsonException("Block production must carry its slot range.");
+    }
 }
 
 /// <summary>Reads and writes the exact two-element block-production count tuple used by Agave.</summary>

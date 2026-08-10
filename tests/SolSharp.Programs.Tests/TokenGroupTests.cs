@@ -6,35 +6,6 @@ using static SolSharp.Programs.Tests.TokenGroupTestHelpers;
 
 namespace SolSharp.Programs.Tests;
 
-internal static class TokenGroupTestHelpers
-{
-    internal static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
-
-    internal static string Hex(Instruction instruction) => Convert.ToHexString(instruction.Data).ToLowerInvariant();
-
-    internal static (PublicKey, bool, bool)[] Metas(Instruction instruction)
-        => [.. instruction.Accounts.Select(account => (account.PublicKey, account.IsSigner, account.IsWritable))];
-
-    internal static byte[] GroupData()
-    {
-        var data = new byte[TokenGroupState.Length];
-        Key(1).CopyTo(data);
-        Key(2).CopyTo(data.AsSpan(PublicKey.Length));
-        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(PublicKey.Length * 2), 3UL);
-        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan((PublicKey.Length * 2) + sizeof(ulong)), 4UL);
-        return data;
-    }
-
-    internal static byte[] MemberData()
-    {
-        var data = new byte[TokenGroupMemberState.Length];
-        Key(5).CopyTo(data);
-        Key(2).CopyTo(data.AsSpan(PublicKey.Length));
-        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(PublicKey.Length * 2), 6UL);
-        return data;
-    }
-}
-
 public static class TokenGroupTests
 {
     [TestFixture]
@@ -164,5 +135,34 @@ public static class TokenGroupMemberStateTests
             member.MemberNumber.Should().Be(6);
             TokenGroupMemberState.Decode(data.AsSpan()[..^1]).Should().BeNull();
         }
+    }
+}
+
+internal static class TokenGroupTestHelpers
+{
+    internal static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
+
+    internal static string Hex(Instruction instruction) => Convert.ToHexString(instruction.Data).ToLowerInvariant();
+
+    internal static (PublicKey, bool, bool)[] Metas(Instruction instruction)
+        => [.. instruction.Accounts.Select(account => (account.PublicKey, account.IsSigner, account.IsWritable))];
+
+    internal static byte[] GroupData()
+    {
+        var data = new byte[TokenGroupState.Length];
+        Key(1).CopyTo(data);
+        Key(2).CopyTo(data.AsSpan(PublicKey.Length));
+        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(PublicKey.Length * 2), 3UL);
+        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan((PublicKey.Length * 2) + sizeof(ulong)), 4UL);
+        return data;
+    }
+
+    internal static byte[] MemberData()
+    {
+        var data = new byte[TokenGroupMemberState.Length];
+        Key(5).CopyTo(data);
+        Key(2).CopyTo(data.AsSpan(PublicKey.Length));
+        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(PublicKey.Length * 2), 6UL);
+        return data;
     }
 }

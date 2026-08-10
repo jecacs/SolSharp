@@ -16,6 +16,8 @@ namespace SolSharp.IntegrationTests;
 /// </summary>
 public static class RpcReadIntegrationTests
 {
+    // A standard 165-byte SPL token account; only its size matters for the rent-exemption query.
+    private const long TokenAccountSize = 165;
     private static readonly TokenBucketRateLimiter RequestLimiter = new(new TokenBucketRateLimiterOptions
     {
         TokenLimit = 1,
@@ -29,9 +31,6 @@ public static class RpcReadIntegrationTests
     // USDC: a long-lived, heavily used SPL mint with stable, assertable properties (6 decimals).
     private static readonly PublicKey UsdcMint = PublicKey.Parse("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
     private static readonly PublicKey TokenProgram = PublicKey.Parse("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
-
-    // A standard 165-byte SPL token account; only its size matters for the rent-exemption query.
-    private const long TokenAccountSize = 165;
 
     private static ServiceProvider CreateProvider()
     {

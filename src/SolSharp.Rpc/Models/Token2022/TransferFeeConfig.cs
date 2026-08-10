@@ -6,6 +6,9 @@ namespace SolSharp.Rpc.Models.Token2022;
 /// <summary>One transfer-fee schedule entry: the epoch it takes effect, the fee cap, and the rate.</summary>
 public sealed record TransferFee
 {
+    // The 18-byte spl_token_2022 TransferFee pod: epoch u64, maximum_fee u64, basis points u16.
+    internal const int Length = 18;
+
     /// <summary>The first epoch the fee takes effect.</summary>
     public required ulong Epoch { get; init; }
 
@@ -14,9 +17,6 @@ public sealed record TransferFee
 
     /// <summary>The fee rate in basis points of the transfer amount (100 = 1%).</summary>
     public required ushort BasisPoints { get; init; }
-
-    // The 18-byte spl_token_2022 TransferFee pod: epoch u64, maximum_fee u64, basis points u16.
-    internal const int Length = 18;
 
     internal static TransferFee Decode(ReadOnlySpan<byte> data) => new()
     {

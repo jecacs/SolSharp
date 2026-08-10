@@ -4,85 +4,6 @@ using SolSharp.Core.Primitives;
 
 namespace SolSharp.Programs;
 
-/// <summary>A single instruction embedded in Token-2022's compact batch payload.</summary>
-public sealed class DecodedTokenBatchEntry
-{
-    private readonly byte[] _data;
-
-    internal DecodedTokenBatchEntry(byte accountCount, ReadOnlySpan<byte> data)
-    {
-        AccountCount = accountCount;
-        _data = data.ToArray();
-    }
-
-    /// <summary>The number of sequential account metas consumed by this embedded instruction.</summary>
-    public byte AccountCount { get; }
-
-    /// <summary>The complete embedded token instruction data.</summary>
-    public ReadOnlyMemory<byte> Data => _data;
-}
-
-/// <summary>
-/// A decoded SPL Token or Token-2022 instruction. Common fixed fields are exposed in typed form while
-/// extension-specific POD bytes remain available through <see cref="Payload"/>.
-/// </summary>
-public sealed class DecodedTokenInstruction
-{
-    private readonly byte[] _payload;
-
-    internal DecodedTokenInstruction(byte discriminator, string name, ReadOnlySpan<byte> payload)
-    {
-        Discriminator = discriminator;
-        Name = name;
-        _payload = payload.ToArray();
-    }
-
-    /// <summary>The outer one-byte token instruction discriminator.</summary>
-    public byte Discriminator { get; }
-
-    /// <summary>The upstream instruction variant name.</summary>
-    public string Name { get; }
-
-    /// <summary>All bytes after the outer discriminator.</summary>
-    public ReadOnlyMemory<byte> Payload => _payload;
-
-    /// <summary>The inner one-byte discriminator for a Token-2022 extension instruction, when present.</summary>
-    public byte? ExtensionInstructionDiscriminator { get; internal set; }
-
-    /// <summary>An amount decoded from a standard token instruction.</summary>
-    public ulong? Amount { get; internal set; }
-
-    /// <summary>Mint decimals decoded from a checked or initialize-mint instruction.</summary>
-    public byte? Decimals { get; internal set; }
-
-    /// <summary>A primary authority, owner, or delegate key encoded in instruction data.</summary>
-    public PublicKey? RelatedPublicKey { get; internal set; }
-
-    /// <summary>An optional freeze/new/close authority encoded in instruction data.</summary>
-    public PublicKey? OptionalPublicKey { get; internal set; }
-
-    /// <summary>Whether this variant contains an optional-public-key field, including when its value is null.</summary>
-    public bool HasOptionalPublicKey { get; internal set; }
-
-    /// <summary>The set-authority kind, when this is a SetAuthority instruction.</summary>
-    public AuthorityType? AuthorityType { get; internal set; }
-
-    /// <summary>The required signature count in an initialize-multisig instruction.</summary>
-    public byte? RequiredSignatures { get; internal set; }
-
-    /// <summary>The UI amount string in a UiAmountToAmount instruction.</summary>
-    public string? UiAmount { get; internal set; }
-
-    /// <summary>Extension types from Token-2022 GetAccountDataSize or Reallocate data.</summary>
-    public IReadOnlyList<Token2022ExtensionType> ExtensionTypes { get; internal set; } = [];
-
-    /// <summary>Whether this variant contains an optional raw amount, including when its value is null.</summary>
-    public bool HasOptionalAmount { get; internal set; }
-
-    /// <summary>The decoded entries of a Token-2022 compact batch.</summary>
-    public IReadOnlyList<DecodedTokenBatchEntry> BatchEntries { get; internal set; } = [];
-}
-
 public static partial class TokenProgram
 {
     private static readonly UTF8Encoding StrictInstructionUtf8 = new(false, true);
@@ -403,4 +324,83 @@ public static partial class TokenProgram
         entries = decoded;
         return true;
     }
+}
+
+/// <summary>A single instruction embedded in Token-2022's compact batch payload.</summary>
+public sealed class DecodedTokenBatchEntry
+{
+    private readonly byte[] _data;
+
+    internal DecodedTokenBatchEntry(byte accountCount, ReadOnlySpan<byte> data)
+    {
+        AccountCount = accountCount;
+        _data = data.ToArray();
+    }
+
+    /// <summary>The number of sequential account metas consumed by this embedded instruction.</summary>
+    public byte AccountCount { get; }
+
+    /// <summary>The complete embedded token instruction data.</summary>
+    public ReadOnlyMemory<byte> Data => _data;
+}
+
+/// <summary>
+/// A decoded SPL Token or Token-2022 instruction. Common fixed fields are exposed in typed form while
+/// extension-specific POD bytes remain available through <see cref="Payload"/>.
+/// </summary>
+public sealed class DecodedTokenInstruction
+{
+    private readonly byte[] _payload;
+
+    internal DecodedTokenInstruction(byte discriminator, string name, ReadOnlySpan<byte> payload)
+    {
+        Discriminator = discriminator;
+        Name = name;
+        _payload = payload.ToArray();
+    }
+
+    /// <summary>The outer one-byte token instruction discriminator.</summary>
+    public byte Discriminator { get; }
+
+    /// <summary>The upstream instruction variant name.</summary>
+    public string Name { get; }
+
+    /// <summary>All bytes after the outer discriminator.</summary>
+    public ReadOnlyMemory<byte> Payload => _payload;
+
+    /// <summary>The inner one-byte discriminator for a Token-2022 extension instruction, when present.</summary>
+    public byte? ExtensionInstructionDiscriminator { get; internal set; }
+
+    /// <summary>An amount decoded from a standard token instruction.</summary>
+    public ulong? Amount { get; internal set; }
+
+    /// <summary>Mint decimals decoded from a checked or initialize-mint instruction.</summary>
+    public byte? Decimals { get; internal set; }
+
+    /// <summary>A primary authority, owner, or delegate key encoded in instruction data.</summary>
+    public PublicKey? RelatedPublicKey { get; internal set; }
+
+    /// <summary>An optional freeze/new/close authority encoded in instruction data.</summary>
+    public PublicKey? OptionalPublicKey { get; internal set; }
+
+    /// <summary>Whether this variant contains an optional-public-key field, including when its value is null.</summary>
+    public bool HasOptionalPublicKey { get; internal set; }
+
+    /// <summary>The set-authority kind, when this is a SetAuthority instruction.</summary>
+    public AuthorityType? AuthorityType { get; internal set; }
+
+    /// <summary>The required signature count in an initialize-multisig instruction.</summary>
+    public byte? RequiredSignatures { get; internal set; }
+
+    /// <summary>The UI amount string in a UiAmountToAmount instruction.</summary>
+    public string? UiAmount { get; internal set; }
+
+    /// <summary>Extension types from Token-2022 GetAccountDataSize or Reallocate data.</summary>
+    public IReadOnlyList<Token2022ExtensionType> ExtensionTypes { get; internal set; } = [];
+
+    /// <summary>Whether this variant contains an optional raw amount, including when its value is null.</summary>
+    public bool HasOptionalAmount { get; internal set; }
+
+    /// <summary>The decoded entries of a Token-2022 compact batch.</summary>
+    public IReadOnlyList<DecodedTokenBatchEntry> BatchEntries { get; internal set; } = [];
 }

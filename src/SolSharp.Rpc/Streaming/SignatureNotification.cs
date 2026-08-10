@@ -3,6 +3,16 @@ using System.Text.Json.Serialization;
 
 namespace SolSharp.Rpc.Streaming;
 
+/// <summary>The two wire variants emitted by <c>signatureSubscribe</c>.</summary>
+public enum SignatureNotificationKind
+{
+    /// <summary>The final <c>{ err }</c> processed-signature result.</summary>
+    Processed,
+
+    /// <summary>The early <c>"receivedSignature"</c> event.</summary>
+    Received
+}
+
 /// <summary>
 /// A <c>signatureSubscribe</c> notification: normally the final processed result, with an optional earlier
 /// received event when requested. The node unsubscribes automatically after the final result.
@@ -28,16 +38,6 @@ public sealed record SignatureNotification
     /// <summary>True when the transaction failed (<see cref="Err"/> is present).</summary>
     [JsonIgnore]
     public bool IsError => IsFinal && Err is { ValueKind: not JsonValueKind.Null };
-}
-
-/// <summary>The two wire variants emitted by <c>signatureSubscribe</c>.</summary>
-public enum SignatureNotificationKind
-{
-    /// <summary>The final <c>{ err }</c> processed-signature result.</summary>
-    Processed,
-
-    /// <summary>The early <c>"receivedSignature"</c> event.</summary>
-    Received
 }
 
 /// <summary>Converts the untagged string-or-object signature notification union.</summary>

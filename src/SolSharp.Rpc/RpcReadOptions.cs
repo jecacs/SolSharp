@@ -2,6 +2,41 @@ using SolSharp.Core.Primitives;
 
 namespace SolSharp.Rpc;
 
+/// <summary>The transaction encoding requested from <c>getBlock</c>, <c>getTransaction</c>, or <c>blockSubscribe</c>.</summary>
+public enum RpcTransactionEncoding
+{
+    /// <summary>The legacy <c>binary</c> alias for base58 encoding.</summary>
+    Binary,
+
+    /// <summary>Base64-encoded transaction wire bytes.</summary>
+    Base64,
+
+    /// <summary>Base58-encoded transaction wire bytes.</summary>
+    Base58,
+
+    /// <summary>JSON transaction objects with compiled instructions.</summary>
+    Json,
+
+    /// <summary>JSON transaction objects with recognized instructions parsed by the node.</summary>
+    JsonParsed
+}
+
+/// <summary>The amount of transaction information requested for a block.</summary>
+public enum RpcTransactionDetails
+{
+    /// <summary>Full transactions and execution metadata.</summary>
+    Full,
+
+    /// <summary>Transaction signatures only.</summary>
+    Signatures,
+
+    /// <summary>No transaction data.</summary>
+    None,
+
+    /// <summary>Transaction signatures and account-key metadata without instructions.</summary>
+    Accounts
+}
+
 /// <summary>Options for <see cref="SolanaRpcClient.RequestAirdropWithOptionsAsync(PublicKey, ulong, RequestAirdropOptions, CancellationToken)"/>.</summary>
 public sealed record RequestAirdropOptions
 {
@@ -78,41 +113,6 @@ public sealed record GetInflationRewardOptions
 
     /// <summary>The minimum slot at which the request may be evaluated.</summary>
     public ulong? MinContextSlot { get; init; }
-}
-
-/// <summary>The transaction encoding requested from <c>getBlock</c>, <c>getTransaction</c>, or <c>blockSubscribe</c>.</summary>
-public enum RpcTransactionEncoding
-{
-    /// <summary>The legacy <c>binary</c> alias for base58 encoding.</summary>
-    Binary,
-
-    /// <summary>Base64-encoded transaction wire bytes.</summary>
-    Base64,
-
-    /// <summary>Base58-encoded transaction wire bytes.</summary>
-    Base58,
-
-    /// <summary>JSON transaction objects with compiled instructions.</summary>
-    Json,
-
-    /// <summary>JSON transaction objects with recognized instructions parsed by the node.</summary>
-    JsonParsed
-}
-
-/// <summary>The amount of transaction information requested for a block.</summary>
-public enum RpcTransactionDetails
-{
-    /// <summary>Full transactions and execution metadata.</summary>
-    Full,
-
-    /// <summary>Transaction signatures only.</summary>
-    Signatures,
-
-    /// <summary>No transaction data.</summary>
-    None,
-
-    /// <summary>Transaction signatures and account-key metadata without instructions.</summary>
-    Accounts
 }
 
 /// <summary>

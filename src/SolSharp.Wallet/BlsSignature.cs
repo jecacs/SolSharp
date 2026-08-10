@@ -19,6 +19,8 @@ public sealed class BlsSignature : IEquatable<BlsSignature>
         _bytes = bytes.ToArray();
     }
 
+    internal ReadOnlySpan<byte> Bytes => _bytes;
+
     /// <summary>Parses a compressed G2 point and rejects malformed, off-curve, wrong-subgroup, and infinity encodings.</summary>
     /// <param name="compressed">The exact 96-byte compressed point.</param>
     /// <returns>The validated signature.</returns>
@@ -91,10 +93,6 @@ public sealed class BlsSignature : IEquatable<BlsSignature>
         }
     }
 
-    /// <summary>Returns a new array containing the compressed 96-byte signature.</summary>
-    /// <returns>A defensive copy of the compressed signature.</returns>
-    public byte[] ToBytes() => [.. _bytes];
-
     /// <summary>
     /// Aggregates one or more subgroup-checked signatures with native BLS12-381 group addition.
     /// Duplicate signatures are included repeatedly, matching the pinned Solana SDK.
@@ -121,6 +119,10 @@ public sealed class BlsSignature : IEquatable<BlsSignature>
         return FromValidated(aggregate);
     }
 
+    /// <summary>Returns a new array containing the compressed 96-byte signature.</summary>
+    /// <returns>A defensive copy of the compressed signature.</returns>
+    public byte[] ToBytes() => [.. _bytes];
+
     /// <inheritdoc/>
     public bool Equals(BlsSignature? other) => other is not null && _bytes.AsSpan().SequenceEqual(other._bytes);
 
@@ -138,8 +140,6 @@ public sealed class BlsSignature : IEquatable<BlsSignature>
 
     /// <inheritdoc/>
     public override string ToString() => Convert.ToBase64String(_bytes);
-
-    internal ReadOnlySpan<byte> Bytes => _bytes;
 
     internal static BlsSignature FromValidated(ReadOnlySpan<byte> compressed) => new(compressed);
 }

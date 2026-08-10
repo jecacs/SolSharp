@@ -10,15 +10,15 @@ public static class SignatureTests
     private const string UpstreamBase58 =
         "34UR3rLRtnsQVHNQ49AtUzYP5mLWsvoEBPYMGa1dmSHvg6pZup8ysqtM5LEg2vbcGfi91Upu2JkLyw3uRm7Y1fqX";
 
-    private static readonly byte[] UpstreamBytes = Convert.FromHexString(
-        "67075860CB8CBF2FE7251EDC3D235D70E102050B9E69F69385406DFC77496CF8"
-        + "A7F0A012DE03013033435E135B6CE37E6419D4875A3C3D4EBA68163AF24A9406");
-
     private const string RfcPublicKey = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a";
 
     private const string RfcSignature =
         "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e06522490155" +
         "5fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b";
+
+    private static readonly byte[] UpstreamBytes = Convert.FromHexString(
+        "67075860CB8CBF2FE7251EDC3D235D70E102050B9E69F69385406DFC77496CF8"
+        + "A7F0A012DE03013033435E135B6CE37E6419D4875A3C3D4EBA68163AF24A9406");
 
     private static byte[] Hex(string hex) => Convert.FromHexString(hex);
 

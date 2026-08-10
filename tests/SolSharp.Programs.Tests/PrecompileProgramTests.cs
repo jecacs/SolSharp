@@ -4,14 +4,6 @@ using static SolSharp.Programs.Tests.PrecompileProgramTestHelpers;
 
 namespace SolSharp.Programs.Tests;
 
-internal static class PrecompileProgramTestHelpers
-{
-    internal static string Repeat(byte value, int count) =>
-        string.Concat(Enumerable.Repeat(value.ToString("x2"), count));
-
-    internal static string Hex(Instruction instruction) => Convert.ToHexString(instruction.Data).ToLowerInvariant();
-}
-
 public static class Ed25519ProgramTests
 {
     [TestFixture]
@@ -211,4 +203,12 @@ public static class Secp256k1ProgramTests
             act.Should().Throw<ArgumentException>();
         }
     }
+}
+
+internal static class PrecompileProgramTestHelpers
+{
+    internal static string Repeat(byte value, int count) =>
+        string.Concat(Enumerable.Repeat(value.ToString("x2"), count));
+
+    internal static string Hex(Instruction instruction) => Convert.ToHexString(instruction.Data).ToLowerInvariant();
 }

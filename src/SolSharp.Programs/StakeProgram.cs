@@ -6,6 +6,13 @@ namespace SolSharp.Programs;
 /// <summary>Builds bincode-compatible instructions for Solana's native Stake program.</summary>
 public static class StakeProgram
 {
+    /// <summary>The fixed serialized size of a stake account.</summary>
+    public const int AccountDataLength = StakeAccountState.AccountDataLength;
+
+    /// <summary>The native Stake program address.</summary>
+    public static readonly PublicKey ProgramId =
+        PublicKey.Parse("Stake11111111111111111111111111111111111111");
+
     private const uint InitializeDiscriminator = 0;
     private const uint AuthorizeDiscriminator = 1;
     private const uint DelegateDiscriminator = 2;
@@ -31,13 +38,6 @@ public static class StakeProgram
 
     private static readonly PublicKey StakeConfig =
         PublicKey.Parse("StakeConfig11111111111111111111111111111111");
-
-    /// <summary>The native Stake program address.</summary>
-    public static readonly PublicKey ProgramId =
-        PublicKey.Parse("Stake11111111111111111111111111111111111111");
-
-    /// <summary>The fixed serialized size of a stake account.</summary>
-    public const int AccountDataLength = StakeAccountState.AccountDataLength;
 
     /// <summary>Initializes an allocated stake account with authorities and a lockup.</summary>
     /// <param name="stakeAccount">The uninitialized writable stake account.</param>

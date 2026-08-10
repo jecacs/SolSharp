@@ -30,9 +30,7 @@ public sealed class BlsKeypair : IDisposable
     /// <summary>The length of <c>ALPENGLOW || vote_account</c>.</summary>
     public const int VoteProofPayloadLength = 41;
 
-    private static ReadOnlySpan<byte> VoteProofDomain => "ALPENGLOW"u8;
-
-    private readonly object _secretGate = new();
+    private readonly System.Threading.Lock _secretGate = new();
     private readonly byte[] _secretKey;
     private bool _disposed;
 
@@ -43,6 +41,12 @@ public sealed class BlsKeypair : IDisposable
         PopVerifiedPublicKey = new BlsPopVerifiedPublicKey(PublicKey);
     }
 
+    /// <summary>Finalizer backstop that clears the managed secret when deterministic disposal was missed.</summary>
+    ~BlsKeypair()
+    {
+        ClearSecret();
+    }
+
     /// <summary>The validated compressed BLS public key.</summary>
     public BlsPublicKey PublicKey { get; }
 
@@ -51,6 +55,8 @@ public sealed class BlsKeypair : IDisposable
     /// the locally held secret, it matches the pinned Rust keypair's <c>PopVerified</c> public-key boundary.
     /// </summary>
     public BlsPopVerifiedPublicKey PopVerifiedPublicKey { get; }
+
+    private static ReadOnlySpan<byte> VoteProofDomain => "ALPENGLOW"u8;
 
     /// <summary>Generates a keypair by applying the pinned BLS key-generation function to 32 random bytes.</summary>
     /// <returns>A fresh BLS keypair.</returns>
@@ -201,43 +207,6 @@ public sealed class BlsKeypair : IDisposable
         }
     }
 
-    private static BlsKeypair FromJsonValues(int[]? values)
-    {
-        if (values is null)
-            throw new FormatException($"BLS keypair JSON must contain exactly {KeypairLength} byte values.");
-
-        byte[]? bytes = null;
-        try
-        {
-            if (values.Length != KeypairLength)
-                throw new FormatException($"BLS keypair JSON must contain exactly {KeypairLength} byte values.");
-
-            bytes = new byte[KeypairLength];
-            for (var i = 0; i < values.Length; i++)
-            {
-                if (values[i] is < byte.MinValue or > byte.MaxValue)
-                    throw new FormatException($"BLS keypair JSON value at index {i} is outside the byte range.");
-
-                bytes[i] = (byte)values[i];
-            }
-
-            try
-            {
-                return FromBytes(bytes);
-            }
-            catch (ArgumentException exception)
-            {
-                throw new FormatException("BLS keypair JSON contains an invalid keypair.", exception);
-            }
-        }
-        finally
-        {
-            if (bytes is not null)
-                CryptographicOperations.ZeroMemory(bytes);
-            Array.Clear(values);
-        }
-    }
-
     /// <summary>Signs a message with the exact pinned POP-ciphersuite signature DST.</summary>
     /// <param name="message">The exact bytes to sign.</param>
     /// <returns>The validated compressed G2 signature.</returns>
@@ -385,12 +354,6 @@ public sealed class BlsKeypair : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    /// <summary>Finalizer backstop that clears the managed secret when deterministic disposal was missed.</summary>
-    ~BlsKeypair()
-    {
-        ClearSecret();
-    }
-
     internal static void WriteVoteProofPayload(PublicKey voteAccount, Span<byte> destination)
     {
         if (destination.Length != VoteProofPayloadLength)
@@ -398,6 +361,43 @@ public sealed class BlsKeypair : IDisposable
 
         VoteProofDomain.CopyTo(destination);
         voteAccount.CopyTo(destination[VoteProofDomain.Length..]);
+    }
+
+    private static BlsKeypair FromJsonValues(int[]? values)
+    {
+        if (values is null)
+            throw new FormatException($"BLS keypair JSON must contain exactly {KeypairLength} byte values.");
+
+        byte[]? bytes = null;
+        try
+        {
+            if (values.Length != KeypairLength)
+                throw new FormatException($"BLS keypair JSON must contain exactly {KeypairLength} byte values.");
+
+            bytes = new byte[KeypairLength];
+            for (var i = 0; i < values.Length; i++)
+            {
+                if (values[i] is < byte.MinValue or > byte.MaxValue)
+                    throw new FormatException($"BLS keypair JSON value at index {i} is outside the byte range.");
+
+                bytes[i] = (byte)values[i];
+            }
+
+            try
+            {
+                return FromBytes(bytes);
+            }
+            catch (ArgumentException exception)
+            {
+                throw new FormatException("BLS keypair JSON contains an invalid keypair.", exception);
+            }
+        }
+        finally
+        {
+            if (bytes is not null)
+                CryptographicOperations.ZeroMemory(bytes);
+            Array.Clear(values);
+        }
     }
 
     private static BlsKeypair Create(byte[] ownedSecretKey)

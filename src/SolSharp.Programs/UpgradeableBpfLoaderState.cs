@@ -22,6 +22,17 @@ public enum UpgradeableBpfLoaderStateKind : uint
 /// <summary>Decoded metadata and program bytes from an upgradeable-loader account.</summary>
 public sealed class UpgradeableBpfLoaderState
 {
+    /// <summary>The uninitialized-state metadata size.</summary>
+    public const int UninitializedMetadataLength = 4;
+
+    /// <summary>The buffer metadata size, including reserved optional-authority space.</summary>
+    public const int BufferMetadataLength = 37;
+
+    /// <summary>The executable Program metadata size.</summary>
+    public const int ProgramMetadataLength = 36;
+
+    /// <summary>The ProgramData metadata size, including reserved optional-authority space.</summary>
+    public const int ProgramDataMetadataLength = 45;
     private readonly byte[] _programBytes;
 
     private UpgradeableBpfLoaderState(
@@ -37,18 +48,6 @@ public sealed class UpgradeableBpfLoaderState
         Slot = slot;
         _programBytes = programBytes.ToArray();
     }
-
-    /// <summary>The uninitialized-state metadata size.</summary>
-    public const int UninitializedMetadataLength = 4;
-
-    /// <summary>The buffer metadata size, including reserved optional-authority space.</summary>
-    public const int BufferMetadataLength = 37;
-
-    /// <summary>The executable Program metadata size.</summary>
-    public const int ProgramMetadataLength = 36;
-
-    /// <summary>The ProgramData metadata size, including reserved optional-authority space.</summary>
-    public const int ProgramDataMetadataLength = 45;
 
     /// <summary>The decoded account variant.</summary>
     public UpgradeableBpfLoaderStateKind Kind { get; }

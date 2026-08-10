@@ -22,18 +22,6 @@ public static class MessageTests
     [TestFixture]
     public sealed class Compile
     {
-        private static Instruction AllSigners(int count, out PublicKey payer)
-        {
-            var keys = Enumerable.Range(0, count).Select(UniqueKey).ToArray();
-            payer = keys[0];
-            return new Instruction
-            {
-                ProgramId = keys[^1],
-                Accounts = [.. keys.Skip(1).Select(AccountMeta.ReadonlySigner)],
-                Data = [7]
-            };
-        }
-
         // Reference bytes generated with solders (the Rust solana-sdk): a System transfer of 1_000_000
         // lamports from a fixed payer to a fixed recipient.
         [Test]
@@ -175,6 +163,18 @@ public static class MessageTests
             // Assert
             message.Instructions[0].Data.Should().Equal(7);
         }
+
+        private static Instruction AllSigners(int count, out PublicKey payer)
+        {
+            var keys = Enumerable.Range(0, count).Select(UniqueKey).ToArray();
+            payer = keys[0];
+            return new Instruction
+            {
+                ProgramId = keys[^1],
+                Accounts = [.. keys.Skip(1).Select(AccountMeta.ReadonlySigner)],
+                Data = [7]
+            };
+        }
     }
 
     [TestFixture]
@@ -204,18 +204,6 @@ public static class MessageTests
         // 135 (the payer) and 136 (the recipient).
         private const int ProgramIdIndexOffset = 133;
         private const int SecondAccountIndexOffset = 136;
-
-        // Keys [Key(1), Key(2), Key(9)], header (1, 0, 1), one instruction: program index 2, accounts [0, 1].
-        private static byte[] SerializedTransfer()
-        {
-            var instruction = new Instruction
-            {
-                ProgramId = Key(9),
-                Accounts = [AccountMeta.WritableSigner(Key(1)), AccountMeta.Writable(Key(2))],
-                Data = [7]
-            };
-            return Message.Compile(Key(1), Key(8).ToString(), [instruction]).Serialize();
-        }
 
         [Test]
         public void TruncatedData_ThrowsFormatException()
@@ -372,6 +360,18 @@ public static class MessageTests
 
             // Assert
             act.Should().Throw<FormatException>().WithMessage("*1 trailing byte(s)*");
+        }
+
+        // Keys [Key(1), Key(2), Key(9)], header (1, 0, 1), one instruction: program index 2, accounts [0, 1].
+        private static byte[] SerializedTransfer()
+        {
+            var instruction = new Instruction
+            {
+                ProgramId = Key(9),
+                Accounts = [AccountMeta.WritableSigner(Key(1)), AccountMeta.Writable(Key(2))],
+                Data = [7]
+            };
+            return Message.Compile(Key(1), Key(8).ToString(), [instruction]).Serialize();
         }
     }
 }

@@ -9,6 +9,13 @@ public static class FeatureGateProgramTests
     private static readonly PublicKey Feature = new(Enumerable.Repeat((byte)1, 32).ToArray());
     private static readonly PublicKey Funder = new(Enumerable.Repeat((byte)2, 32).ToArray());
 
+    private static void AssertMeta(AccountMeta meta, PublicKey key, bool isSigner, bool isWritable)
+    {
+        meta.PublicKey.Should().Be(key);
+        meta.IsSigner.Should().Be(isSigner);
+        meta.IsWritable.Should().Be(isWritable);
+    }
+
     [TestFixture]
     public sealed class ActivateWithLamports
     {
@@ -55,12 +62,5 @@ public static class FeatureGateProgramTests
             FeatureGateProgram.IncineratorId.ToString().Should()
                 .Be("1nc1nerator11111111111111111111111111111111");
         }
-    }
-
-    private static void AssertMeta(AccountMeta meta, PublicKey key, bool isSigner, bool isWritable)
-    {
-        meta.PublicKey.Should().Be(key);
-        meta.IsSigner.Should().Be(isSigner);
-        meta.IsWritable.Should().Be(isWritable);
     }
 }

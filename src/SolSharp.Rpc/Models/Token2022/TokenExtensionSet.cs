@@ -24,23 +24,6 @@ public sealed record TokenExtensionSet
     /// <summary>Every TLV entry present, in on-chain order, including types this library has no typed view for.</summary>
     public required IReadOnlyList<TokenExtension> Extensions { get; init; }
 
-    /// <summary>Whether an extension of <paramref name="type"/> is present.</summary>
-    /// <param name="type">The extension type to look for.</param>
-    /// <returns><c>true</c> when present.</returns>
-    public bool Has(ExtensionType type) => Find(type) is not null;
-
-    /// <summary>Returns the raw value bytes of the first extension of <paramref name="type"/>, or <c>null</c> if absent.</summary>
-    /// <param name="type">The extension type to look for.</param>
-    /// <returns>The extension's value bytes, or <c>null</c>.</returns>
-    public byte[]? Find(ExtensionType type)
-    {
-        foreach (var extension in Extensions)
-            if (extension.Type == type)
-                return extension.Data;
-
-        return null;
-    }
-
     /// <summary>Decodes the extension section of a Token-2022 mint account.</summary>
     /// <param name="data">The mint account's raw data.</param>
     /// <returns>
@@ -58,6 +41,23 @@ public sealed record TokenExtensionSet
     /// </returns>
     public static TokenExtensionSet? DecodeAccount(ReadOnlySpan<byte> data)
         => Decode(data, TokenAccount.Length, TokenAccountType);
+
+    /// <summary>Whether an extension of <paramref name="type"/> is present.</summary>
+    /// <param name="type">The extension type to look for.</param>
+    /// <returns><c>true</c> when present.</returns>
+    public bool Has(ExtensionType type) => Find(type) is not null;
+
+    /// <summary>Returns the raw value bytes of the first extension of <paramref name="type"/>, or <c>null</c> if absent.</summary>
+    /// <param name="type">The extension type to look for.</param>
+    /// <returns>The extension's value bytes, or <c>null</c>.</returns>
+    public byte[]? Find(ExtensionType type)
+    {
+        foreach (var extension in Extensions)
+            if (extension.Type == type)
+                return extension.Data;
+
+        return null;
+    }
 
     /// <summary>The mint's transfer-fee schedule and authorities, or <c>null</c> when the extension is absent.</summary>
     /// <returns>The decoded <see cref="Token2022.TransferFeeConfig"/>, or <c>null</c>.</returns>

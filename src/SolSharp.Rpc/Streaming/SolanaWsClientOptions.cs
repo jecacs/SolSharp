@@ -51,8 +51,8 @@ public sealed record SolanaWsClientOptions
     /// <summary>
     /// The maximum time to receive the next complete WebSocket message before the connection is treated
     /// as dropped, letting auto-reconnect replace a silently half-open socket. Disabled by default
-    /// (<see cref="Timeout.InfiniteTimeSpan"/>): only data messages reset the timer (.NET 8 surfaces no
-    /// ping/pong liveness signal), so on a connection whose subscriptions are legitimately quiet - an
+    /// (<see cref="Timeout.InfiniteTimeSpan"/>): only data messages surfaced to the receive loop reset the
+    /// timer, not protocol ping/pong frames, so on a connection whose subscriptions are legitimately quiet - an
     /// account that rarely changes, a pending signature - a timeout would force a reconnect cycle, and a
     /// notification gap, at every interval. Enable it only when the subscribed traffic is guaranteed to be
     /// frequent (slot subscriptions, busy programs) and stuck-connection recovery outweighs idle churn.

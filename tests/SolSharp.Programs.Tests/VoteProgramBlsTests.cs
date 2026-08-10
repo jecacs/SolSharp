@@ -7,11 +7,6 @@ using static SolSharp.Programs.Tests.VoteProgramBlsTestHelpers;
 
 namespace SolSharp.Programs.Tests;
 
-internal static class VoteProgramBlsTestHelpers
-{
-    internal static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
-}
-
 public static class VoteProgramBlsTests
 {
     [TestFixture]
@@ -258,4 +253,9 @@ public static class VoteProgramBlsTests
             act.Should().Throw<ArgumentException>().WithMessage("*vote account*");
         }
     }
+}
+
+internal static class VoteProgramBlsTestHelpers
+{
+    internal static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
 }

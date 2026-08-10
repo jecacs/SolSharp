@@ -21,6 +21,15 @@ public sealed class RpcBatch
 
     internal RpcBatch(SolanaRpcClient client) => _client = client;
 
+    private interface IPending
+    {
+        int Id { get; }
+
+        void Complete(JsonElement response);
+
+        void Fail(Exception exception);
+    }
+
     /// <summary>The number of calls queued so far.</summary>
     public int Count => _requests.Count;
 
@@ -165,17 +174,6 @@ public sealed class RpcBatch
         }
     }
 
-    private Task<T> Add<T>(RpcRequest request, Func<JsonElement, T> map)
-    {
-        if (_executed)
-            throw new InvalidOperationException("The batch was already executed; create a new batch per round-trip.");
-
-        var pending = new Pending<T>(_requests.Count + 1, map);
-        _requests.Add(request with { Id = pending.Id });
-        _pending.Add(pending);
-        return pending.Source.Task;
-    }
-
     private static RpcContextValue<T> DeserializeContext<T>(JsonElement result)
         => result.Deserialize(RpcJson.TypeInfo<RpcContextValue<T>>())
            ?? throw new JsonException("A batched RPC method returned a null context wrapper.");
@@ -189,13 +187,15 @@ public sealed class RpcBatch
         return context.Value;
     }
 
-    private interface IPending
+    private Task<T> Add<T>(RpcRequest request, Func<JsonElement, T> map)
     {
-        int Id { get; }
+        if (_executed)
+            throw new InvalidOperationException("The batch was already executed; create a new batch per round-trip.");
 
-        void Complete(JsonElement response);
-
-        void Fail(Exception exception);
+        var pending = new Pending<T>(_requests.Count + 1, map);
+        _requests.Add(request with { Id = pending.Id });
+        _pending.Add(pending);
+        return pending.Source.Task;
     }
 
     private sealed class Pending<T>(int id, Func<JsonElement, T> map) : IPending

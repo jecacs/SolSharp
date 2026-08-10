@@ -6,16 +6,6 @@ using static SolSharp.Programs.Tests.LoaderProgramTestHelpers;
 
 namespace SolSharp.Programs.Tests;
 
-internal static class LoaderProgramTestHelpers
-{
-    internal static PublicKey Pk(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
-
-    internal static string Hex(Instruction instruction) => Convert.ToHexString(instruction.Data).ToLowerInvariant();
-
-    internal static (PublicKey, bool, bool)[] Metas(Instruction instruction)
-        => [.. instruction.Accounts.Select(account => (account.PublicKey, account.IsSigner, account.IsWritable))];
-}
-
 public static class LegacyBpfLoaderProgramTests
 {
     [TestFixture]
@@ -446,4 +436,14 @@ public static class LoaderV4StateTests
             state.ProgramBytes.ToArray().Should().Equal(0xaa, 0xbb);
         }
     }
+}
+
+internal static class LoaderProgramTestHelpers
+{
+    internal static PublicKey Pk(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
+
+    internal static string Hex(Instruction instruction) => Convert.ToHexString(instruction.Data).ToLowerInvariant();
+
+    internal static (PublicKey, bool, bool)[] Metas(Instruction instruction)
+        => [.. instruction.Accounts.Select(account => (account.PublicKey, account.IsSigner, account.IsWritable))];
 }

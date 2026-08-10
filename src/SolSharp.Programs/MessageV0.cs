@@ -275,6 +275,110 @@ public sealed class MessageV0 : ITransactionMessage
             lookups);
     }
 
+    /// <summary>Parses a v0 message from its wire bytes (including the leading <see cref="VersionPrefix"/> byte).</summary>
+    /// <param name="data">The serialized v0 message.</param>
+    /// <returns>The parsed message.</returns>
+    /// <exception cref="FormatException">
+    /// The data is not a versioned message, carries a version other than 0, is truncated, contains trailing
+    /// bytes, has a malformed compact-u16 length, or breaks a rule Solana's sanitize enforces: header counts that
+    /// overlap the static account list or leave no writable fee-payer signer, an address table lookup that
+    /// loads no accounts, more than 256 addressable accounts, an instruction whose program id is the fee
+    /// payer or a lookup-loaded account, or an out-of-range program id or account index.
+    /// </exception>
+    public static MessageV0 Deserialize(ReadOnlySpan<byte> data)
+    {
+        try
+        {
+            var offset = 0;
+            var prefix = data[offset++];
+            if ((prefix & VersionPrefix) == 0)
+                throw new FormatException("Not a versioned message: the high bit of the version prefix is not set.");
+
+            // SolSharp currently implements v0; a v1 or later payload must fail loudly rather than
+            // being misparsed as v0.
+            var version = prefix & ~VersionPrefix;
+            if (version != 0)
+                throw new FormatException($"Unsupported message version {version}; only v0 is supported.");
+
+            var requiredSignatures = data[offset++];
+            var readonlySignedAccounts = data[offset++];
+            var readonlyUnsignedAccounts = data[offset++];
+
+            var accountKeys = MessageWire.ReadAccountKeys(data, ref offset);
+
+            var recentBlockhash = new PublicKey(data.Slice(offset, PublicKey.Length)).ToString();
+            offset += PublicKey.Length;
+
+            var instructions = MessageWire.ReadInstructions(data, ref offset);
+
+            var lookupCount = ShortVec.Decode(data[offset..], out var read);
+            offset += read;
+            const int minimumLookupBytes = PublicKey.Length + 2; // table key plus two zero length prefixes
+            if ((long)lookupCount * minimumLookupBytes > data.Length - offset)
+                throw new FormatException(
+                    $"The v0 message declares {lookupCount} address table lookup(s), but the remaining data cannot hold their minimum wire representation.");
+
+            var addressTableLookups = new MessageAddressTableLookup[lookupCount];
+            for (var i = 0; i < lookupCount; i++)
+            {
+                var accountKey = new PublicKey(data.Slice(offset, PublicKey.Length));
+                offset += PublicKey.Length;
+
+                var writableCount = ShortVec.Decode(data[offset..], out read);
+                offset += read;
+                var writableIndexes = data.Slice(offset, writableCount).ToArray();
+                offset += writableCount;
+
+                var readonlyCount = ShortVec.Decode(data[offset..], out read);
+                offset += read;
+                var readonlyIndexes = data.Slice(offset, readonlyCount).ToArray();
+                offset += readonlyCount;
+
+                addressTableLookups[i] = new MessageAddressTableLookup
+                {
+                    AccountKey = accountKey,
+                    WritableIndexes = writableIndexes,
+                    ReadonlyIndexes = readonlyIndexes
+                };
+            }
+
+            if (offset != data.Length)
+                throw new FormatException($"The v0 message has {data.Length - offset} trailing byte(s).");
+
+            // Mirror Solana's v0 sanitize so a message the network would refuse never parses successfully.
+            MessageWire.SanitizeHeader(requiredSignatures, readonlySignedAccounts, readonlyUnsignedAccounts, accountKeys.Length);
+
+            var loadedAccounts = 0;
+            foreach (var lookup in addressTableLookups)
+            {
+                var lookupAccounts = lookup.WritableIndexes.Length + lookup.ReadonlyIndexes.Length;
+                if (lookupAccounts == 0)
+                    throw new FormatException($"Address table lookup {lookup.AccountKey} loads no accounts; every lookup must load at least one.");
+
+                loadedAccounts += lookupAccounts;
+            }
+
+            // Unreachable after the header checks (they already force a writable signer), but mirrored
+            // from Solana's sanitize so the rule survives any reordering of the checks above.
+            if (accountKeys.Length == 0)
+                throw new FormatException("The message has no static account keys.");
+
+            var addressableAccounts = accountKeys.Length + loadedAccounts;
+            if (addressableAccounts > MaxAccounts)
+                throw new FormatException(
+                    $"The message addresses {addressableAccounts} accounts (static plus lookup-loaded); indices are single bytes, so at most {MaxAccounts} are addressable.");
+
+            MessageWire.SanitizeInstructions(instructions, accountKeys.Length, addressableAccounts);
+
+            return new MessageV0(requiredSignatures, readonlySignedAccounts, readonlyUnsignedAccounts, accountKeys, recentBlockhash, instructions, addressTableLookups);
+        }
+        catch (Exception exception) when (exception is IndexOutOfRangeException or ArgumentOutOfRangeException)
+        {
+            // Span indexing and slicing throw index errors on short input; surface the documented type.
+            throw new FormatException("The v0 message data is truncated.", exception);
+        }
+    }
+
     /// <summary>Serializes the message to its canonical wire bytes - what a signer signs over - starting with <see cref="VersionPrefix"/>.</summary>
     /// <returns>The serialized v0 message.</returns>
     /// <exception cref="FormatException"><see cref="RecentBlockhash"/> is not a 32-byte base58 value.</exception>
@@ -396,31 +500,6 @@ public sealed class MessageV0 : ITransactionMessage
             Instructions, keys, RequiredSignatures, ReadonlySignedAccounts, ReadonlyUnsignedAccounts, AccountKeys.Count, writable.Count);
     }
 
-    private List<PublicKey> BuildKeys(List<PublicKey> loadedWritable, List<PublicKey> loadedReadonly)
-    {
-        var keys = new List<PublicKey>(AccountKeys.Count + loadedWritable.Count + loadedReadonly.Count);
-        keys.AddRange(AccountKeys);
-        keys.AddRange(loadedWritable);
-        keys.AddRange(loadedReadonly);
-        return keys;
-    }
-
-    private (List<PublicKey> Writable, List<PublicKey> Readonly) ResolveLoaded(IReadOnlyList<AddressLookupTableAccount> lookupTables)
-    {
-        var writable = new List<PublicKey>();
-        var readOnly = new List<PublicKey>();
-        foreach (var lookup in AddressTableLookups)
-        {
-            var table = FindTable(lookupTables, lookup.AccountKey);
-            foreach (var index in lookup.WritableIndexes)
-                writable.Add(AddressAt(table, index));
-            foreach (var index in lookup.ReadonlyIndexes)
-                readOnly.Add(AddressAt(table, index));
-        }
-
-        return (writable, readOnly);
-    }
-
     private static AddressLookupTableAccount FindTable(IReadOnlyList<AddressLookupTableAccount> tables, PublicKey key)
     {
         foreach (var table in tables)
@@ -434,110 +513,6 @@ public sealed class MessageV0 : ITransactionMessage
         => index < table.Addresses.Count
             ? table.Addresses[index]
             : throw new ArgumentException($"Lookup index {index} is out of range in table {table.Key} ({table.Addresses.Count} addresses).");
-
-    /// <summary>Parses a v0 message from its wire bytes (including the leading <see cref="VersionPrefix"/> byte).</summary>
-    /// <param name="data">The serialized v0 message.</param>
-    /// <returns>The parsed message.</returns>
-    /// <exception cref="FormatException">
-    /// The data is not a versioned message, carries a version other than 0, is truncated, contains trailing
-    /// bytes, has a malformed compact-u16 length, or breaks a rule Solana's sanitize enforces: header counts that
-    /// overlap the static account list or leave no writable fee-payer signer, an address table lookup that
-    /// loads no accounts, more than 256 addressable accounts, an instruction whose program id is the fee
-    /// payer or a lookup-loaded account, or an out-of-range program id or account index.
-    /// </exception>
-    public static MessageV0 Deserialize(ReadOnlySpan<byte> data)
-    {
-        try
-        {
-            var offset = 0;
-            var prefix = data[offset++];
-            if ((prefix & VersionPrefix) == 0)
-                throw new FormatException("Not a versioned message: the high bit of the version prefix is not set.");
-
-            // SolSharp currently implements v0; a v1 or later payload must fail loudly rather than
-            // being misparsed as v0.
-            var version = prefix & ~VersionPrefix;
-            if (version != 0)
-                throw new FormatException($"Unsupported message version {version}; only v0 is supported.");
-
-            var requiredSignatures = data[offset++];
-            var readonlySignedAccounts = data[offset++];
-            var readonlyUnsignedAccounts = data[offset++];
-
-            var accountKeys = MessageWire.ReadAccountKeys(data, ref offset);
-
-            var recentBlockhash = new PublicKey(data.Slice(offset, PublicKey.Length)).ToString();
-            offset += PublicKey.Length;
-
-            var instructions = MessageWire.ReadInstructions(data, ref offset);
-
-            var lookupCount = ShortVec.Decode(data[offset..], out var read);
-            offset += read;
-            const int minimumLookupBytes = PublicKey.Length + 2; // table key plus two zero length prefixes
-            if ((long)lookupCount * minimumLookupBytes > data.Length - offset)
-                throw new FormatException(
-                    $"The v0 message declares {lookupCount} address table lookup(s), but the remaining data cannot hold their minimum wire representation.");
-
-            var addressTableLookups = new MessageAddressTableLookup[lookupCount];
-            for (var i = 0; i < lookupCount; i++)
-            {
-                var accountKey = new PublicKey(data.Slice(offset, PublicKey.Length));
-                offset += PublicKey.Length;
-
-                var writableCount = ShortVec.Decode(data[offset..], out read);
-                offset += read;
-                var writableIndexes = data.Slice(offset, writableCount).ToArray();
-                offset += writableCount;
-
-                var readonlyCount = ShortVec.Decode(data[offset..], out read);
-                offset += read;
-                var readonlyIndexes = data.Slice(offset, readonlyCount).ToArray();
-                offset += readonlyCount;
-
-                addressTableLookups[i] = new MessageAddressTableLookup
-                {
-                    AccountKey = accountKey,
-                    WritableIndexes = writableIndexes,
-                    ReadonlyIndexes = readonlyIndexes
-                };
-            }
-
-            if (offset != data.Length)
-                throw new FormatException($"The v0 message has {data.Length - offset} trailing byte(s).");
-
-            // Mirror Solana's v0 sanitize so a message the network would refuse never parses successfully.
-            MessageWire.SanitizeHeader(requiredSignatures, readonlySignedAccounts, readonlyUnsignedAccounts, accountKeys.Length);
-
-            var loadedAccounts = 0;
-            foreach (var lookup in addressTableLookups)
-            {
-                var lookupAccounts = lookup.WritableIndexes.Length + lookup.ReadonlyIndexes.Length;
-                if (lookupAccounts == 0)
-                    throw new FormatException($"Address table lookup {lookup.AccountKey} loads no accounts; every lookup must load at least one.");
-
-                loadedAccounts += lookupAccounts;
-            }
-
-            // Unreachable after the header checks (they already force a writable signer), but mirrored
-            // from Solana's sanitize so the rule survives any reordering of the checks above.
-            if (accountKeys.Length == 0)
-                throw new FormatException("The message has no static account keys.");
-
-            var addressableAccounts = accountKeys.Length + loadedAccounts;
-            if (addressableAccounts > MaxAccounts)
-                throw new FormatException(
-                    $"The message addresses {addressableAccounts} accounts (static plus lookup-loaded); indices are single bytes, so at most {MaxAccounts} are addressable.");
-
-            MessageWire.SanitizeInstructions(instructions, accountKeys.Length, addressableAccounts);
-
-            return new MessageV0(requiredSignatures, readonlySignedAccounts, readonlyUnsignedAccounts, accountKeys, recentBlockhash, instructions, addressTableLookups);
-        }
-        catch (Exception exception) when (exception is IndexOutOfRangeException or ArgumentOutOfRangeException)
-        {
-            // Span indexing and slicing throw index errors on short input; surface the documented type.
-            throw new FormatException("The v0 message data is truncated.", exception);
-        }
-    }
 
     private static void AddClass(
         List<PublicKey> target,
@@ -589,6 +564,31 @@ public sealed class MessageV0 : ITransactionMessage
 
         nonceAccount = default;
         return false;
+    }
+
+    private List<PublicKey> BuildKeys(List<PublicKey> loadedWritable, List<PublicKey> loadedReadonly)
+    {
+        var keys = new List<PublicKey>(AccountKeys.Count + loadedWritable.Count + loadedReadonly.Count);
+        keys.AddRange(AccountKeys);
+        keys.AddRange(loadedWritable);
+        keys.AddRange(loadedReadonly);
+        return keys;
+    }
+
+    private (List<PublicKey> Writable, List<PublicKey> Readonly) ResolveLoaded(IReadOnlyList<AddressLookupTableAccount> lookupTables)
+    {
+        var writable = new List<PublicKey>();
+        var readOnly = new List<PublicKey>();
+        foreach (var lookup in AddressTableLookups)
+        {
+            var table = FindTable(lookupTables, lookup.AccountKey);
+            foreach (var index in lookup.WritableIndexes)
+                writable.Add(AddressAt(table, index));
+            foreach (var index in lookup.ReadonlyIndexes)
+                readOnly.Add(AddressAt(table, index));
+        }
+
+        return (writable, readOnly);
     }
 
     private readonly record struct KeyMeta(bool IsSigner, bool IsWritable, bool IsInvoked, bool IsNonce = false);

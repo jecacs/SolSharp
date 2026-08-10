@@ -170,6 +170,52 @@ public sealed class Message : ITransactionMessage
             compiled);
     }
 
+    /// <summary>Parses a legacy message from its wire bytes.</summary>
+    /// <param name="data">The serialized message (no version prefix).</param>
+    /// <returns>The parsed message.</returns>
+    /// <exception cref="FormatException">
+    /// The data is truncated, contains trailing bytes, has a malformed compact-u16 length, or breaks a rule
+    /// Solana's sanitize enforces: header counts that overlap the account list or leave no writable
+    /// fee-payer signer, an instruction whose program id is the fee payer, or an out-of-range program id
+    /// or account index.
+    /// </exception>
+    public static Message Deserialize(ReadOnlySpan<byte> data)
+    {
+        try
+        {
+            var offset = 0;
+            var requiredSignatures = data[offset++];
+            if ((requiredSignatures & MessageV0.VersionPrefix) != 0)
+                throw new FormatException(
+                    $"A legacy message signer count must be below {MessageV0.VersionPrefix}; " +
+                    $"the high bit marks a versioned message, got {requiredSignatures}.");
+
+            var readonlySignedAccounts = data[offset++];
+            var readonlyUnsignedAccounts = data[offset++];
+
+            var accountKeys = MessageWire.ReadAccountKeys(data, ref offset);
+
+            var recentBlockhash = new PublicKey(data.Slice(offset, PublicKey.Length)).ToString();
+            offset += PublicKey.Length;
+
+            var instructions = MessageWire.ReadInstructions(data, ref offset);
+
+            if (offset != data.Length)
+                throw new FormatException($"The message has {data.Length - offset} trailing byte(s).");
+
+            // Mirror Solana's sanitize so a message the network would refuse never parses successfully.
+            MessageWire.SanitizeHeader(requiredSignatures, readonlySignedAccounts, readonlyUnsignedAccounts, accountKeys.Length);
+            MessageWire.SanitizeInstructions(instructions, accountKeys.Length, accountKeys.Length);
+
+            return new Message(requiredSignatures, readonlySignedAccounts, readonlyUnsignedAccounts, accountKeys, recentBlockhash, instructions);
+        }
+        catch (Exception exception) when (exception is IndexOutOfRangeException or ArgumentOutOfRangeException)
+        {
+            // Span indexing and slicing throw index errors on short input; surface the documented type.
+            throw new FormatException("The message data is truncated.", exception);
+        }
+    }
+
     /// <summary>Serializes the message to its canonical wire bytes - the bytes a signer signs over.</summary>
     /// <returns>The serialized message.</returns>
     /// <exception cref="FormatException"><see cref="RecentBlockhash"/> is not a 32-byte base58 value.</exception>
@@ -251,52 +297,6 @@ public sealed class Message : ITransactionMessage
         ArgumentNullException.ThrowIfNull(lookupTables);
         return MessageDecompiler.Decompile(
             Instructions, AccountKeys, RequiredSignatures, ReadonlySignedAccounts, ReadonlyUnsignedAccounts, AccountKeys.Count, numLoadedWritable: 0);
-    }
-
-    /// <summary>Parses a legacy message from its wire bytes.</summary>
-    /// <param name="data">The serialized message (no version prefix).</param>
-    /// <returns>The parsed message.</returns>
-    /// <exception cref="FormatException">
-    /// The data is truncated, contains trailing bytes, has a malformed compact-u16 length, or breaks a rule
-    /// Solana's sanitize enforces: header counts that overlap the account list or leave no writable
-    /// fee-payer signer, an instruction whose program id is the fee payer, or an out-of-range program id
-    /// or account index.
-    /// </exception>
-    public static Message Deserialize(ReadOnlySpan<byte> data)
-    {
-        try
-        {
-            var offset = 0;
-            var requiredSignatures = data[offset++];
-            if ((requiredSignatures & MessageV0.VersionPrefix) != 0)
-                throw new FormatException(
-                    $"A legacy message signer count must be below {MessageV0.VersionPrefix}; " +
-                    $"the high bit marks a versioned message, got {requiredSignatures}.");
-
-            var readonlySignedAccounts = data[offset++];
-            var readonlyUnsignedAccounts = data[offset++];
-
-            var accountKeys = MessageWire.ReadAccountKeys(data, ref offset);
-
-            var recentBlockhash = new PublicKey(data.Slice(offset, PublicKey.Length)).ToString();
-            offset += PublicKey.Length;
-
-            var instructions = MessageWire.ReadInstructions(data, ref offset);
-
-            if (offset != data.Length)
-                throw new FormatException($"The message has {data.Length - offset} trailing byte(s).");
-
-            // Mirror Solana's sanitize so a message the network would refuse never parses successfully.
-            MessageWire.SanitizeHeader(requiredSignatures, readonlySignedAccounts, readonlyUnsignedAccounts, accountKeys.Length);
-            MessageWire.SanitizeInstructions(instructions, accountKeys.Length, accountKeys.Length);
-
-            return new Message(requiredSignatures, readonlySignedAccounts, readonlyUnsignedAccounts, accountKeys, recentBlockhash, instructions);
-        }
-        catch (Exception exception) when (exception is IndexOutOfRangeException or ArgumentOutOfRangeException)
-        {
-            // Span indexing and slicing throw index errors on short input; surface the documented type.
-            throw new FormatException("The message data is truncated.", exception);
-        }
     }
 
     private static void AddClass(

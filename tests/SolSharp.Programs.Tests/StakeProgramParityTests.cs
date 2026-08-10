@@ -7,16 +7,6 @@ using static SolSharp.Programs.Tests.StakeProgramTestHelpers;
 
 namespace SolSharp.Programs.Tests;
 
-internal static class StakeProgramTestHelpers
-{
-    internal static PublicKey Pk(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
-
-    internal static string Hex(Instruction instruction) => Convert.ToHexString(instruction.Data).ToLowerInvariant();
-
-    internal static (PublicKey, bool, bool)[] Metas(Instruction instruction)
-        => [.. instruction.Accounts.Select(account => (account.PublicKey, account.IsSigner, account.IsWritable))];
-}
-
 public static class StakeProgramTests
 {
     [TestFixture]
@@ -479,4 +469,14 @@ public static class StakeAccountStateTests
             state.StakeFlags.Should().Be(1);
         }
     }
+}
+
+internal static class StakeProgramTestHelpers
+{
+    internal static PublicKey Pk(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
+
+    internal static string Hex(Instruction instruction) => Convert.ToHexString(instruction.Data).ToLowerInvariant();
+
+    internal static (PublicKey, bool, bool)[] Metas(Instruction instruction)
+        => [.. instruction.Accounts.Select(account => (account.PublicKey, account.IsSigner, account.IsWritable))];
 }

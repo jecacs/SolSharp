@@ -1,23 +1,5 @@
 namespace SolSharp.Programs;
 
-/// <summary>A decoded discriminator and opaque payload from an SPL interface instruction.</summary>
-public sealed class DecodedSplInterfaceInstruction
-{
-    private readonly byte[] _payload;
-
-    internal DecodedSplInterfaceInstruction(string name, ReadOnlySpan<byte> payload)
-    {
-        Name = name;
-        _payload = payload.ToArray();
-    }
-
-    /// <summary>The upstream instruction variant name.</summary>
-    public string Name { get; }
-
-    /// <summary>The exact bytes after the interface discriminator.</summary>
-    public ReadOnlyMemory<byte> Payload => _payload;
-}
-
 public static partial class Token2022Program
 {
     /// <summary>Decodes an SPL token-metadata interface instruction discriminator.</summary>
@@ -67,4 +49,22 @@ public static partial class TransferHookProgram
             discriminator.SequenceEqual(UpdateExtraAccountMetasDiscriminator) ? "UpdateExtraAccountMetaList" : null;
         return name is null ? null : new DecodedSplInterfaceInstruction(name, data[8..]);
     }
+}
+
+/// <summary>A decoded discriminator and opaque payload from an SPL interface instruction.</summary>
+public sealed class DecodedSplInterfaceInstruction
+{
+    private readonly byte[] _payload;
+
+    internal DecodedSplInterfaceInstruction(string name, ReadOnlySpan<byte> payload)
+    {
+        Name = name;
+        _payload = payload.ToArray();
+    }
+
+    /// <summary>The upstream instruction variant name.</summary>
+    public string Name { get; }
+
+    /// <summary>The exact bytes after the interface discriminator.</summary>
+    public ReadOnlyMemory<byte> Payload => _payload;
 }

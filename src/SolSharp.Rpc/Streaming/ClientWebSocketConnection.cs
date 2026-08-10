@@ -15,7 +15,7 @@ internal sealed class ClientWebSocketConnection : IWebSocketConnection
     private readonly IClientWebSocket _socket;
     private readonly int _maxMessageSizeBytes;
     private readonly TimeSpan _closeTimeout;
-    private readonly object _lifecycleGate = new();
+    private readonly System.Threading.Lock _lifecycleGate = new();
     private readonly TaskCompletionSource _peerCloseReceived =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -73,6 +73,25 @@ internal sealed class ClientWebSocketConnection : IWebSocketConnection
         }
 
         return ReceiveCoreAsync(cancellationToken);
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        TaskCompletionSource completion;
+        bool receiveLoopOwnsPeerRead;
+        lock (_lifecycleGate)
+        {
+            if (_disposeTask is not null)
+                return new ValueTask(_disposeTask);
+
+            completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _disposeTask = completion.Task;
+            receiveLoopOwnsPeerRead = _receiveActive;
+            _closeOwnsReceive = !receiveLoopOwnsPeerRead;
+        }
+
+        _ = DisposeCoreAsync(completion, receiveLoopOwnsPeerRead);
+        return new ValueTask(completion.Task);
     }
 
     private async ValueTask<string?> ReceiveCoreAsync(CancellationToken cancellationToken)
@@ -139,25 +158,6 @@ internal sealed class ClientWebSocketConnection : IWebSocketConnection
             lock (_lifecycleGate)
                 _receiveActive = false;
         }
-    }
-
-    public ValueTask DisposeAsync()
-    {
-        TaskCompletionSource completion;
-        bool receiveLoopOwnsPeerRead;
-        lock (_lifecycleGate)
-        {
-            if (_disposeTask is not null)
-                return new ValueTask(_disposeTask);
-
-            completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            _disposeTask = completion.Task;
-            receiveLoopOwnsPeerRead = _receiveActive;
-            _closeOwnsReceive = !receiveLoopOwnsPeerRead;
-        }
-
-        _ = DisposeCoreAsync(completion, receiveLoopOwnsPeerRead);
-        return new ValueTask(completion.Task);
     }
 
     private async Task DisposeCoreAsync(TaskCompletionSource completion, bool receiveLoopOwnsPeerRead)

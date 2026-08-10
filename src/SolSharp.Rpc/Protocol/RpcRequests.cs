@@ -609,6 +609,9 @@ internal static class RpcRequests
             ]
         };
 
+    public static RpcRequest MinimumLedgerSlot() =>
+        new() { Method = RpcMethods.MinimumLedgerSlot };
+
     private static object TokenAccountsFilterPayload(TokenAccountsFilter filter)
     {
         ArgumentNullException.ThrowIfNull(filter);
@@ -619,9 +622,6 @@ internal static class RpcRequests
             _ => throw new ArgumentOutOfRangeException(nameof(filter), "Unknown token-account filter kind.")
         };
     }
-
-    public static RpcRequest MinimumLedgerSlot() =>
-        new() { Method = RpcMethods.MinimumLedgerSlot };
 }
 
 internal static class RpcMethods

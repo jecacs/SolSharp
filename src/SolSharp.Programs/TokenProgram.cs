@@ -12,11 +12,6 @@ namespace SolSharp.Programs;
 /// </summary>
 public static partial class TokenProgram
 {
-    private const int MaxMultisigSigners = 11;
-
-    /// <summary>The SPL Token program's address.</summary>
-    public static readonly PublicKey ProgramId = PublicKey.Parse(SolanaProgramIds.TokenProgram);
-
     /// <summary>The instruction-data discriminator (first data byte) of InitializeMint.</summary>
     public const byte InitializeMintDiscriminator = 0;
 
@@ -64,6 +59,10 @@ public static partial class TokenProgram
 
     /// <summary>The instruction-data discriminator (first data byte) of SyncNative.</summary>
     public const byte SyncNativeDiscriminator = 17;
+
+    /// <summary>The SPL Token program's address.</summary>
+    public static readonly PublicKey ProgramId = PublicKey.Parse(SolanaProgramIds.TokenProgram);
+    private const int MaxMultisigSigners = 11;
 
     private static readonly PublicKey RentSysvar = PublicKey.Parse(Sysvars.Rent);
 

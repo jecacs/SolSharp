@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using System.Text;
 using SolSharp.Core.Primitives;
 
 namespace SolSharp.Programs;
@@ -21,7 +20,7 @@ public static partial class TransferHookProgram
     private static readonly byte[] ExecuteDiscriminator = [0x69, 0x25, 0x65, 0xc5, 0x4b, 0xfb, 0x66, 0x1a];
     private static readonly byte[] InitializeExtraAccountMetasDiscriminator = [0x2b, 0x22, 0x0d, 0x31, 0xa7, 0x58, 0xeb, 0xeb];
     private static readonly byte[] UpdateExtraAccountMetasDiscriminator = [0x9d, 0x69, 0x2a, 0x92, 0x66, 0x55, 0xf1, 0xae];
-    private static readonly byte[] ExtraAccountMetasSeed = Encoding.ASCII.GetBytes("extra-account-metas");
+    private static readonly byte[] ExtraAccountMetasSeed = "extra-account-metas"u8.ToArray();
 
     /// <summary>Derives the validation-state PDA for a mint and transfer-hook program.</summary>
     /// <param name="mint">The Token-2022 mint.</param>

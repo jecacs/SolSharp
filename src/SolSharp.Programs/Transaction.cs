@@ -422,6 +422,24 @@ public sealed class Transaction
         return new Transaction(message, signatures, data[..messageLength].ToArray());
     }
 
+    private static PublicKey[] CopyRequiredSignerKeys(ITransactionMessage message)
+    {
+        var keys = new PublicKey[message.RequiredSignatures];
+        for (var i = 0; i < keys.Length; i++)
+            keys[i] = message.AccountKeys[i];
+
+        return keys;
+    }
+
+    private static int RequiredSignerIndex(PublicKey[] requiredSignerKeys, PublicKey key)
+    {
+        for (var i = 0; i < requiredSignerKeys.Length; i++)
+            if (requiredSignerKeys[i] == key)
+                return i;
+
+        return -1;
+    }
+
     private int SerializeMessage(Span<byte> destination)
     {
         if (_signedMessageBytes is not { } signedMessage)
@@ -441,23 +459,5 @@ public sealed class Transaction
         }
 
         return offset;
-    }
-
-    private static PublicKey[] CopyRequiredSignerKeys(ITransactionMessage message)
-    {
-        var keys = new PublicKey[message.RequiredSignatures];
-        for (var i = 0; i < keys.Length; i++)
-            keys[i] = message.AccountKeys[i];
-
-        return keys;
-    }
-
-    private static int RequiredSignerIndex(PublicKey[] requiredSignerKeys, PublicKey key)
-    {
-        for (var i = 0; i < requiredSignerKeys.Length; i++)
-            if (requiredSignerKeys[i] == key)
-                return i;
-
-        return -1;
     }
 }

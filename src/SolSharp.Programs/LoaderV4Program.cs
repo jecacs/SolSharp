@@ -5,6 +5,13 @@ namespace SolSharp.Programs;
 /// <summary>Builds instructions for Solana's Loader V4 program-management interface.</summary>
 public static class LoaderV4Program
 {
+    /// <summary>The minimum slot cooldown between deployment-state changes.</summary>
+    public const ulong DeploymentCooldownSlots = 1;
+
+    /// <summary>The Loader V4 program address.</summary>
+    public static readonly PublicKey ProgramId =
+        PublicKey.Parse("LoaderV411111111111111111111111111111111111");
+
     private const uint WriteDiscriminator = 0;
     private const uint CopyDiscriminator = 1;
     private const uint SetProgramLengthDiscriminator = 2;
@@ -12,13 +19,6 @@ public static class LoaderV4Program
     private const uint RetractDiscriminator = 4;
     private const uint TransferAuthorityDiscriminator = 5;
     private const uint FinalizeDiscriminator = 6;
-
-    /// <summary>The Loader V4 program address.</summary>
-    public static readonly PublicKey ProgramId =
-        PublicKey.Parse("LoaderV411111111111111111111111111111111111");
-
-    /// <summary>The minimum slot cooldown between deployment-state changes.</summary>
-    public const ulong DeploymentCooldownSlots = 1;
 
     /// <summary>Creates a Loader V4 account and initializes its program-data length.</summary>
     /// <param name="payer">The funding signer.</param>

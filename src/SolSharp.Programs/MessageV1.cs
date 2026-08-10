@@ -278,6 +278,16 @@ public sealed class MessageV1 : ITransactionMessage
         return Compile(feePayer, new Hash(lifetimeSpecifier), instructions, config);
     }
 
+    /// <summary>Parses one complete version-prefixed V1 message and applies all sanitize checks.</summary>
+    /// <param name="data">The complete V1 message bytes, beginning with <see cref="VersionPrefix"/>.</param>
+    /// <returns>The parsed V1 message.</returns>
+    /// <exception cref="FormatException">
+    /// The message is truncated, has trailing data, uses an invalid config mask, or violates a V1
+    /// sanitize constraint.
+    /// </exception>
+    public static MessageV1 Deserialize(ReadOnlySpan<byte> data)
+        => DeserializeCore(data, requireExactLength: true, out _);
+
     /// <summary>Validates all SIMD-0385 header, configuration, account, and instruction constraints.</summary>
     /// <exception cref="FormatException">The message violates a V1 sanitize constraint.</exception>
     public void Validate()
@@ -389,16 +399,6 @@ public sealed class MessageV1 : ITransactionMessage
 
         return offset;
     }
-
-    /// <summary>Parses one complete version-prefixed V1 message and applies all sanitize checks.</summary>
-    /// <param name="data">The complete V1 message bytes, beginning with <see cref="VersionPrefix"/>.</param>
-    /// <returns>The parsed V1 message.</returns>
-    /// <exception cref="FormatException">
-    /// The message is truncated, has trailing data, uses an invalid config mask, or violates a V1
-    /// sanitize constraint.
-    /// </exception>
-    public static MessageV1 Deserialize(ReadOnlySpan<byte> data)
-        => DeserializeCore(data, requireExactLength: true, out _);
 
     /// <inheritdoc/>
     public IReadOnlyList<Instruction> DecompileInstructions(IReadOnlyList<AddressLookupTableAccount> lookupTables)

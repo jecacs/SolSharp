@@ -6,16 +6,6 @@ using static SolSharp.Programs.Tests.TransferHookTestHelpers;
 
 namespace SolSharp.Programs.Tests;
 
-internal static class TransferHookTestHelpers
-{
-    internal static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
-
-    internal static string Hex(byte[] data) => Convert.ToHexString(data).ToLowerInvariant();
-
-    internal static (PublicKey, bool, bool)[] Metas(Instruction instruction)
-        => [.. instruction.Accounts.Select(account => (account.PublicKey, account.IsSigner, account.IsWritable))];
-}
-
 public static class TransferHookProgramTests
 {
     [TestFixture]
@@ -351,4 +341,14 @@ public static class ExtraAccountMetaTests
                 ExtraAccountSeedKind.AccountData);
         }
     }
+}
+
+internal static class TransferHookTestHelpers
+{
+    internal static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
+
+    internal static string Hex(byte[] data) => Convert.ToHexString(data).ToLowerInvariant();
+
+    internal static (PublicKey, bool, bool)[] Metas(Instruction instruction)
+        => [.. instruction.Accounts.Select(account => (account.PublicKey, account.IsSigner, account.IsWritable))];
 }

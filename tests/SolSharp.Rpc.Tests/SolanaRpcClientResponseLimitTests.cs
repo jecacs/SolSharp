@@ -10,6 +10,13 @@ public static class SolanaRpcClientResponseLimitTests
 {
     private const string SlotResponse = "{\"jsonrpc\":\"2.0\",\"result\":123,\"id\":1}";
 
+    private static StreamContent UnknownLengthContent(string body)
+    {
+        var content = new StreamContent(new NonSeekableReadStream(Encoding.UTF8.GetBytes(body)));
+        content.Headers.ContentType = new("application/json");
+        return content;
+    }
+
     [TestFixture]
     public sealed class SingleRequest
     {
@@ -118,13 +125,6 @@ public static class SolanaRpcClientResponseLimitTests
         }
     }
 
-    private static StreamContent UnknownLengthContent(string body)
-    {
-        var content = new StreamContent(new NonSeekableReadStream(Encoding.UTF8.GetBytes(body)));
-        content.Headers.ContentType = new("application/json");
-        return content;
-    }
-
     private sealed class NonSeekableReadStream(byte[] data) : Stream
     {
         private readonly MemoryStream _inner = new(data, writable: false);
@@ -159,17 +159,17 @@ public static class SolanaRpcClientResponseLimitTests
 
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 
+        public override async ValueTask DisposeAsync()
+        {
+            await _inner.DisposeAsync();
+            await base.DisposeAsync();
+        }
+
         protected override void Dispose(bool disposing)
         {
             if (disposing)
                 _inner.Dispose();
             base.Dispose(disposing);
-        }
-
-        public override async ValueTask DisposeAsync()
-        {
-            await _inner.DisposeAsync();
-            await base.DisposeAsync();
         }
     }
 }

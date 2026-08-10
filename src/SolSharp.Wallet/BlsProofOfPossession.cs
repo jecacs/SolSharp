@@ -17,6 +17,8 @@ public sealed class BlsProofOfPossession : IEquatable<BlsProofOfPossession>
         _bytes = bytes.ToArray();
     }
 
+    internal ReadOnlySpan<byte> Bytes => _bytes;
+
     /// <summary>Parses a compressed G2 proof and performs canonical, curve, subgroup, and infinity checks.</summary>
     /// <param name="compressed">The exact 96-byte compressed point.</param>
     /// <returns>The validated proof.</returns>
@@ -110,8 +112,6 @@ public sealed class BlsProofOfPossession : IEquatable<BlsProofOfPossession>
 
     /// <inheritdoc/>
     public override string ToString() => Convert.ToBase64String(_bytes);
-
-    internal ReadOnlySpan<byte> Bytes => _bytes;
 
     internal static BlsProofOfPossession FromValidated(ReadOnlySpan<byte> compressed) => new(compressed);
 }

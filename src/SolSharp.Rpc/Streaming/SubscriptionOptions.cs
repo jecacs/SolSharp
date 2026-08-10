@@ -2,6 +2,18 @@ using SolSharp.Core.Primitives;
 
 namespace SolSharp.Rpc.Streaming;
 
+internal enum LogsSubscriptionFilterKind
+{
+    /// <summary>All non-vote transactions.</summary>
+    All,
+
+    /// <summary>All transactions, including votes.</summary>
+    AllWithVotes,
+
+    /// <summary>Transactions mentioning one address.</summary>
+    Mentions
+}
+
 /// <summary>
 /// Effective upstream <c>accountSubscribe</c> configuration. Pinned Agave ignores the other fields present on
 /// its shared HTTP account configuration, so they are intentionally not exposed here.
@@ -52,15 +64,15 @@ public sealed class LogsSubscriptionFilter
         Mention = mention;
     }
 
-    internal LogsSubscriptionFilterKind Kind { get; }
-
-    internal PublicKey? Mention { get; }
-
     /// <summary>Includes all non-vote transactions.</summary>
     public static LogsSubscriptionFilter All { get; } = new(LogsSubscriptionFilterKind.All, null);
 
     /// <summary>Includes all transactions, including simple vote transactions.</summary>
     public static LogsSubscriptionFilter AllWithVotes { get; } = new(LogsSubscriptionFilterKind.AllWithVotes, null);
+
+    internal LogsSubscriptionFilterKind Kind { get; }
+
+    internal PublicKey? Mention { get; }
 
     /// <summary>Includes transactions that mention one account or program.</summary>
     /// <param name="accountOrProgram">The single address to match.</param>
@@ -69,27 +81,15 @@ public sealed class LogsSubscriptionFilter
         new(LogsSubscriptionFilterKind.Mentions, accountOrProgram);
 }
 
-internal enum LogsSubscriptionFilterKind
-{
-    /// <summary>All non-vote transactions.</summary>
-    All,
-
-    /// <summary>All transactions, including votes.</summary>
-    AllWithVotes,
-
-    /// <summary>Transactions mentioning one address.</summary>
-    Mentions
-}
-
 /// <summary>The filter accepted by <c>blockSubscribe</c>.</summary>
 public sealed class BlockSubscriptionFilter
 {
     private BlockSubscriptionFilter(PublicKey? mention) => Mention = mention;
 
-    internal PublicKey? Mention { get; }
-
     /// <summary>Includes every produced block.</summary>
     public static BlockSubscriptionFilter All { get; } = new(null);
+
+    internal PublicKey? Mention { get; }
 
     /// <summary>Includes blocks that mention one account or program.</summary>
     /// <param name="accountOrProgram">The address a block must mention.</param>

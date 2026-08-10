@@ -8,8 +8,6 @@ namespace SolSharp.Rpc.Models;
 /// <seealso href="https://solana.com/docs/rpc/http/getprogramaccounts">getProgramAccounts</seealso>
 public sealed record ProgramAccount
 {
-    private AccountInfo? _account;
-
     /// <summary>The account's address.</summary>
     [JsonPropertyName("pubkey")]
     public required PublicKey PublicKey { get; init; }
@@ -18,7 +16,7 @@ public sealed record ProgramAccount
     [JsonPropertyName("account")]
     public required AccountInfo Account
     {
-        get => _account!;
-        init => _account = value ?? throw new JsonException("A keyed account must carry a non-null account.");
+        get => field!;
+        init => field = value ?? throw new JsonException("A keyed account must carry a non-null account.");
     }
 }

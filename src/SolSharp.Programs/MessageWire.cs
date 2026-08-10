@@ -61,14 +61,6 @@ internal static class MessageWire
         return instructions;
     }
 
-    private static void EnsureMinimumBytes(int remainingBytes, int count, int minimumElementBytes, string elementName)
-    {
-        var minimumBytes = (long)count * minimumElementBytes;
-        if (minimumBytes > remainingBytes)
-            throw new FormatException(
-                $"The wire data declares {count} {elementName}(s), which need at least {minimumBytes} byte(s), but only {remainingBytes} byte(s) remain.");
-    }
-
     /// <summary>
     /// Enforces the header rules of Solana's sanitize: the signing area and the read-only non-signing area
     /// must fit the account list without overlapping, and at least one signer must be writable so it can
@@ -109,5 +101,13 @@ internal static class MessageWire
                     throw new FormatException(
                         $"Instruction account index {index} is out of range: the message addresses {addressableAccountCount} account(s).");
         }
+    }
+
+    private static void EnsureMinimumBytes(int remainingBytes, int count, int minimumElementBytes, string elementName)
+    {
+        var minimumBytes = (long)count * minimumElementBytes;
+        if (minimumBytes > remainingBytes)
+            throw new FormatException(
+                $"The wire data declares {count} {elementName}(s), which need at least {minimumBytes} byte(s), but only {remainingBytes} byte(s) remain.");
     }
 }

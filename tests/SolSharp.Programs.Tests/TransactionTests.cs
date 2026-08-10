@@ -23,19 +23,6 @@ public static class TransactionTests
 
     private static byte[] Fill(byte value) => [.. Enumerable.Repeat(value, PublicKey.Length)];
 
-    private sealed class TestSigner(PublicKey publicKey, byte[]? signature) : ISigner
-    {
-        public PublicKey PublicKey { get; } = publicKey;
-
-        public int CallCount { get; private set; }
-
-        byte[] ISigner.Sign(ReadOnlySpan<byte> message)
-        {
-            CallCount++;
-            return signature!;
-        }
-    }
-
     private static Transaction BuildTransfer(out Keypair payer)
     {
         payer = Keypair.FromSeed(Fill(1));
@@ -430,6 +417,19 @@ public static class TransactionTests
                 actual.Should().Be(expected);
                 transaction.GetMessageHash().Should().Be(expected);
             }
+        }
+    }
+
+    private sealed class TestSigner(PublicKey publicKey, byte[]? signature) : ISigner
+    {
+        public PublicKey PublicKey { get; } = publicKey;
+
+        public int CallCount { get; private set; }
+
+        byte[] ISigner.Sign(ReadOnlySpan<byte> message)
+        {
+            CallCount++;
+            return signature!;
         }
     }
 }

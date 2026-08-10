@@ -7,9 +7,16 @@ namespace SolSharp.Programs.Tests;
 
 public static class SystemProgramTests
 {
+    private static PublicKey RecentBlockhashes => PublicKey.Parse(Sysvars.RecentBlockhashes);
+
+    private static PublicKey Rent => PublicKey.Parse(Sysvars.Rent);
+
     private static byte[] Hex(string hex) => Convert.FromHexString(hex);
 
     private static PublicKey Key(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
+
+    private static (PublicKey, bool, bool)[] Metas(Instruction instruction)
+        => [.. instruction.Accounts.Select(a => (a.PublicKey, a.IsSigner, a.IsWritable))];
 
     [TestFixture]
     public sealed class Transfer
@@ -140,13 +147,6 @@ public static class SystemProgramTests
             act.Should().Throw<ArgumentException>().WithParameterName("payer");
         }
     }
-
-    private static (PublicKey, bool, bool)[] Metas(Instruction instruction)
-        => [.. instruction.Accounts.Select(a => (a.PublicKey, a.IsSigner, a.IsWritable))];
-
-    private static PublicKey RecentBlockhashes => PublicKey.Parse(Sysvars.RecentBlockhashes);
-
-    private static PublicKey Rent => PublicKey.Parse(Sysvars.Rent);
 
     [TestFixture]
     public sealed class Assign

@@ -95,8 +95,6 @@ public sealed record RpcAccountInfo
 /// <summary>An account paired with its address, as returned by program and token-account scans.</summary>
 public sealed record RpcProgramAccount
 {
-    private RpcAccountInfo? _account;
-
     /// <summary>The account address.</summary>
     [JsonPropertyName("pubkey")]
     public required PublicKey PublicKey { get; init; }
@@ -105,7 +103,7 @@ public sealed record RpcProgramAccount
     [JsonPropertyName("account")]
     public required RpcAccountInfo Account
     {
-        get => _account!;
-        init => _account = value ?? throw new JsonException("A keyed RPC account must carry a non-null account.");
+        get => field!;
+        init => field = value ?? throw new JsonException("A keyed RPC account must carry a non-null account.");
     }
 }

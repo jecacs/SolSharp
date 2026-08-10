@@ -13,6 +13,34 @@ public static class SolanaWsClientAccountEncodingTests
 {
     private static readonly PublicKey TokenProgram = PublicKey.Parse(SolanaProgramIds.TokenProgram);
 
+    private static async Task<string> NextRequestAsync(FakeWebSocketConnection connection)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(1);
+        while (connection.SentCount == 0 && DateTime.UtcNow < deadline)
+            await Task.Yield();
+
+        connection.SentCount.Should().BeGreaterThan(0);
+        return connection.SentSnapshot()[0];
+    }
+
+    private static async Task WaitForSentCountAsync(FakeWebSocketConnection connection, int count)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(1);
+        while (connection.SentCount < count && DateTime.UtcNow < deadline)
+            await Task.Yield();
+
+        connection.SentCount.Should().BeGreaterThanOrEqualTo(count);
+    }
+
+    private static int RequestId(string request)
+    {
+        using var document = JsonDocument.Parse(request);
+        return document.RootElement.GetProperty("id").GetInt32();
+    }
+
+    private static string Acknowledgement(int requestId, ulong subscriptionId) =>
+        $$"""{"jsonrpc":"2.0","result":{{subscriptionId}},"id":{{requestId}}}""";
+
     [TestFixture]
     public sealed class SubscribeAccountWithOptionsAsync
     {
@@ -266,32 +294,4 @@ public static class SolanaWsClientAccountEncodingTests
                 .Value!.Signature.Should().Be("live");
         }
     }
-
-    private static async Task<string> NextRequestAsync(FakeWebSocketConnection connection)
-    {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(1);
-        while (connection.SentCount == 0 && DateTime.UtcNow < deadline)
-            await Task.Yield();
-
-        connection.SentCount.Should().BeGreaterThan(0);
-        return connection.SentSnapshot()[0];
-    }
-
-    private static async Task WaitForSentCountAsync(FakeWebSocketConnection connection, int count)
-    {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(1);
-        while (connection.SentCount < count && DateTime.UtcNow < deadline)
-            await Task.Yield();
-
-        connection.SentCount.Should().BeGreaterThanOrEqualTo(count);
-    }
-
-    private static int RequestId(string request)
-    {
-        using var document = JsonDocument.Parse(request);
-        return document.RootElement.GetProperty("id").GetInt32();
-    }
-
-    private static string Acknowledgement(int requestId, ulong subscriptionId) =>
-        $$"""{"jsonrpc":"2.0","result":{{subscriptionId}},"id":{{requestId}}}""";
 }

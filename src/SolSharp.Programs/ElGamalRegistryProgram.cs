@@ -1,4 +1,3 @@
-using System.Text;
 using SolSharp.Core.Constants;
 using SolSharp.Core.Primitives;
 
@@ -10,11 +9,11 @@ public static class ElGamalRegistryProgram
     /// <summary>The encoded ElGamal registry state length.</summary>
     public const int RegistryStateLength = PublicKey.Length * 2;
 
-    private static readonly byte[] RegistrySeed = Encoding.ASCII.GetBytes("elgamal-registry");
-    private static readonly PublicKey InstructionsSysvar = PublicKey.Parse(Sysvars.Instructions);
-
     /// <summary>The SPL ElGamal registry program address.</summary>
     public static readonly PublicKey ProgramId = PublicKey.Parse("regVYJW7tcT8zipN5YiBvHsvR5jXW1uLFxaHSbugABg");
+
+    private static readonly byte[] RegistrySeed = "elgamal-registry"u8.ToArray();
+    private static readonly PublicKey InstructionsSysvar = PublicKey.Parse(Sysvars.Instructions);
 
     /// <summary>Derives the canonical registry PDA for a wallet owner.</summary>
     /// <param name="owner">The wallet owner.</param>

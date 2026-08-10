@@ -6,32 +6,6 @@ using static SolSharp.Programs.Tests.VoteProgramParityTestHelpers;
 
 namespace SolSharp.Programs.Tests;
 
-internal static class VoteProgramParityTestHelpers
-{
-    internal static PublicKey Pk(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
-
-    internal static Hash H(byte value) => new(Enumerable.Repeat(value, Hash.Length).ToArray());
-
-    internal static string Repeat(byte value, int count)
-        => string.Concat(Enumerable.Repeat(value.ToString("x2"), count));
-
-    internal static string Hex(Instruction instruction) => Convert.ToHexString(instruction.Data).ToLowerInvariant();
-
-    internal static (PublicKey, bool, bool)[] Metas(Instruction instruction)
-        => [.. instruction.Accounts.Select(account => (account.PublicKey, account.IsSigner, account.IsWritable))];
-
-    internal static VoteStateUpdate Update()
-        => new([new VoteLockout(7, 1), new VoteLockout(300, 2)], 5, H(9), -2);
-
-    internal static string CompactBody()
-        => "0500000000000000" +
-           "02" +
-           "0201" +
-           "a50202" +
-           Repeat(9, 32) +
-           "01feffffffffffffff";
-}
-
 public static class VoteProgramParityTests
 {
     [TestFixture]
@@ -402,4 +376,30 @@ public static class VoteInitializeTests
             initialize.Should().Be(new VoteInitialize(Pk(1), Pk(2), Pk(3), 7));
         }
     }
+}
+
+internal static class VoteProgramParityTestHelpers
+{
+    internal static PublicKey Pk(byte value) => new(Enumerable.Repeat(value, PublicKey.Length).ToArray());
+
+    internal static Hash H(byte value) => new(Enumerable.Repeat(value, Hash.Length).ToArray());
+
+    internal static string Repeat(byte value, int count)
+        => string.Concat(Enumerable.Repeat(value.ToString("x2"), count));
+
+    internal static string Hex(Instruction instruction) => Convert.ToHexString(instruction.Data).ToLowerInvariant();
+
+    internal static (PublicKey, bool, bool)[] Metas(Instruction instruction)
+        => [.. instruction.Accounts.Select(account => (account.PublicKey, account.IsSigner, account.IsWritable))];
+
+    internal static VoteStateUpdate Update()
+        => new([new VoteLockout(7, 1), new VoteLockout(300, 2)], 5, H(9), -2);
+
+    internal static string CompactBody()
+        => "0500000000000000" +
+           "02" +
+           "0201" +
+           "a50202" +
+           Repeat(9, 32) +
+           "01feffffffffffffff";
 }

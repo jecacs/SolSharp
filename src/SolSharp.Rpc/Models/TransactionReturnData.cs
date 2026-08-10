@@ -7,8 +7,6 @@ namespace SolSharp.Rpc.Models;
 /// <summary>Data returned by a program through Solana's transaction return-data syscall.</summary>
 public sealed record TransactionReturnData
 {
-    private byte[]? _data;
-
     /// <summary>The program that set the return data.</summary>
     [JsonPropertyName("programId")]
     [JsonRequired]
@@ -20,7 +18,7 @@ public sealed record TransactionReturnData
     [JsonRequired]
     public byte[] Data
     {
-        get => _data!;
-        init => _data = value ?? throw new JsonException("Transaction return data must carry non-null bytes.");
+        get => field!;
+        init => field = value ?? throw new JsonException("Transaction return data must carry non-null bytes.");
     }
 }
