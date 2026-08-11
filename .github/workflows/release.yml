@@ -862,10 +862,11 @@ jobs:
         id: setup_dotnet
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          # Read the exact SDK from global.json. The AOT toolchain packages (ILLink/ILCompiler) are
-          # versioned by the SDK's runtime and land in packages.lock.json, so a floating SDK breaks
-          # --locked-mode restores with NU1004 without a single source change.
-          global-json-file: global.json
+          # This job has no checkout, so global.json is unreadable here; it also never restores or builds,
+          # so the SDK version cannot affect any lock file. The step below pins whatever is installed into
+          # an isolated global.json and asserts dotnet honours it.
+          dotnet-version: 10.0.x
+          dotnet-quality: ga
 
       # This privileged job deliberately has no checkout. Use an isolated, fixed global.json so
       # runner-installed newer SDKs cannot change the NuGet verification or publishing client.
