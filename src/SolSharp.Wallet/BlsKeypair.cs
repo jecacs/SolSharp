@@ -30,6 +30,8 @@ public sealed class BlsKeypair : IDisposable
     /// <summary>The length of <c>ALPENGLOW || vote_account</c>.</summary>
     public const int VoteProofPayloadLength = 41;
 
+    private const int MaxJsonKeyLength = 4 * 1024;
+
     private readonly Lock _secretGate = new();
     private readonly byte[] _secretKey;
     private bool _disposed;
@@ -102,8 +104,8 @@ public sealed class BlsKeypair : IDisposable
         try
         {
             signature = signer.Sign(message);
-            if (signature.Length != Signature.Length)
-                throw new CryptographicException($"The derivation signer returned {signature.Length} bytes instead of {Signature.Length}.");
+            if (signature is null || signature.Length != Signature.Length)
+                throw new CryptographicException($"The derivation signer returned {signature?.Length ?? 0} bytes instead of {Signature.Length}.");
 
             Span<byte> zero = stackalloc byte[Signature.Length];
             if (CryptographicOperations.FixedTimeEquals(signature, zero))
@@ -170,10 +172,13 @@ public sealed class BlsKeypair : IDisposable
     /// <param name="json">A JSON array of exactly 128 integers in the range 0 through 255.</param>
     /// <returns>The validated keypair.</returns>
     /// <exception cref="ArgumentException">The input is null, empty, or whitespace.</exception>
-    /// <exception cref="FormatException">The JSON or keypair representation is invalid.</exception>
+    /// <exception cref="FormatException">The JSON is too large, or the JSON or keypair representation is invalid.</exception>
     public static BlsKeypair FromJsonArray(string json)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(json);
+        if (json.Length > MaxJsonKeyLength)
+            throw new FormatException($"BLS keypair JSON cannot exceed {MaxJsonKeyLength} characters.");
+
         try
         {
             return FromJsonValues(JsonSerializer.Deserialize(json, WalletJsonContext.Default.Int32Array));
@@ -191,11 +196,13 @@ public sealed class BlsKeypair : IDisposable
     /// <param name="utf8Json">UTF-8 JSON containing exactly 128 integers in the range 0 through 255.</param>
     /// <returns>The validated keypair.</returns>
     /// <exception cref="ArgumentException">The input is empty.</exception>
-    /// <exception cref="FormatException">The JSON or keypair representation is invalid.</exception>
+    /// <exception cref="FormatException">The JSON is too large, or the JSON or keypair representation is invalid.</exception>
     public static BlsKeypair FromJsonArray(ReadOnlySpan<byte> utf8Json)
     {
         if (utf8Json.IsEmpty)
             throw new ArgumentException("BLS keypair JSON cannot be empty.", nameof(utf8Json));
+        if (utf8Json.Length > MaxJsonKeyLength)
+            throw new FormatException($"BLS keypair JSON cannot exceed {MaxJsonKeyLength} UTF-8 bytes.");
 
         try
         {

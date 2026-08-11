@@ -1,6 +1,6 @@
 using FluentAssertions;
-using NUnit.Framework;
-using FsCheckProperty = FsCheck.NUnit.PropertyAttribute;
+using FsCheck.NUnit;
+using NUnitFramework = NUnit.Framework;
 
 namespace SolSharp.Programs.Tests;
 
@@ -20,10 +20,10 @@ public static class TransactionDeserializeTests
     private const string SignedV0Hex =
         "0172bf724b5847ec43050f991f3f87765831b9dd14b37b6d13470db2b0cc3f5f61041e2c1c90b1b0365c81c888f3984510f822f0bbdde022287615a17108d6a00e80010001028a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0000000000000000000000000000000000000000000000000000000000000000030303030303030303030303030303030303030303030303030303030303030301010200020c0200000040420f0000000000010505050505050505050505050505050505050505050505050505050505050505010000";
 
-    [TestFixture]
+    [NUnitFramework.TestFixture]
     public sealed class Deserialize
     {
-        [FsCheckProperty(
+        [Property(
             MaxTest = 2_000,
             EndSize = MessageV1.MaxTransactionSize,
             Replay = "1597463007,12648431",
@@ -31,7 +31,7 @@ public static class TransactionDeserializeTests
         public bool ArbitraryBoundedPayload_EitherRejectsOrRoundTrips(byte[] data)
             => RejectsOrRoundTrips(data);
 
-        [FsCheckProperty(
+        [Property(
             MaxTest = 1_000,
             Replay = "3735928559,195948557",
             QuietOnSuccess = true)]
@@ -46,7 +46,7 @@ public static class TransactionDeserializeTests
             return RejectsOrRoundTrips(data);
         }
 
-        [FsCheckProperty(
+        [Property(
             MaxTest = 500,
             Replay = "4277009102,2882400001",
             QuietOnSuccess = true)]
@@ -68,7 +68,7 @@ public static class TransactionDeserializeTests
             }
         }
 
-        [Test]
+        [NUnitFramework.Test]
         public void LegacyTransfer_RoundTripsAndParsesFields()
         {
             // Arrange
@@ -85,7 +85,7 @@ public static class TransactionDeserializeTests
             transaction.Message.AccountKeys.Should().HaveCount(3);
         }
 
-        [Test]
+        [NUnitFramework.Test]
         public void V0Transfer_RoundTripsAndIsVersioned()
         {
             // Arrange
@@ -104,8 +104,8 @@ public static class TransactionDeserializeTests
             message.AddressTableLookups[0].WritableIndexes.Should().Equal(0);
         }
 
-        [TestCase(SignedTransferHex)]
-        [TestCase(SignedV0Hex)]
+        [NUnitFramework.TestCase(SignedTransferHex)]
+        [NUnitFramework.TestCase(SignedV0Hex)]
         public void MessageMutation_DoesNotChangeReserializedBytes(string hex)
         {
             // Arrange
@@ -119,7 +119,7 @@ public static class TransactionDeserializeTests
             transaction.Serialize().Should().Equal(bytes);
         }
 
-        [Test]
+        [NUnitFramework.Test]
         public void TruncatedData_ThrowsFormatException()
         {
             // Arrange: cut inside the first signature.
@@ -132,7 +132,7 @@ public static class TransactionDeserializeTests
             act.Should().Throw<FormatException>();
         }
 
-        [Test]
+        [NUnitFramework.Test]
         public void HighBitDiscriminator_IsRejectedBeforeCompactSignatureDecoding()
         {
             // Arrange: SIMD-0385 reserves a top-bit discriminator for message-first transactions.
@@ -146,7 +146,7 @@ public static class TransactionDeserializeTests
             act.Should().Throw<FormatException>().WithMessage("*Invalid transaction discriminator 0xFF*");
         }
 
-        [Test]
+        [NUnitFramework.Test]
         public void FewerSignatureSlotsThanRequiredSigners_ThrowsFormatException()
         {
             // Arrange: rewrite the signature count to 0 and drop the 64 signature bytes, leaving a message
@@ -163,7 +163,7 @@ public static class TransactionDeserializeTests
             act.Should().Throw<FormatException>().WithMessage("*0 signature slot(s)*requires 1*");
         }
 
-        [Test]
+        [NUnitFramework.Test]
         public void MoreSignatureSlotsThanRequiredSigners_ThrowsFormatException()
         {
             // Arrange: rewrite the signature count to 2 and insert a second zeroed signature.
@@ -180,8 +180,8 @@ public static class TransactionDeserializeTests
             act.Should().Throw<FormatException>().WithMessage("*2 signature slot(s)*requires 1*");
         }
 
-        [TestCase(SignedTransferHex)]
-        [TestCase(SignedV0Hex)]
+        [NUnitFramework.TestCase(SignedTransferHex)]
+        [NUnitFramework.TestCase(SignedV0Hex)]
         public void TrySerialize_MatchesSerializeAndReportsExactLength(string hex)
         {
             // Arrange
@@ -198,7 +198,7 @@ public static class TransactionDeserializeTests
             buffer.Should().Equal(bytes);
         }
 
-        [Test]
+        [NUnitFramework.Test]
         public void TrySerialize_TooSmallBuffer_ReturnsFalse()
         {
             // Arrange
@@ -212,8 +212,8 @@ public static class TransactionDeserializeTests
             written.Should().Be(0);
         }
 
-        [TestCase(SignedTransferHex)]
-        [TestCase(SignedV0Hex)]
+        [NUnitFramework.TestCase(SignedTransferHex)]
+        [NUnitFramework.TestCase(SignedV0Hex)]
         public void TrailingByte_ThrowsFormatException(string hex)
         {
             // Arrange

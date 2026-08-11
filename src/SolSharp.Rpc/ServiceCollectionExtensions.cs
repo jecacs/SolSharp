@@ -57,6 +57,15 @@ public static class ServiceCollectionExtensions
         });
 
         var resilience = builder.AddStandardResilienceHandler();
+
+        // Configured before the caller's callback so an explicit configuration still wins.
+        resilience.Configure(static options =>
+        {
+            options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(30);
+            options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(100);
+            options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(60);
+        });
+
         if (configureResilience is not null)
             resilience.Configure(configureResilience);
 

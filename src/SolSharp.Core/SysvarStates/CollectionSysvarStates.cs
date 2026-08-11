@@ -36,17 +36,23 @@ public sealed record SlotHashesSysvarState
     public IReadOnlyList<SlotHashEntry> Entries { get; }
 
     /// <summary>Decodes a bounded bincode slot-hashes account.</summary>
-    /// <param name="data">The complete account data.</param>
+    /// <param name="data">The complete account data, including any trailing zero padding.</param>
     /// <returns>The decoded slot hashes.</returns>
-    /// <exception cref="ArgumentException">The data is malformed, truncated, over the runtime limit, or has trailing bytes.</exception>
+    /// <exception cref="ArgumentException">
+    /// The data is malformed, truncated, longer than <see cref="MaximumDataLength"/>, over the runtime
+    /// entry limit, or followed by trailing bytes that are not zero padding.
+    /// </exception>
     public static SlotHashesSysvarState Parse(ReadOnlySpan<byte> data)
     {
+        if (data.Length > MaximumDataLength)
+            throw new ArgumentException($"Slot hashes account data exceeds {MaximumDataLength} bytes.", nameof(data));
+
         var reader = new SysvarBincodeReader(data);
         var count = reader.ReadBoundedCount(MaximumEntries, "Slot hashes");
         var entries = new SlotHashEntry[count];
         for (var i = 0; i < entries.Length; i++)
             entries[i] = new(reader.ReadUInt64(), reader.ReadHash());
-        reader.EnsureEnd();
+        reader.EnsureEndOrZeroPadding();
         return new(entries);
     }
 }
@@ -69,11 +75,17 @@ public sealed record StakeHistorySysvarState
     public IReadOnlyList<StakeHistoryEpoch> Entries { get; }
 
     /// <summary>Decodes a bounded bincode stake-history account.</summary>
-    /// <param name="data">The complete account data.</param>
+    /// <param name="data">The complete account data, including any trailing zero padding.</param>
     /// <returns>The decoded stake history.</returns>
-    /// <exception cref="ArgumentException">The data is malformed, truncated, over the runtime limit, or has trailing bytes.</exception>
+    /// <exception cref="ArgumentException">
+    /// The data is malformed, truncated, longer than <see cref="MaximumDataLength"/>, over the runtime
+    /// entry limit, or followed by trailing bytes that are not zero padding.
+    /// </exception>
     public static StakeHistorySysvarState Parse(ReadOnlySpan<byte> data)
     {
+        if (data.Length > MaximumDataLength)
+            throw new ArgumentException($"Stake history account data exceeds {MaximumDataLength} bytes.", nameof(data));
+
         var reader = new SysvarBincodeReader(data);
         var count = reader.ReadBoundedCount(MaximumEntries, "Stake history");
         var entries = new StakeHistoryEpoch[count];
@@ -84,7 +96,7 @@ public sealed record StakeHistorySysvarState
             entries[i] = new(epoch, entry);
         }
 
-        reader.EnsureEnd();
+        reader.EnsureEndOrZeroPadding();
         return new(entries);
     }
 }

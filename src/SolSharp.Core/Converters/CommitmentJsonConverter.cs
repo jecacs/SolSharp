@@ -19,13 +19,14 @@ public sealed class CommitmentJsonConverter : JsonConverter<Commitment>
         if (reader.TokenType != JsonTokenType.String)
             throw new JsonException($"Expected a commitment string, got {reader.TokenType}.");
 
-        return reader.GetString() switch
-        {
-            "confirmed" => Commitment.Confirmed,
-            "finalized" => Commitment.Finalized,
-            "processed" => Commitment.Processed,
-            var other => throw new JsonException($"Unknown commitment value: '{other}'.")
-        };
+        if (reader.ValueTextEquals("confirmed"u8))
+            return Commitment.Confirmed;
+        if (reader.ValueTextEquals("finalized"u8))
+            return Commitment.Finalized;
+        if (reader.ValueTextEquals("processed"u8))
+            return Commitment.Processed;
+
+        throw new JsonException("Unknown commitment value.");
     }
 
     /// <inheritdoc/>

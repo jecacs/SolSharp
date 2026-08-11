@@ -16,11 +16,18 @@ public sealed class HashJsonConverter : JsonConverter<Hash>
         if (reader.TokenType != JsonTokenType.String)
             throw new JsonException($"Expected a hash string, got {reader.TokenType}.");
 
+        // Reject oversized JSON tokens before GetString creates a potentially huge UTF-16 allocation.
+        // A valid base58 character is one ASCII byte, or at most six bytes when written as \uXXXX.
+        var rawLength = reader.HasValueSequence ? reader.ValueSequence.Length : reader.ValueSpan.Length;
+        var maximumRawLength = reader.ValueIsEscaped ? Hash.MaxBase58Length * 6L : Hash.MaxBase58Length;
+        if (rawLength > maximumRawLength)
+            throw new JsonException("Invalid hash base58 value.");
+
         var text = reader.GetString();
         if (Hash.TryParse(text, out var hash))
             return hash;
 
-        throw new JsonException($"Invalid hash: '{text}'.");
+        throw new JsonException("Invalid hash base58 value.");
     }
 
     /// <inheritdoc/>

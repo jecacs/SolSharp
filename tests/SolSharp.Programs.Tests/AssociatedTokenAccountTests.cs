@@ -116,4 +116,25 @@ public static class AssociatedTokenAccountTests
                 (TokenProgram.ProgramId, false, false));
         }
     }
+
+    [TestFixture]
+    public sealed class DecodeInstructionData
+    {
+        [Test]
+        public void EmptyData_DecodesAsCreate() =>
+            // The original ATA encoding carried no instruction data; the pinned program still maps an
+            // empty input to Create, so historical instructions must classify the same way.
+            AssociatedTokenAccount.DecodeInstructionData([]).Should().Be("Create");
+
+        [TestCase(new byte[] { 0 }, "Create")]
+        [TestCase(new byte[] { 1 }, "CreateIdempotent")]
+        [TestCase(new byte[] { 2 }, "RecoverNested")]
+        public void TaggedData_DecodesToItsVariant(byte[] data, string expected) =>
+            AssociatedTokenAccount.DecodeInstructionData(data).Should().Be(expected);
+
+        [TestCase(new byte[] { 9 })]
+        [TestCase(new byte[] { 0, 0 })]
+        public void UnknownData_DecodesToNull(byte[] data) =>
+            AssociatedTokenAccount.DecodeInstructionData(data).Should().BeNull();
+    }
 }

@@ -1,4 +1,4 @@
-using System.Numerics;
+using Org.BouncyCastle.Math.EC.Rfc7748;
 
 namespace SolSharp.Wallet;
 
@@ -9,35 +9,49 @@ namespace SolSharp.Wallet;
 /// </summary>
 internal static class Ed25519Curve
 {
-    private static readonly BigInteger P = BigInteger.Pow(2, 255) - 19;
-    private static readonly BigInteger YMask = BigInteger.Pow(2, 255) - 1;
-
-    private static readonly BigInteger D = BigInteger
-        .Parse("37095705934669439343138083508754565189542113879843219016388785533085940283555");
-
-    private static readonly BigInteger SqrtExponent = (P + 3) / 8;
+    // d = -121665/121666 mod p, little-endian, in the packed field representation.
+    private static readonly int[] D = DecodeD();
 
     public static bool IsOnCurve(ReadOnlySpan<byte> encoded)
     {
-        // y is the low 255 bits reduced mod p; the top bit is the sign of x and is ignored here.
-        var y = (new BigInteger(encoded, isUnsigned: true, isBigEndian: false) & YMask) % P;
+        // The top bit is the sign of x and is not part of y. Everything below it is taken as y; values
+        // at or above p are reduced by the field arithmetic itself, which is what curve25519-dalek does
+        // and why a canonical-encoding check is deliberately absent here.
+        Span<byte> y = stackalloc byte[32];
+        encoded[..32].CopyTo(y);
+        y[31] &= 0x7F;
 
-        var y2 = (y * y) % P;
-        var u = Mod(y2 - 1);
-        var v = Mod((D * y2) + 1);
-        if (v.IsZero)
-            return false;
+        var fieldY = X25519Field.Create();
+        X25519Field.Decode255(y, fieldY);
 
-        // x^2 = u / v must be a square. For p = 5 (mod 8) the candidate's square is +/- (u/v),
-        // so v * x^2 lands on +/- u exactly when u/v is a square.
-        var x = BigInteger.ModPow((u * BigInteger.ModPow(v, P - 2, P)) % P, SqrtExponent, P);
-        var check = (((x * x) % P) * v) % P;
-        return check == u || check == Mod(-u);
+        var y2 = X25519Field.Create();
+        X25519Field.Sqr(fieldY, y2);
+
+        var u = X25519Field.Create();
+        X25519Field.Copy(y2, 0, u, 0);
+        X25519Field.SubOne(u);
+
+        var v = X25519Field.Create();
+        X25519Field.Mul(y2, D, v);
+        X25519Field.AddOne(v);
+
+        // SqrtRatioVar reports whether u/v is a square, which is exactly the on-curve condition, and
+        // handles v = 0 by reporting failure. It replaces a modular inverse plus a square-root
+        // exponentiation, each of which cost a full 255-bit BigInteger.ModPow.
+        var x = X25519Field.Create();
+        return X25519Field.SqrtRatioVar(u, v, x);
     }
 
-    private static BigInteger Mod(BigInteger value)
+    private static int[] DecodeD()
     {
-        var result = value % P;
-        return result.Sign < 0 ? result + P : result;
+        ReadOnlySpan<byte> littleEndian =
+        [
+            0xA3, 0x78, 0x59, 0x13, 0xCA, 0x4D, 0xEB, 0x75, 0xAB, 0xD8, 0x41, 0x41, 0x4D, 0x0A, 0x70, 0x00,
+            0x98, 0xE8, 0x79, 0x77, 0x79, 0x40, 0xC7, 0x8C, 0x73, 0xFE, 0x6F, 0x2B, 0xEE, 0x6C, 0x03, 0x52
+        ];
+
+        var d = X25519Field.Create();
+        X25519Field.Decode255(littleEndian, d);
+        return d;
     }
 }

@@ -176,6 +176,11 @@ dotnet_diagnostic.SA1519.severity = none
 dotnet_diagnostic.SA1520.severity = none
 dotnet_diagnostic.SA1633.severity = none
 
+# RS0030 build-gates the banned-API list in BannedSymbols.txt. It is an error rather than a warning so the
+# rules it carries (currently the permanent ConfigureAwait ban) cannot be reintroduced by a local build that
+# is not run with -warnaserror.
+dotnet_diagnostic.RS0030.severity = error
+
 # CS1591 build-gates the presence of XML documentation on production public API.
 # Completeness is a review policy; StyleCop's fixed wording/internal-element rules
 # conflict with the repository's concise contract style and are disabled explicitly.
