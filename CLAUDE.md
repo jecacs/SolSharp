@@ -16,14 +16,51 @@ and devnet write paths against real nodes.
 Run from the repo root (where `SolSharp.sln` lives):
 
 - `dotnet build` — Roslyn and StyleCop code style is enforced on build (`EnforceCodeStyleInBuild`), so actionable style violations surface as warnings. Repository-specific StyleCop severities live in `.editorconfig`; the member-order precedence is explicit in `stylecop.json`.
-- `dotnet test` — NUnit suite.
+- `dotnet test` — NUnit suite. Add `--filter "TestCategory!=Integration"` for a fast offline run.
 - `dotnet format` — applies supported style fixes. It cannot reorder members (SA1201/SA1202/SA1203/SA1204/SA1214) or fix naming (IDE1006); move or rename those by hand.
+
+**Before pushing, run what CI runs, verbatim.** A weaker local approximation passes while CI fails, which
+has happened for both of these. `.githooks/pre-push` runs the whole list and is the recommended way to do
+it — enable it once per clone with `git config core.hooksPath .githooks` (Rider runs Git hooks on push).
+Bypass with `git push --no-verify`, `SOLSHARP_SKIP_PREPUSH=1`, or `SOLSHARP_PREPUSH_SKIP_TESTS=1`.
+
+```
+dotnet build --no-restore --configuration Release -warnaserror
+dotnet format --no-restore --verify-no-changes --severity info
+dotnet build benchmarks/SolSharp.Benchmarks/SolSharp.Benchmarks.csproj --no-restore --configuration Release -warnaserror
+dotnet format benchmarks/SolSharp.Benchmarks/SolSharp.Benchmarks.csproj --no-restore --verify-no-changes --severity warn
+```
+
+Three traps worth knowing:
+
+- **`--severity info` is the gate for the solution**, not the default `warn`. Info-level analyzers such as
+  CA1859 (`Change type of parameter … for improved performance`) fail CI and are invisible to a bare
+  `dotnet format --verify-no-changes`.
+- **Benchmarks are checked at `--severity warn`, deliberately** — their methods stay instance members and
+  cold-start cases build fresh options, so info-level advice does not apply there. They are also outside
+  the solution, so they need their own build/format/restore invocations.
+- **A local incremental build hides warnings.** MSBuild skips analyzers for projects it considers
+  up-to-date, so pre-existing violations in untouched files never reappear. CI always builds a clean
+  checkout; locally add `--no-incremental` when you want the same picture.
 
 ## Hard rules
 
 - **Never use `ConfigureAwait`.** Do not write `.ConfigureAwait(false)` or `.ConfigureAwait(true)` anywhere — not in library code, not in tests. This is a deliberate, permanent project choice; do not suggest adding it.
 - **English only** — code, comments, identifiers, test names, docs.
 - **Comments earn their place.** Explain *why* — non-obvious rationale, wire-format quirks, gotchas — never restate what the code already says. No filler, decorative, or obvious comments. Public API carries full XML docs (summary, every `<param>`, `<returns>`, and thrown `<exception>`); inline noise does not.
+  **Default to none.** An inline comment is the exception, not the accompaniment: write it only when a
+  competent reader would otherwise get it *wrong*, not merely find it *slow*. Concretely, an inline comment
+  earns its place only if it does one of these:
+  a magic constant (`d = -121665/121666 mod p`), a rule imposed by an external wire format or upstream
+  implementation, a deliberate deviation someone would otherwise "fix", or a hazard that is invisible at
+  the call site. Everything else is noise.
+  Three habits to avoid, in rough order of how often they show up:
+  **narrating the next line** (`// A carry out of the top limb means the value is too large` above
+  `if (carry != 0)`); **putting the commit message in the code** — the history of *why this changed*,
+  benchmark numbers and before/after comparisons belong in `CHANGELOG.md` and the commit, while the code
+  says only what is true now; and **restating the XML doc** a few lines below it.
+  One line beats four. If the explanation needs a paragraph, the code usually needs a better name or a
+  smaller method instead.
 - **Default to `internal`; `public` is a deliberate contract.** This is a library, so the public surface is an API others depend on — keep it minimal. A type is `public` only when a consumer constructs, receives, or catches it (i.e. it appears in a public signature). Everything else — request/response plumbing, converters, sinks, internal helpers — is `internal`, and tests reach it through `InternalsVisibleTo`.
 - **Attributes on their own line** — never inline with the member, e.g. `[JsonPropertyName("id")]` goes above the property, not beside it. `dotnet format` does not enforce this (only Rider does), so write it that way by hand.
 - **Member order is build-gated.** Group fields, constructors, finalizers, delegates, events, enums, interfaces, properties, indexers, conversions/operators, methods, and nested types in that order. Within each kind use `public`, `internal`, `protected internal`, `protected`, `private protected`, then `private`; therefore a private method never splits public methods. The remaining precedence is `const`, `static`, then `readonly`, as declared in `stylecop.json` and enforced by SA1201/SA1202/SA1203/SA1204/SA1214.

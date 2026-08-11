@@ -592,9 +592,9 @@ public sealed class MessageV0 : ITransactionMessage
         return x.SequenceCompareTo(y);
     }
 
-    private static bool TryGetNonceAccount(IReadOnlyList<Instruction> instructions, out PublicKey nonceAccount)
+    private static bool TryGetNonceAccount(Instruction[] instructions, out PublicKey nonceAccount)
     {
-        if (instructions.Count > 0)
+        if (instructions.Length > 0)
         {
             var first = instructions[0];
             if (first.ProgramId == SystemProgram.ProgramId

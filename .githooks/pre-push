@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# Runs the same gates CI runs, before anything leaves the machine.
+#
+# Enable once per clone:   git config core.hooksPath .githooks
+# Skip for one push:       git push --no-verify      (or SOLSHARP_SKIP_PREPUSH=1 git push)
+# Skip only the tests:     SOLSHARP_PREPUSH_SKIP_TESTS=1 git push
+#
+# The checks are ordered cheapest-first and mirror .github/workflows/ci.yml verbatim. Approximating them
+# with weaker local flags is what lets a green local run fail CI, so the flags here are deliberate:
+#   --severity info   is the solution gate (CA1859 and friends are info-level and do fail CI)
+#   --severity warn   is the benchmarks gate, deliberately lower (see the note in ci.yml)
+#   --locked-mode     catches a packages.lock.json that drifted from the projects
+set -euo pipefail
+
+if [[ -n "${SOLSHARP_SKIP_PREPUSH:-}" ]]; then
+  echo "pre-push: skipped via SOLSHARP_SKIP_PREPUSH."
+  exit 0
+fi
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "${repo_root}"
+
+# A push that only deletes refs has nothing to verify.
+only_deletes=1
+while read -r _local_ref local_sha _remote_ref _remote_sha; do
+  [[ -z "${local_sha:-}" ]] && continue
+  [[ "${local_sha}" =~ ^0+$ ]] || only_deletes=0
+done
+if [[ "${only_deletes}" -eq 1 ]]; then
+  echo "pre-push: deletion-only push, nothing to verify."
+  exit 0
+fi
+
+if ! command -v dotnet >/dev/null 2>&1; then
+  echo "pre-push: dotnet not found on PATH." >&2
+  exit 1
+fi
+
+benchmarks="benchmarks/SolSharp.Benchmarks/SolSharp.Benchmarks.csproj"
+step=0
+run() {
+  step=$((step + 1))
+  local label="$1"
+  shift
+  printf 'pre-push [%d] %s ... ' "${step}" "${label}"
+  local output
+  if output="$("$@" 2>&1)"; then
+    printf 'ok\n'
+  else
+    printf 'FAILED\n\n'
+    printf '%s\n' "${output}" | tail -40
+    printf '\npre-push: "%s" failed. Fix it, or push with --no-verify if you know why.\n' "${label}" >&2
+    exit 1
+  fi
+}
+
+# global.json pins one exact SDK because the AOT packages it injects are recorded in packages.lock.json.
+pinned_sdk="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' global.json | head -1)"
+# `dotnet --version` itself exits non-zero when the pinned SDK is missing, so tolerate that and report it
+# as the same problem rather than letting `set -e` kill the hook without an explanation.
+if ! selected_sdk="$(dotnet --version 2>/dev/null)"; then
+  selected_sdk="(none installed)"
+fi
+if [[ "${selected_sdk}" != "${pinned_sdk}" ]]; then
+  echo "pre-push: global.json pins SDK ${pinned_sdk}, but dotnet resolved ${selected_sdk}." >&2
+  echo "pre-push: install that exact SDK. The pin is required because IsAotCompatible/PublishAot record" >&2
+  echo "pre-push: SDK-versioned packages in packages.lock.json, so any other SDK fails the locked restore." >&2
+  echo "pre-push:   curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --version ${pinned_sdk}" >&2
+  exit 1
+fi
+
+# Restore first: a lock file that drifted from the projects is the cheapest failure to surface, and the
+# solution restore does not cover benchmarks/, which lives outside SolSharp.sln.
+run "restore (locked)"            dotnet restore --locked-mode -p:NuGetAuditMode=all -warnaserror
+run "restore benchmarks (locked)" dotnet restore "${benchmarks}" --locked-mode -p:NuGetAuditMode=all -warnaserror
+run "build"                       dotnet build --no-restore --configuration Release -warnaserror
+run "build benchmarks"            dotnet build "${benchmarks}" --no-restore --configuration Release -warnaserror
+run "format"                      dotnet format --no-restore --verify-no-changes --severity info
+run "format benchmarks"           dotnet format "${benchmarks}" --no-restore --verify-no-changes --severity warn
+
+if [[ -n "${SOLSHARP_PREPUSH_SKIP_TESTS:-}" ]]; then
+  echo "pre-push: tests skipped via SOLSHARP_PREPUSH_SKIP_TESTS."
+else
+  run "tests (offline)" dotnet test --no-build --configuration Release --filter "TestCategory!=Integration"
+fi
+
+echo "pre-push: all checks passed."

@@ -108,8 +108,7 @@ public static class Base58
     /// </summary>
     internal static bool TryDecode32(ReadOnlySpan<char> text, Span<byte> destination)
     {
-        // 44 is the longest base58 string a 32-byte value can produce, so anything longer is rejected
-        // before the quadratic accumulation starts.
+        // 44 is the longest base58 string a 32-byte value can produce.
         if (text.Length is 0 or > 44)
             return false;
 
@@ -138,7 +137,6 @@ public static class Base58
                 carry = current >> 32;
             }
 
-            // A carry out of the top limb means the value needs more than 32 bytes.
             if (carry != 0)
                 return false;
         }

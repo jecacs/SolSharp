@@ -16,7 +16,26 @@ to the project's [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Development setup
 
-Install the .NET SDK selected by `global.json`, then run these commands from the repository root:
+Install the **exact** .NET SDK pinned in `global.json`. The pin is not cosmetic: `IsAotCompatible` and
+`PublishAot` make the SDK record its own toolchain packages in every `packages.lock.json`, so a different
+SDK fails the locked restore below with `NU1004`.
+
+```bash
+curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --version "$(jq -r .sdk.version global.json)"
+```
+
+Then enable the repository's pre-push hook once per clone. It runs exactly the checks CI runs, so a failing
+push is caught locally in about a minute instead of on the runner:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Rider and other JetBrains IDEs execute Git hooks on push by default (the push dialog has a "Run Git hooks"
+checkbox). To bypass the hook for one push use `git push --no-verify`, or `SOLSHARP_SKIP_PREPUSH=1 git push`;
+`SOLSHARP_PREPUSH_SKIP_TESTS=1` keeps every check except the test run.
+
+Run these commands from the repository root — the hook runs the same list:
 
 ```bash
 dotnet restore --locked-mode -p:NuGetAuditMode=all -warnaserror
