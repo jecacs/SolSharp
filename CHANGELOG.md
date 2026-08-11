@@ -7,6 +7,8 @@ version (on the earlier 0.x releases, minor versions could carry them).
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-08-11
+
 ### Added
 
 - `Mints.Token2022NativeMint`, the Token-2022 native mint (`9pan9bMn5HatX4EJdBwg9VgCa7Uz5HL8N1m5D3NdXejP`),
@@ -46,6 +48,11 @@ version (on the earlier 0.x releases, minor versions could carry them).
 - The AOT smoke restore passed `--force-evaluate` together with `--locked-mode`. `--force-evaluate` is the
   documented way to re-evaluate and rewrite a lock file, so it cancelled locked mode and the rendered
   package lock was regenerated instead of enforced.
+- Locked restores broke whenever .NET shipped an SDK patch. `IsAotCompatible` and `PublishAot` inject
+  `Microsoft.NET.ILLink.Tasks` and `Microsoft.DotNet.ILCompiler` at versions taken from the SDK's runtime,
+  and both are recorded in `packages.lock.json`, so a floating SDK produced NU1004 with no source change.
+  `global.json` now pins one exact SDK (10.0.303) with `rollForward: disable`, every workflow installs it
+  through `global-json-file`, and each job asserts the resolved SDK equals that pin.
 - `Token2022Program.CreateNativeMint` named the classic SPL Token wSOL mint as account 1 instead of the
   Token-2022 native mint, so the instruction was always rejected with `InvalidMint`. Verified against the
   address derived from the pinned interface's seeds.
@@ -625,7 +632,8 @@ bundles four layered assemblies.
   transaction building, signing and serialization, `Transaction.Deserialize`, and instruction
   decompilation — every wire format validated byte-for-byte against the Rust `solana-sdk`.
 
-[Unreleased]: https://github.com/jecacs/SolSharp/compare/v3.0.0...HEAD
+[Unreleased]: https://github.com/jecacs/SolSharp/compare/v3.1.0...HEAD
+[3.1.0]: https://github.com/jecacs/SolSharp/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/jecacs/SolSharp/compare/v2.0.0...v3.0.0
 [2.0.0]: https://github.com/jecacs/SolSharp/compare/v1.3.0...v2.0.0
 [1.3.0]: https://github.com/jecacs/SolSharp/releases/tag/v1.3.0

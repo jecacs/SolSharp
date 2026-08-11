@@ -4,7 +4,7 @@ A modern, contract-driven .NET SDK for Solana: keys and signing, program instruc
 transaction wire formats, RPC, and WebSocket streaming. It is optimized for low latency,
 bounded hostile-input handling, focused dependencies with a dependency-light Core, and Native AOT.
 
-Status: 3.0.0. SolSharp is independently implemented
+Status: 3.1.0. SolSharp is independently implemented
 against immutable Anza Solana SDK, Agave, and SPL source revisions; exact pins, client-side
 coverage, verification criteria, and deliberate node/runtime exclusions live in
 `docs/RUST_PARITY.md`. All JSON used by the library is source-generated and all four functional
@@ -28,11 +28,19 @@ Run from the repo root (where `SolSharp.sln` lives):
 - **Attributes on their own line** — never inline with the member, e.g. `[JsonPropertyName("id")]` goes above the property, not beside it. `dotnet format` does not enforce this (only Rider does), so write it that way by hand.
 - **Member order is build-gated.** Group fields, constructors, finalizers, delegates, events, enums, interfaces, properties, indexers, conversions/operators, methods, and nested types in that order. Within each kind use `public`, `internal`, `protected internal`, `protected`, `private protected`, then `private`; therefore a private method never splits public methods. The remaining precedence is `const`, `static`, then `readonly`, as declared in `stylecop.json` and enforced by SA1201/SA1202/SA1203/SA1204/SA1214.
 - **Target framework is `net10.0`.** Do not use APIs that require a later target framework.
-  `global.json` starts at SDK 10.0.100 with `rollForward: latestFeature`, so development stays on the
-  latest installed stable .NET 10 feature band. Hosted runners also contain other SDKs; after installing
-  10.x, every CI/release job that invokes .NET asserts the resolver's actual `dotnet --version` is 10.x.
-  Do not remove that check or CI could silently
-  stop proving the minimum if SDK selection or runner contents change.
+  **`global.json` pins one exact SDK with `rollForward: disable`, and every CI/release job installs it via
+  `global-json-file: global.json`.** The pin is not stylistic: `IsAotCompatible` injects
+  `Microsoft.NET.ILLink.Tasks` and `PublishAot` injects `Microsoft.DotNet.ILCompiler`, both versioned by
+  the SDK's *runtime* (10.0.303 carries runtime 10.0.11), and both are recorded in every
+  `packages.lock.json` as direct references. A floating SDK therefore breaks
+  `dotnet restore --locked-mode` with NU1004 the moment .NET ships a patch, with no source change at all.
+  Every job asserts `dotnet --version` equals the pinned value; do not weaken that back to a `10.*` prefix
+  test, or a mismatched SDK will surface as a confusing lock error instead of a clear one.
+  **Bumping the SDK is a deliberate, four-part change:** update `global.json`, regenerate the solution
+  locks (`dotnet restore --force-evaluate`), regenerate `benchmarks/` separately because it is outside the
+  solution, and hand-update the ILLink/ILCompiler entries in
+  `samples/SolSharp.AotSmoke/packages.packed.lock.template.json`. The same four steps apply to adding any
+  `PackageReference` in `Directory.Build.props`.
 - **Modern C# 14 only.** `LangVersion=latest` means the latest stable language supported by the pinned .NET 10 SDK line; preview syntax is not enabled. File-scoped namespaces, `var`, collection expressions `[]`, primary constructors, switch expressions, pattern matching, `is null` / `is not null`. The full rule set lives in `.editorconfig`, `stylecop.json`, and `Directory.Build.props` — follow the analyzers, don't fight them.
 - **A feature is not done until it is documented.** Every user-facing addition or change lands in the same commit with all four documentation layers: (1) XML docs on the public API (CS1591 enforces presence on production members; full `<param>`, `<returns>`, and `<exception>` content remains a review policy); (2) `docs/USAGE.md` — a runnable example in the matching section (or a new section + `Contents` entry), with every snippet checked against the real signatures and model properties, not written from memory; (3) `README.md` — the wire-method list, feature bullets, and Layout if the shape of the repo changed (`README.nuget.md` only if the pitch/quick-start changes — it carries no method lists by design); (4) `CHANGELOG.md` under the release being prepared. Release-only extras: bump `Version` in `Directory.Build.props`, refresh `PackageReleaseNotes` in `src/SolSharp/SolSharp.csproj` (nuget.org shows only the current version's notes), and update the `Status:` line here.
 
