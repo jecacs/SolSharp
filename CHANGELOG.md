@@ -39,9 +39,10 @@ version (on the earlier 0.x releases, minor versions could carry them).
   and serializes into them, so a partly-filled ring is followed by zero padding; both decoders now accept
   that padding, still reject non-zero trailing bytes, and bound the input to the canonical account length.
   This affected fresh local validators and any cluster younger than 512 epochs, not mature clusters.
-- `PublicKey`, `Hash`, and `Signature` base58 parsing now bound the input length before decoding. Base58
-  decoding is quadratic, so a hostile string previously cost work proportional to its size (a 200,000-character
-  input took roughly 24 seconds to reject; it is now rejected immediately).
+- Fixed-width base58 parsing now bounds public keys, hashes, signatures, keypairs, and legacy/v0 recent
+  blockhashes before decoding. Base58 decoding is quadratic, so a hostile 200,000-character string previously
+  took roughly 24 seconds to reject; it is now rejected immediately. Public-key and hash JSON converters reject
+  oversized raw tokens before materializing them, and validation exceptions no longer echo untrusted input.
 - `AssociatedTokenAccount.DecodeInstructionData` returned `null` for empty instruction data. The program
   decodes an empty input as `Create`, which is the original ATA encoding still present in historical
   transactions.

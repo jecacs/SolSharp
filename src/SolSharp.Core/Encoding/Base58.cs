@@ -42,7 +42,7 @@ public static class Base58
         if (text.Length == 0)
             return [];
         if (text.ContainsAnyExcept(Alphabet))
-            throw new FormatException($"Not a valid base58 string: '{text}'.");
+            throw new FormatException($"Not a valid base58 string (input length {text.Length}).");
 
         return Codec.Decode(text);
     }

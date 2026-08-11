@@ -136,7 +136,9 @@ public readonly struct PublicKey : IEquatable<PublicKey>
     {
         var bytes = new byte[Length];
         if (base58 is null || !Base58.TryDecode32(base58, bytes))
-            throw new ArgumentException($"Not a valid base58 string: '{base58}'.", nameof(base58));
+            throw new ArgumentException(
+                $"Public key must be valid base58 encoding of exactly {Length} bytes (input length {base58?.Length ?? 0}).",
+                nameof(base58));
 
         return bytes;
     }

@@ -172,7 +172,9 @@ public readonly struct Signature : IEquatable<Signature>
     private static byte[] Decode(string base58)
     {
         if (!Base58.TryDecode(base58, MaxBase58Length, out var bytes))
-            throw new ArgumentException($"Not a valid base58 string: '{base58}'.", nameof(base58));
+            throw new ArgumentException(
+                $"Signature must be valid base58 encoding of exactly {Length} bytes (input length {base58?.Length ?? 0}).",
+                nameof(base58));
 
         return bytes;
     }

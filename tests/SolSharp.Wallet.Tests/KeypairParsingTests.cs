@@ -80,6 +80,22 @@ public static class KeypairParsingTests
             // Assert
             act.Should().Throw<FormatException>();
         }
+
+        [Test]
+        public void OverLongInput_IsRejectedBeforeBase58Decoding()
+        {
+            // Arrange
+            var input = new string('z', 200_000);
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+            // Act
+            Action act = () => _ = Keypair.FromBase58String(input);
+
+            // Assert
+            act.Should().Throw<FormatException>();
+            stopwatch.Stop();
+            stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(1));
+        }
     }
 
     [TestFixture]
@@ -199,24 +215,71 @@ public static class KeypairParsingTests
         }
 
         [Test]
+        public void InternalWhitespace_RemainsAccepted()
+        {
+            // Arrange: Convert.FromBase64String, used before fixed-buffer decoding was introduced,
+            // ignores ASCII whitespace anywhere in the input.
+            var base64 = SecretBase64.Insert(40, " \t\r\n");
+
+            // Act
+            using var keypair = Keypair.FromBase64String(base64);
+
+            // Assert
+            keypair.PublicKey.Should().Be(ExpectedPublicKey);
+        }
+
+        [Test]
         public void NotBase64_Throws()
         {
             // Act
             Action act = static () => _ = Keypair.FromBase64String("!!!!");
 
             // Assert
-            act.Should().Throw<FormatException>();
+            act.Should().Throw<FormatException>().WithMessage("Key is not a valid base64 string.");
         }
 
         [Test]
-        public void WrongDecodedLength_Throws()
+        public void WrongDecodedLength_ReportsTheDecodedLength()
         {
             // "AQID" is base64 for the three bytes [1, 2, 3].
             // Act
             Action act = static () => _ = Keypair.FromBase64String("AQID");
 
             // Assert
+            act.Should().Throw<FormatException>()
+                .WithMessage("Expected a 32- or 64-byte base64 key, got 3 bytes.");
+        }
+
+        // The decode buffer only fits a well-formed key, so a longer value has to be measured before
+        // decoding or it degrades into an indistinguishable "not valid base64" error.
+        [Test]
+        public void DecodedLengthAboveTheBuffer_StillReportsTheDecodedLength()
+        {
+            // Arrange
+            var base64 = Convert.ToBase64String(new byte[100]);
+
+            // Act
+            Action act = () => _ = Keypair.FromBase64String(base64);
+
+            // Assert
+            act.Should().Throw<FormatException>()
+                .WithMessage("Expected a 32- or 64-byte base64 key, got 100 bytes.");
+        }
+
+        [Test]
+        public void OverLongInput_IsRejectedBeforeBase64Decoding()
+        {
+            // Arrange
+            var input = new string('A', 200_000);
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+            // Act
+            Action act = () => _ = Keypair.FromBase64String(input);
+
+            // Assert
             act.Should().Throw<FormatException>();
+            stopwatch.Stop();
+            stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(1));
         }
     }
 
@@ -267,6 +330,20 @@ public static class KeypairParsingTests
         }
 
         [Test]
+        public void Base64WithInternalWhitespace_IsDetected()
+        {
+            // Arrange
+            var secretBase64 = Convert.ToBase64String(Convert.FromHexString(SeedHex + PublicKeyHex))
+                .Insert(40, " \t\r\n");
+
+            // Act
+            using var keypair = Keypair.Parse(secretBase64);
+
+            // Assert
+            keypair.PublicKey.Should().Be(ExpectedPublicKey);
+        }
+
+        [Test]
         public void JsonArray_IsDetected()
         {
             // Act
@@ -303,6 +380,48 @@ public static class KeypairParsingTests
 
             // Assert
             act.Should().Throw<FormatException>();
+        }
+
+        [Test]
+        public void OverLongEncodedInput_IsRejectedBeforeTryingEitherDecoder()
+        {
+            // Arrange: 'z' belongs to both alphabets, so both fixed-width decoders must reject it by length.
+            var input = new string('z', 200_000);
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+            // Act
+            Action act = () => _ = Keypair.Parse(input);
+
+            // Assert
+            act.Should().Throw<FormatException>();
+            stopwatch.Stop();
+            stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(1));
+        }
+
+        [Test]
+        public void OverLongInputWithLeadingWhitespace_IsNotCopiedByTrimming()
+        {
+            // Arrange
+            var input = " " + new string('z', 1_000_000);
+            _ = Keypair.TryParse(" " + new string('z', 1000), out _);
+
+            // Act
+            FormatException? exception = null;
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            try
+            {
+                _ = Keypair.Parse(input);
+            }
+            catch (FormatException error)
+            {
+                exception = error;
+            }
+
+            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+            // Assert
+            exception.Should().NotBeNull();
+            allocated.Should().BeLessThan(256_000, "trimming should remain a span for oversized input");
         }
     }
 

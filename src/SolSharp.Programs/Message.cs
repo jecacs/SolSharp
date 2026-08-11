@@ -250,8 +250,12 @@ public sealed class Message : ITransactionMessage
     /// <exception cref="FormatException"><see cref="RecentBlockhash"/> is not a 32-byte base58 value.</exception>
     public int Serialize(Span<byte> destination)
     {
-        if (!Base58.TryDecode(RecentBlockhash, out var blockhash) || blockhash.Length != PublicKey.Length)
-            throw new FormatException($"Recent blockhash must be a 32-byte base58 value, got '{RecentBlockhash}'.");
+        if (!Base58.TryDecode(RecentBlockhash, Hash.MaxBase58Length, out var blockhash)
+            || blockhash.Length != Hash.Length)
+        {
+            throw new FormatException(
+                $"Recent blockhash must be a {Hash.Length}-byte base58 value (input length {RecentBlockhash.Length}).");
+        }
 
         var required = GetSerializedLength();
         if (destination.Length < required)

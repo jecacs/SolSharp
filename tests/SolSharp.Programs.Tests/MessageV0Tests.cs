@@ -232,6 +232,28 @@ public static class MessageV0Tests
     }
 
     [TestFixture]
+    public sealed class Serialize
+    {
+        [Test]
+        public void OverLongBlockhash_IsNotDecodedOrCopiedIntoTheException()
+        {
+            // Arrange
+            var input = new string('z', 10_000);
+            var instruction = new Instruction { ProgramId = Pk(9), Accounts = [], Data = [] };
+            var message = MessageV0.Compile(Pk(1), input, [instruction], []);
+
+            // Act
+            Action act = () => message.Serialize();
+
+            // Assert
+            var exception = act.Should().Throw<FormatException>().Which;
+            exception.Message.Length.Should().BeLessThan(256);
+            exception.Message.Should().NotContain(input);
+            exception.Message.Should().Contain(input.Length.ToString());
+        }
+    }
+
+    [TestFixture]
     public sealed class Deserialize
     {
         // Wire offsets in SerializedV0(): the version prefix, the 3 header bytes, the key count, three

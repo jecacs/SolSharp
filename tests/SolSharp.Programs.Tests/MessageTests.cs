@@ -194,6 +194,24 @@ public static class MessageTests
             // Assert
             act.Should().Throw<FormatException>();
         }
+
+        [Test]
+        public void OverLongBlockhash_IsNotDecodedOrCopiedIntoTheException()
+        {
+            // Arrange
+            var input = new string('z', 10_000);
+            var instruction = new Instruction { ProgramId = Key(9), Accounts = [], Data = [] };
+            var message = Message.Compile(Key(1), input, [instruction]);
+
+            // Act
+            Action act = () => message.Serialize();
+
+            // Assert
+            var exception = act.Should().Throw<FormatException>().Which;
+            exception.Message.Length.Should().BeLessThan(256);
+            exception.Message.Should().NotContain(input);
+            exception.Message.Should().Contain(input.Length.ToString());
+        }
     }
 
     [TestFixture]
