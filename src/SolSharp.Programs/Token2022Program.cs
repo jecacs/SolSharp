@@ -20,7 +20,8 @@ public static partial class Token2022Program
     private const byte InitializePermanentDelegateDiscriminator = 35;
     private const int MaxMultisigSigners = 11;
 
-    private static readonly PublicKey NativeMint = PublicKey.Parse(Mints.WrappedSol);
+    // Token-2022 wraps its own native mint PDA, not the classic SPL Token wSOL mint.
+    private static readonly PublicKey NativeMint = PublicKey.Parse(Mints.Token2022NativeMint);
 
     /// <summary>Requests the token-account size for a mint plus additional Token-2022 extensions.</summary>
     /// <param name="mint">The mint whose existing configuration contributes required account extensions.</param>

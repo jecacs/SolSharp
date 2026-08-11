@@ -18,11 +18,18 @@ public sealed class PublicKeyJsonConverter : JsonConverter<PublicKey>
         if (reader.TokenType != JsonTokenType.String)
             throw new JsonException($"Expected a public-key string, got {reader.TokenType}.");
 
+        // Reject oversized JSON tokens before GetString creates a potentially huge UTF-16 allocation.
+        // A valid base58 character is one ASCII byte, or at most six bytes when written as \uXXXX.
+        var rawLength = reader.HasValueSequence ? reader.ValueSequence.Length : reader.ValueSpan.Length;
+        var maximumRawLength = reader.ValueIsEscaped ? PublicKey.MaxBase58Length * 6L : PublicKey.MaxBase58Length;
+        if (rawLength > maximumRawLength)
+            throw new JsonException("Invalid public key base58 value.");
+
         var text = reader.GetString();
         if (PublicKey.TryParse(text, out var key))
             return key;
 
-        throw new JsonException($"Invalid public key: '{text}'.");
+        throw new JsonException("Invalid public key base58 value.");
     }
 
     /// <inheritdoc/>

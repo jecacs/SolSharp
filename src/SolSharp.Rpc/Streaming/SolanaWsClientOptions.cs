@@ -49,6 +49,20 @@ public sealed record SolanaWsClientOptions
     public int SubscriptionBufferCapacity { get; init; } = 1024;
 
     /// <summary>
+    /// The maximum combined encoded size, in bytes, of unread notifications buffered by one
+    /// subscription. The full JSON-RPC WebSocket message size is charged for each notification.
+    /// The default is 64 MiB. Exceeding the limit faults and unsubscribes only that subscription.
+    /// </summary>
+    public long MaxBufferedNotificationBytesPerSubscription { get; init; } = 64L * 1024 * 1024;
+
+    /// <summary>
+    /// The maximum combined encoded size, in bytes, of unread notifications across all subscriptions
+    /// owned by this client. The default is 256 MiB. Exceeding the limit faults and unsubscribes the
+    /// subscription whose notification could not be buffered; other subscriptions remain active.
+    /// </summary>
+    public long MaxBufferedNotificationBytesTotal { get; init; } = 256L * 1024 * 1024;
+
+    /// <summary>
     /// The maximum time to receive the next complete WebSocket message before the connection is treated
     /// as dropped, letting auto-reconnect replace a silently half-open socket. Disabled by default
     /// (<see cref="Timeout.InfiniteTimeSpan"/>): only data messages surfaced to the receive loop reset the

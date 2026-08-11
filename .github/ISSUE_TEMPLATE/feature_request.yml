@@ -1,0 +1,34 @@
+name: Feature request
+description: Propose a Solana contract, API, or developer-experience improvement
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user need or compatibility gap should this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed API or behavior
+      description: Include the intended public surface and compatibility implications where possible.
+    validations:
+      required: true
+  - type: textarea
+    id: upstream
+    attributes:
+      label: Upstream contract
+      description: Link an immutable Anza, Agave, SPL, SIMD, RFC, BIP, or SLIP source revision when applicable.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to prepare a pull request following CONTRIBUTING.md.

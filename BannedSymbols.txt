@@ -1,0 +1,14 @@
+; Banned APIs, enforced as build errors by Microsoft.CodeAnalysis.BannedApiAnalyzers (RS0030).
+; Format: <DocumentationCommentId>; <message shown at the use site>
+
+; ConfigureAwait is a deliberate, permanent project choice (see CLAUDE.md "Hard rules"). The library never
+; captures a synchronization context it needs to resume on, and mixing the two styles is worse than either,
+; so every await stays plain. Banned everywhere, including tests.
+M:System.Threading.Tasks.Task.ConfigureAwait(System.Boolean); Do not use ConfigureAwait; this repository awaits without it by deliberate, permanent choice (CLAUDE.md).
+M:System.Threading.Tasks.Task.ConfigureAwait(System.Threading.Tasks.ConfigureAwaitOptions); Do not use ConfigureAwait; this repository awaits without it by deliberate, permanent choice (CLAUDE.md).
+M:System.Threading.Tasks.Task`1.ConfigureAwait(System.Boolean); Do not use ConfigureAwait; this repository awaits without it by deliberate, permanent choice (CLAUDE.md).
+M:System.Threading.Tasks.Task`1.ConfigureAwait(System.Threading.Tasks.ConfigureAwaitOptions); Do not use ConfigureAwait; this repository awaits without it by deliberate, permanent choice (CLAUDE.md).
+M:System.Threading.Tasks.ValueTask.ConfigureAwait(System.Boolean); Do not use ConfigureAwait; this repository awaits without it by deliberate, permanent choice (CLAUDE.md).
+M:System.Threading.Tasks.ValueTask`1.ConfigureAwait(System.Boolean); Do not use ConfigureAwait; this repository awaits without it by deliberate, permanent choice (CLAUDE.md).
+M:System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait``1(System.Collections.Generic.IAsyncEnumerable{``0},System.Boolean); Do not use ConfigureAwait; this repository awaits without it by deliberate, permanent choice (CLAUDE.md).
+M:System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(System.IAsyncDisposable,System.Boolean); Do not use ConfigureAwait; this repository awaits without it by deliberate, permanent choice (CLAUDE.md).

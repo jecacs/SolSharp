@@ -1,3 +1,6 @@
+using System.Buffers.Binary;
+using System.Numerics;
+using System.Security.Cryptography;
 using FluentAssertions;
 using NUnit.Framework;
 
@@ -25,9 +28,41 @@ public static class Ed25519CurveTests
     [TestFixture]
     public sealed class IsOnCurve
     {
+        private static readonly BigInteger ReferenceP = (BigInteger.One << 255) - 19;
+
+        private static readonly BigInteger ReferenceYMask = (BigInteger.One << 255) - 1;
+
+        private static readonly BigInteger ReferenceD = BigInteger.Parse(
+            "37095705934669439343138083508754565189542113879843219016388785533085940283555");
+
         [TestCaseSource(typeof(Ed25519CurveTests), nameof(Vectors))]
         public void MatchesSolanaSdk(string hex, bool expected)
             => Ed25519Curve.IsOnCurve(Convert.FromHexString(hex)).Should().Be(expected);
+
+        [Test]
+        public void MatchesIndependentOracleOnDeterministicCorpus()
+        {
+            // Arrange: SHA-256 makes a stable, uniformly distributed corpus without committing hundreds
+            // of opaque vectors. The BigInteger oracle uses the Legendre symbol rather than BouncyCastle's
+            // square-root implementation, so it detects changes in either the constant or the field path.
+            var domain = "SolSharp.Ed25519Curve.v1"u8;
+            Span<byte> input = stackalloc byte[domain.Length + sizeof(int)];
+            Span<byte> encoded = stackalloc byte[32];
+            domain.CopyTo(input);
+
+            // Act & Assert
+            for (var i = 0; i < 256; i++)
+            {
+                BinaryPrimitives.WriteInt32LittleEndian(input[domain.Length..], i);
+                SHA256.HashData(input, encoded);
+
+                Ed25519Curve.IsOnCurve(encoded).Should().Be(
+                    ReferenceIsOnCurve(encoded),
+                    "sample {0} ({1}) must match the independent field oracle",
+                    i,
+                    Convert.ToHexString(encoded));
+            }
+        }
 
         [Test]
         public void IgnoresTheSignBit()
@@ -42,6 +77,64 @@ public static class Ed25519CurveTests
 
             key[31] |= 0x80;
             Ed25519Curve.IsOnCurve(key).Should().BeTrue();
+        }
+
+        // A y at or above p is reduced into the field rather than rejected, matching curve25519-dalek.
+        // Asserting that y = p + k answers exactly as y = k pins that reduction without needing an
+        // external oracle, and it is the property most at risk from any change to the field arithmetic.
+        // The range stops at 19 because p = 2^255 - 19, so p + 19 is the first value that overflows into
+        // bit 255 - the sign of x, which is masked off and would make the comparison meaningless.
+        [Test]
+        public void NonCanonicalYIsReducedModuloP()
+        {
+            // Arrange
+            var p = (BigInteger.One << 255) - 19;
+
+            // Act & Assert
+            for (var k = 0; k < 19; k++)
+            {
+                Ed25519Curve.IsOnCurve(Encode(p + k))
+                    .Should().Be(Ed25519Curve.IsOnCurve(Encode(k)), "y = p + {0} must reduce to y = {0}", k);
+            }
+        }
+
+        // Above the 255-bit boundary the top bit is the sign of x, so it is masked off and y wraps to
+        // k - 19 rather than continuing the reduction above.
+        [Test]
+        public void ValuesAboveTheSignBitBoundaryDropTheTopBit()
+        {
+            // Arrange
+            var p = (BigInteger.One << 255) - 19;
+
+            // Act & Assert
+            for (var k = 19; k < 40; k++)
+            {
+                Ed25519Curve.IsOnCurve(Encode(p + k))
+                    .Should().Be(Ed25519Curve.IsOnCurve(Encode(k - 19)), "y = p + {0} masks to y = {1}", k, k - 19);
+            }
+        }
+
+        private static byte[] Encode(BigInteger value)
+        {
+            var bytes = new byte[32];
+            var raw = value.ToByteArray(isUnsigned: true, isBigEndian: false);
+            Array.Copy(raw, bytes, Math.Min(raw.Length, 32));
+            return bytes;
+        }
+
+        private static bool ReferenceIsOnCurve(ReadOnlySpan<byte> encoded)
+        {
+            var y = (new BigInteger(encoded, isUnsigned: true, isBigEndian: false) & ReferenceYMask) % ReferenceP;
+            var y2 = (y * y) % ReferenceP;
+            var u = (y2 - 1 + ReferenceP) % ReferenceP;
+            var v = ((ReferenceD * y2) + 1) % ReferenceP;
+            if (v.IsZero)
+                return false;
+
+            // u/v and u*v differ by the square v^2, so they have the same quadratic character.
+            var product = (u * v) % ReferenceP;
+            return product.IsZero
+                   || BigInteger.ModPow(product, (ReferenceP - 1) / 2, ReferenceP) == BigInteger.One;
         }
     }
 }

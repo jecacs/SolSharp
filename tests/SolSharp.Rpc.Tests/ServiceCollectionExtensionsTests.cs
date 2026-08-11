@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Options;
 using NUnit.Framework;
 using Polly;
@@ -146,6 +147,35 @@ public static class ServiceCollectionExtensionsTests
     public sealed class Resilience
     {
         [Test]
+        public void UsesReferenceRequestBudgetsByDefault()
+        {
+            // Act
+            var options = ResolveOptions();
+
+            // Assert
+            options.AttemptTimeout.Timeout.Should().Be(TimeSpan.FromSeconds(30));
+            options.TotalRequestTimeout.Timeout.Should().Be(TimeSpan.FromSeconds(100));
+            options.CircuitBreaker.SamplingDuration.Should().Be(TimeSpan.FromSeconds(60));
+        }
+
+        [Test]
+        public void CallerCanOverrideReferenceRequestBudgets()
+        {
+            // Act
+            var options = ResolveOptions(static resilience =>
+            {
+                resilience.AttemptTimeout.Timeout = TimeSpan.FromSeconds(5);
+                resilience.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(25);
+                resilience.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(15);
+            });
+
+            // Assert
+            options.AttemptTimeout.Timeout.Should().Be(TimeSpan.FromSeconds(5));
+            options.TotalRequestTimeout.Timeout.Should().Be(TimeSpan.FromSeconds(25));
+            options.CircuitBreaker.SamplingDuration.Should().Be(TimeSpan.FromSeconds(15));
+        }
+
+        [Test]
         public async Task RetriesTransientFailure()
         {
             // Arrange
@@ -207,5 +237,17 @@ public static class ServiceCollectionExtensionsTests
 
         private static HttpResponseMessage Json(string body)
             => new(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+
+        private static HttpStandardResilienceOptions ResolveOptions(
+            Action<HttpStandardResilienceOptions>? configureResilience = null)
+        {
+            var services = new ServiceCollection();
+            var builder = services.AddSolanaRpc(
+                static options => options.Endpoint = "https://node.example",
+                configureResilience);
+            using var provider = services.BuildServiceProvider();
+            return provider.GetRequiredService<IOptionsMonitor<HttpStandardResilienceOptions>>()
+                .Get($"{builder.Name}-standard");
+        }
     }
 }

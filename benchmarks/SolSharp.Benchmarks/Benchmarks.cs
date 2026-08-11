@@ -30,21 +30,24 @@ public class SigningBenchmarks
 public class TransactionBenchmarks
 {
     private const string Blockhash = "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8";
-    private static readonly PublicKey Payer = new(Fill(1));
+
+    // The fee payer must be the signer's own public key. Deriving it from the seed rather than reusing
+    // the raw seed bytes as an address is what makes Sign() reachable at all.
+    private static readonly Keypair Signer = Keypair.FromSeed(Fill(1));
+    private static readonly PublicKey Payer = Signer.PublicKey;
     private static readonly PublicKey Recipient = new(Fill(2));
 
-    private readonly Keypair _signer = Keypair.FromSeed(Fill(1));
     private readonly Transaction _signed;
     private readonly byte[] _buffer;
 
     public TransactionBenchmarks()
     {
-        _signed = BuildTransaction().Sign(_signer);
+        _signed = BuildTransaction().Sign(Signer);
         _buffer = new byte[_signed.GetSerializedLength()];
     }
 
     [Benchmark]
-    public Transaction CompileAndSign() => BuildTransaction().Sign(_signer);
+    public Transaction CompileAndSign() => BuildTransaction().Sign(Signer);
 
     [Benchmark]
     public byte[] Serialize() => _signed.Serialize();

@@ -118,8 +118,29 @@ public static class Token2022ProgramTests
             Hex(instruction).Should().Be("1f");
             Metas(instruction).Should().Equal(
                 (Key(1), true, true),
-                (PublicKey.Parse(Mints.WrappedSol), false, true),
+                (PublicKey.Parse(Mints.Token2022NativeMint), false, true),
                 (SystemProgram.ProgramId, false, false));
+        }
+
+        [Test]
+        public void UsesTheDerivedToken2022NativeMintNotWrappedSol()
+        {
+            // Arrange: the pinned interface defines the native mint as a program address of
+            // ["native-mint", 255] under Token-2022, so derive it instead of trusting the constant.
+            byte[][] seeds = ["native-mint"u8.ToArray(), [255]];
+
+            // Act
+            var created = ProgramDerivedAddress.TryCreateProgramAddress(
+                seeds,
+                Token2022Program.ProgramId,
+                out var derived);
+            var instruction = Token2022Program.CreateNativeMint(Key(1));
+
+            // Assert
+            created.Should().BeTrue();
+            derived.Should().Be(PublicKey.Parse(Mints.Token2022NativeMint));
+            instruction.Accounts[1].PublicKey.Should().Be(derived);
+            instruction.Accounts[1].PublicKey.Should().NotBe(PublicKey.Parse(Mints.WrappedSol));
         }
     }
 

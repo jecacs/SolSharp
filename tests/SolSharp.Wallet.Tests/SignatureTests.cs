@@ -66,6 +66,22 @@ public static class SignatureTests
             // Assert
             act.Should().Throw<ArgumentException>();
         }
+
+        [Test]
+        public void OverLongInput_IsNotCopiedIntoTheException()
+        {
+            // Arrange
+            var input = new string('z', 10_000);
+
+            // Act
+            Action act = () => Signature.Parse(input);
+
+            // Assert
+            var exception = act.Should().Throw<ArgumentException>().Which;
+            exception.Message.Length.Should().BeLessThan(256);
+            exception.Message.Should().NotContain(input);
+            exception.Message.Should().Contain(input.Length.ToString());
+        }
     }
 
     [TestFixture]

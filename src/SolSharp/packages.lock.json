@@ -8,6 +8,12 @@
         "resolved": "2.7.0",
         "contentHash": "U+12df8UEWHgBi04YVf/Lgi2dy3SItlIYvHjjEVa/BngCQIzDCDRBk50DDByCfDvSbe5pRNFr3b7UrVK2kMcLw=="
       },
+      "Microsoft.CodeAnalysis.BannedApiAnalyzers": {
+        "type": "Direct",
+        "requested": "[4.14.0, )",
+        "resolved": "4.14.0",
+        "contentHash": "gSWJlDWwmDhtbrEJGiHqvEjz9KthIiFD0qYB8zZ6a7z+xpMSPEtM9yTYELSa58iFWYlzSRqP9FXO6KoT3+ZMtg=="
+      },
       "Microsoft.Extensions.Http": {
         "type": "Direct",
         "requested": "[10.0.10, )",
@@ -44,9 +50,9 @@
       },
       "Microsoft.NET.ILLink.Tasks": {
         "type": "Direct",
-        "requested": "[10.0.10, )",
-        "resolved": "10.0.10",
-        "contentHash": "f5VCIE7AJpd5YvzNTeMGVzQIgyE9tX+AreTYwQF+REbu+DZo/2Ae+jNSwhPEYrVz6RRkd7y8ubXjk6Nn6Ka+Cg=="
+        "requested": "[10.0.11, )",
+        "resolved": "10.0.11",
+        "contentHash": "IBf7lbovvjGWVWXZX5cJ/cO0WXbId0Zq4BuSeT94mGZuOAP66oMeH9PTBZ9Jpp3Jb6jtK0qm/NyUbPRo1gC/wQ=="
       },
       "Microsoft.SourceLink.GitHub": {
         "type": "Direct",
@@ -355,8 +361,8 @@
       "solsharp.programs": {
         "type": "Project",
         "dependencies": {
-          "SolSharp.Core": "[3.0.0, )",
-          "SolSharp.Wallet": "[3.0.0, )"
+          "SolSharp.Core": "[3.1.0, )",
+          "SolSharp.Wallet": "[3.1.0, )"
         }
       },
       "solsharp.rpc": {
@@ -365,7 +371,7 @@
           "Microsoft.Extensions.Http": "[10.0.10, )",
           "Microsoft.Extensions.Http.Resilience": "[10.8.0, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )",
-          "SolSharp.Core": "[3.0.0, )"
+          "SolSharp.Core": "[3.1.0, )"
         }
       },
       "solsharp.wallet": {
@@ -373,7 +379,7 @@
         "dependencies": {
           "BouncyCastle.Cryptography": "[2.7.0, )",
           "Nethermind.Crypto.Bls": "[1.1.0, )",
-          "SolSharp.Core": "[3.0.0, )"
+          "SolSharp.Core": "[3.1.0, )"
         }
       }
     }

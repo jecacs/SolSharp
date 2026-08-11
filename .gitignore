@@ -49,3 +49,6 @@ desktop.ini
 *.log
 logs/
 .tokensave/
+
+# Audit and profiling session output. Durable conclusions belong in docs/ or the CHANGELOG, not here.
+audit/

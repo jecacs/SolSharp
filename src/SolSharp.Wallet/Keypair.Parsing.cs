@@ -1,3 +1,5 @@
+using System.Buffers;
+using System.Buffers.Text;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -7,6 +9,9 @@ namespace SolSharp.Wallet;
 
 public sealed partial class Keypair
 {
+    private const int MaxBase58KeyLength = 88;
+    private const int MaxJsonKeyLength = 4 * 1024;
+
     /// <summary>
     /// Parses a Solana secret key, auto-detecting the format: a JSON number array (the <c>id.json</c>
     /// written by <c>solana-keygen</c>, recognised by a leading <c>[</c>), a hex string (optionally
@@ -21,7 +26,7 @@ public sealed partial class Keypair
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
 
-        var trimmed = text.Trim();
+        var trimmed = text.AsSpan().Trim();
 
         if (trimmed[0] == '[')
             return FromJsonArray(text);
@@ -33,7 +38,7 @@ public sealed partial class Keypair
 
         // base58 (the wallet-export default) and base64 share an alphabet, so try base58 first and fall back
         // to base64, accepting whichever decodes to a 32- or 64-byte key.
-        if (TryDecodeBase58(trimmed) is { } base58)
+        if (TryDecodeBase58(trimmed, text) is { } base58)
             return FromDecodedZeroing(base58, "base58 key");
 
         if (TryDecodeBase64(trimmed) is { } base64)
@@ -70,8 +75,15 @@ public sealed partial class Keypair
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(base58);
 
-        if (!Base58.TryDecode(base58.Trim(), out var bytes))
+        var trimmed = base58.AsSpan().Trim();
+        if (trimmed.Length > MaxBase58KeyLength)
             throw new FormatException("Key is not a valid base58 string.");
+
+        var encoded = trimmed.Length == base58.Length ? base58 : trimmed.ToString();
+        if (!Base58.TryDecode(encoded, MaxBase58KeyLength, out var bytes))
+        {
+            throw new FormatException("Key is not a valid base58 string.");
+        }
 
         try
         {
@@ -92,19 +104,25 @@ public sealed partial class Keypair
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(base64);
 
-        byte[] bytes;
-        try
+        // Validating first yields the decoded length without decoding, which keeps the wrong-length case
+        // reportable even though the buffer below is only large enough for a well-formed key.
+        var trimmed = base64.AsSpan().Trim();
+        if (!Base64.IsValid(trimmed, out var decodedLength))
+            throw new FormatException("Key is not a valid base64 string.");
+
+        if (decodedLength is not (SeedLength or SecretKeyLength))
         {
-            bytes = Convert.FromBase64String(base64.Trim());
-        }
-        catch (FormatException e)
-        {
-            throw new FormatException("Key is not a valid base64 string.", e);
+            throw new FormatException(
+                $"Expected a {SeedLength}- or {SecretKeyLength}-byte base64 key, got {decodedLength} bytes.");
         }
 
+        Span<byte> bytes = stackalloc byte[SecretKeyLength];
         try
         {
-            return FromDecoded(bytes, "base64 key");
+            if (!Convert.TryFromBase64Chars(trimmed, bytes, out var bytesWritten))
+                throw new FormatException("Key is not a valid base64 string.");
+
+            return FromDecoded(bytes[..bytesWritten], "base64 key");
         }
         finally
         {
@@ -125,19 +143,24 @@ public sealed partial class Keypair
         if (digits.StartsWith("0x") || digits.StartsWith("0X"))
             digits = digits[2..];
 
-        byte[] bytes;
+        Span<byte> bytes = stackalloc byte[SecretKeyLength];
         try
         {
-            bytes = Convert.FromHexString(digits.ToString());
-        }
-        catch (FormatException e)
-        {
-            throw new FormatException("Key is not a valid hex string.", e);
-        }
+            var status = Convert.FromHexString(digits, bytes, out var charsConsumed, out var bytesWritten);
 
-        try
-        {
-            return FromDecoded(bytes, "hex key");
+            // The buffer only fits a well-formed key, so valid hex that is merely too long comes back as
+            // DestinationTooSmall. Reporting that as malformed hex would hide the real problem, and the
+            // decoded length is derivable from the input without decoding it.
+            if (status == OperationStatus.DestinationTooSmall)
+            {
+                throw new FormatException(
+                    $"Expected a {SeedLength}- or {SecretKeyLength}-byte hex key, got {digits.Length / 2} bytes.");
+            }
+
+            if (status != OperationStatus.Done || charsConsumed != digits.Length)
+                throw new FormatException("Key is not a valid hex string.");
+
+            return FromDecoded(bytes[..bytesWritten], "hex key");
         }
         finally
         {
@@ -149,10 +172,12 @@ public sealed partial class Keypair
     /// <param name="json">A JSON array of 32 or 64 integers, each in the range 0-255.</param>
     /// <returns>The keypair.</returns>
     /// <exception cref="ArgumentException"><paramref name="json"/> is null, empty, or whitespace.</exception>
-    /// <exception cref="FormatException"><paramref name="json"/> is not a JSON number array, holds a value outside 0-255, or is not 32 or 64 bytes long.</exception>
+    /// <exception cref="FormatException"><paramref name="json"/> is too large, is not a JSON number array, holds a value outside 0-255, or is not 32 or 64 bytes long.</exception>
     public static Keypair FromJsonArray(string json)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(json);
+        if (json.Length > MaxJsonKeyLength)
+            throw new FormatException($"Key JSON cannot exceed {MaxJsonKeyLength} characters.");
 
         int[]? values;
         try
@@ -174,7 +199,7 @@ public sealed partial class Keypair
             for (var i = 0; i < values.Length; i++)
             {
                 if (values[i] is < 0 or > byte.MaxValue)
-                    throw new FormatException($"Key JSON value at index {i} is outside the byte range 0-255: {values[i]}.");
+                    throw new FormatException($"Key JSON value at index {i} is outside the byte range 0-255.");
 
                 bytes[i] = (byte)values[i];
             }
@@ -272,29 +297,39 @@ public sealed partial class Keypair
         }
     }
 
-    private static byte[]? TryDecodeHex(string text)
+    private static byte[]? TryDecodeHex(ReadOnlySpan<char> text)
     {
-        var digits = text.AsSpan();
+        var digits = text;
         if (digits.StartsWith("0x") || digits.StartsWith("0X"))
             digits = digits[2..];
 
         if (digits.Length is not (SeedLength * 2 or SecretKeyLength * 2))
             return null;
 
+        Span<byte> decoded = stackalloc byte[SecretKeyLength];
         try
         {
-            return Convert.FromHexString(digits.ToString());
+            var status = Convert.FromHexString(digits, decoded, out var charsConsumed, out var bytesWritten);
+            return status == OperationStatus.Done && charsConsumed == digits.Length
+                ? decoded[..bytesWritten].ToArray()
+                : null;
         }
-        catch (FormatException)
+        finally
         {
-            return null;
+            CryptographicOperations.ZeroMemory(decoded);
         }
     }
 
-    private static byte[]? TryDecodeBase58(string text)
+    private static byte[]? TryDecodeBase58(ReadOnlySpan<char> text, string original)
     {
-        if (!Base58.TryDecode(text, out var bytes))
+        if (text.Length > MaxBase58KeyLength)
             return null;
+
+        var encoded = text.Length == original.Length ? original : text.ToString();
+        if (!Base58.TryDecode(encoded, MaxBase58KeyLength, out var bytes))
+        {
+            return null;
+        }
 
         if (bytes.Length is SeedLength or SecretKeyLength)
             return bytes;
@@ -303,21 +338,27 @@ public sealed partial class Keypair
         return null;
     }
 
-    private static byte[]? TryDecodeBase64(string text)
+    private static byte[]? TryDecodeBase64(ReadOnlySpan<char> text)
     {
+        Span<byte> decoded = stackalloc byte[SecretKeyLength];
         try
         {
-            var bytes = Convert.FromBase64String(text);
-            if (bytes.Length is SeedLength or SecretKeyLength)
-                return bytes;
-
-            CryptographicOperations.ZeroMemory(bytes);
-            return null;
+            return TryDecodeBase64(text, decoded, out var bytesWritten)
+                ? decoded[..bytesWritten].ToArray()
+                : null;
         }
-        catch (FormatException)
+        finally
         {
-            return null;
+            CryptographicOperations.ZeroMemory(decoded);
         }
+    }
+
+    private static bool TryDecodeBase64(ReadOnlySpan<char> text, Span<byte> destination, out int bytesWritten)
+    {
+        if (!Convert.TryFromBase64Chars(text, destination, out bytesWritten))
+            return false;
+
+        return bytesWritten is SeedLength or SecretKeyLength;
     }
 
     private static Keypair FromDecodedZeroing(byte[] bytes, string what)

@@ -69,10 +69,14 @@ public sealed class MessageV0 : ITransactionMessage
     /// <param name="instructions">The instructions to include, in execution order.</param>
     /// <param name="addressLookupTables">The lookup tables to source extra accounts from; pass an empty list for none.</param>
     /// <returns>The compiled v0 message.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="instructions"/> or <paramref name="addressLookupTables"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="instructions"/>, an instruction, one of its account/data collections, or
+    /// <paramref name="addressLookupTables"/> is <c>null</c>.
+    /// </exception>
     /// <exception cref="ArgumentException">
-    /// The instructions reference more than <see cref="MaxAccounts"/> distinct accounts, require more than
-    /// 255 signatures, or a supplied lookup table holds more than <see cref="MaxAccounts"/> addresses.
+    /// A compact-u16 collection limit is exceeded, the instructions reference more than
+    /// <see cref="MaxAccounts"/> distinct accounts, require more than 255 signatures, or a supplied lookup
+    /// table holds more than <see cref="MaxAccounts"/> addresses.
     /// </exception>
     public static MessageV0 Compile(
         PublicKey feePayer,
@@ -90,10 +94,14 @@ public sealed class MessageV0 : ITransactionMessage
     /// <param name="instructions">The instructions to include, in execution order.</param>
     /// <param name="addressLookupTables">The lookup tables to source extra accounts from; pass an empty list for none.</param>
     /// <returns>The compiled v0 message.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="recentBlockhash"/>, <paramref name="instructions"/>, or <paramref name="addressLookupTables"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="recentBlockhash"/>, <paramref name="instructions"/>, an instruction, one of its
+    /// account/data collections, or <paramref name="addressLookupTables"/> is <c>null</c>.
+    /// </exception>
     /// <exception cref="ArgumentException">
-    /// The instructions reference more than <see cref="MaxAccounts"/> distinct accounts, require more than
-    /// 255 signatures, or a supplied lookup table holds more than <see cref="MaxAccounts"/> addresses.
+    /// A compact-u16 collection limit is exceeded, the instructions reference more than
+    /// <see cref="MaxAccounts"/> distinct accounts, require more than 255 signatures, or a supplied lookup
+    /// table holds more than <see cref="MaxAccounts"/> addresses.
     /// </exception>
     public static MessageV0 Compile(
         PublicKey feePayer,
@@ -104,6 +112,14 @@ public sealed class MessageV0 : ITransactionMessage
         ArgumentNullException.ThrowIfNull(recentBlockhash);
         ArgumentNullException.ThrowIfNull(instructions);
         ArgumentNullException.ThrowIfNull(addressLookupTables);
+        if (instructions.Count > ShortVec.MaxValue)
+            throw new ArgumentException(
+                $"A v0 message can contain at most {ShortVec.MaxValue} instructions, got {instructions.Count}.",
+                nameof(instructions));
+
+        // Snapshot once. IReadOnlyList<T> promises no immutability, so validating one view and compiling
+        // another lets a concurrently-mutated or lazily-materialised collection slip past every check below.
+        Instruction[] source = [.. instructions];
 
         var metas = new Dictionary<PublicKey, KeyMeta>();
 
@@ -114,17 +130,32 @@ public sealed class MessageV0 : ITransactionMessage
         }
 
         Merge(feePayer, signer: true, writable: true, invoked: false);
-        foreach (var instruction in instructions)
+        for (var index = 0; index < source.Length; index++)
         {
+            var instruction = source[index]
+                ?? throw new ArgumentNullException(nameof(instructions), $"Instruction at index {index} is null.");
+            var accounts = instruction.Accounts
+                ?? throw new ArgumentNullException(nameof(instructions), $"Instruction at index {index} has null accounts.");
+            var instructionData = instruction.Data
+                ?? throw new ArgumentNullException(nameof(instructions), $"Instruction at index {index} has null data.");
+            if (accounts.Count > ShortVec.MaxValue)
+                throw new ArgumentException(
+                    $"V0 instruction {index} can reference at most {ShortVec.MaxValue} account slots, got {accounts.Count}.",
+                    nameof(instructions));
+            if (instructionData.Length > ShortVec.MaxValue)
+                throw new ArgumentException(
+                    $"V0 instruction {index} can carry at most {ShortVec.MaxValue} data bytes, got {instructionData.Length}.",
+                    nameof(instructions));
+
             Merge(instruction.ProgramId, signer: false, writable: false, invoked: true);
-            foreach (var account in instruction.Accounts)
+            foreach (var account in accounts)
                 Merge(account.PublicKey, account.IsSigner, account.IsWritable, invoked: false);
         }
 
         // The runtime resolves a durable nonce before loading address tables, so the nonce account
         // named by a first System instruction whose data starts with the AdvanceNonceAccount
         // discriminator must remain in the static keys. Solana permits trailing instruction data here.
-        if (TryGetNonceAccount(instructions, out var nonceAccount))
+        if (TryGetNonceAccount(source, out var nonceAccount))
         {
             var current = metas[nonceAccount];
             metas[nonceAccount] = current with { IsNonce = true };
@@ -145,6 +176,12 @@ public sealed class MessageV0 : ITransactionMessage
 
         foreach (var table in addressLookupTables)
         {
+            // AddressLookupTableAccount is a positional record with no validation of its own, so a null
+            // element or a null Addresses list reaches here and would otherwise surface as a
+            // NullReferenceException rather than the documented ArgumentNullException.
+            ArgumentNullException.ThrowIfNull(table, nameof(addressLookupTables));
+            ArgumentNullException.ThrowIfNull(table.Addresses, nameof(addressLookupTables));
+
             // An on-chain lookup table holds at most 256 addresses; anything bigger cannot be addressed by
             // the single-byte wire indexes and would otherwise truncate silently in the (byte) casts below.
             if (table.Addresses.Count > MaxAccounts)
@@ -249,10 +286,10 @@ public sealed class MessageV0 : ITransactionMessage
         foreach (var key in loadedReadonly)
             position[key] = slot++;
 
-        var compiled = new CompiledInstruction[instructions.Count];
-        for (var n = 0; n < instructions.Count; n++)
+        var compiled = new CompiledInstruction[source.Length];
+        for (var n = 0; n < source.Length; n++)
         {
-            var instruction = instructions[n];
+            var instruction = source[n];
             var accountIndexes = new byte[instruction.Accounts.Count];
             for (var a = 0; a < instruction.Accounts.Count; a++)
                 accountIndexes[a] = (byte)position[instruction.Accounts[a].PublicKey];
@@ -391,25 +428,29 @@ public sealed class MessageV0 : ITransactionMessage
 
     /// <summary>Returns the exact length of the serialized message, in bytes.</summary>
     /// <returns>The serialized length.</returns>
+    /// <exception cref="OverflowException">The aggregate message length exceeds <see cref="int.MaxValue"/>.</exception>
     public int GetSerializedLength()
     {
-        var length = 1 + 3 // the version prefix and the header counts
-            + ShortVec.GetByteCount(AccountKeys.Count) + (AccountKeys.Count * PublicKey.Length)
-            + PublicKey.Length // the recent blockhash
-            + ShortVec.GetByteCount(Instructions.Count);
+        checked
+        {
+            var length = 1 + 3 // the version prefix and the header counts
+                + ShortVec.GetByteCount(AccountKeys.Count) + (AccountKeys.Count * PublicKey.Length)
+                + PublicKey.Length // the recent blockhash
+                + ShortVec.GetByteCount(Instructions.Count);
 
-        foreach (var instruction in Instructions)
-            length += 1
-                + ShortVec.GetByteCount(instruction.AccountIndexes.Length) + instruction.AccountIndexes.Length
-                + ShortVec.GetByteCount(instruction.Data.Length) + instruction.Data.Length;
+            foreach (var instruction in Instructions)
+                length += 1
+                    + ShortVec.GetByteCount(instruction.AccountIndexes.Length) + instruction.AccountIndexes.Length
+                    + ShortVec.GetByteCount(instruction.Data.Length) + instruction.Data.Length;
 
-        length += ShortVec.GetByteCount(AddressTableLookups.Count);
-        foreach (var lookup in AddressTableLookups)
-            length += PublicKey.Length
-                + ShortVec.GetByteCount(lookup.WritableIndexes.Length) + lookup.WritableIndexes.Length
-                + ShortVec.GetByteCount(lookup.ReadonlyIndexes.Length) + lookup.ReadonlyIndexes.Length;
+            length += ShortVec.GetByteCount(AddressTableLookups.Count);
+            foreach (var lookup in AddressTableLookups)
+                length += PublicKey.Length
+                    + ShortVec.GetByteCount(lookup.WritableIndexes.Length) + lookup.WritableIndexes.Length
+                    + ShortVec.GetByteCount(lookup.ReadonlyIndexes.Length) + lookup.ReadonlyIndexes.Length;
 
-        return length;
+            return length;
+        }
     }
 
     /// <summary>Serializes the message into <paramref name="destination"/> without allocating.</summary>
@@ -419,8 +460,12 @@ public sealed class MessageV0 : ITransactionMessage
     /// <exception cref="FormatException"><see cref="RecentBlockhash"/> is not a 32-byte base58 value.</exception>
     public int Serialize(Span<byte> destination)
     {
-        if (!Base58.TryDecode(RecentBlockhash, out var blockhash) || blockhash.Length != PublicKey.Length)
-            throw new FormatException($"Recent blockhash must be a 32-byte base58 value, got '{RecentBlockhash}'.");
+        if (!Base58.TryDecode(RecentBlockhash, Hash.MaxBase58Length, out var blockhash)
+            || blockhash.Length != Hash.Length)
+        {
+            throw new FormatException(
+                $"Recent blockhash must be a {Hash.Length}-byte base58 value (input length {RecentBlockhash.Length}).");
+        }
 
         var required = GetSerializedLength();
         if (destination.Length < required)
@@ -547,9 +592,9 @@ public sealed class MessageV0 : ITransactionMessage
         return x.SequenceCompareTo(y);
     }
 
-    private static bool TryGetNonceAccount(IReadOnlyList<Instruction> instructions, out PublicKey nonceAccount)
+    private static bool TryGetNonceAccount(Instruction[] instructions, out PublicKey nonceAccount)
     {
-        if (instructions.Count > 0)
+        if (instructions.Length > 0)
         {
             var first = instructions[0];
             if (first.ProgramId == SystemProgram.ProgramId

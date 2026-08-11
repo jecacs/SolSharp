@@ -56,6 +56,22 @@ public static class HashTests
             // Assert
             act.Should().Throw<ArgumentException>();
         }
+
+        [Test]
+        public void OverLongInput_IsNotCopiedIntoTheException()
+        {
+            // Arrange
+            var input = new string('z', 10_000);
+
+            // Act
+            Action act = () => Hash.Parse(input);
+
+            // Assert
+            var exception = act.Should().Throw<ArgumentException>().Which;
+            exception.Message.Length.Should().BeLessThan(256);
+            exception.Message.Should().NotContain(input);
+            exception.Message.Should().Contain(input.Length.ToString());
+        }
     }
 
     [TestFixture]
@@ -212,6 +228,56 @@ public static class HashTests
 
             // Assert
             act.Should().Throw<JsonException>();
+        }
+
+        [Test]
+        public void Deserialize_OverLongInput_IsRejectedBeforeMaterializingIt()
+        {
+            // Arrange
+            var input = new string('z', 1_000_000);
+            var json = JsonSerializer.Serialize(input);
+            try
+            {
+                _ = JsonSerializer.Deserialize<Hash>($"\"{new string('z', Hash.MaxBase58Length + 1)}\"");
+            }
+            catch (JsonException)
+            {
+                // Warm serializer metadata and the converter's oversized-token path before measuring.
+            }
+
+            // Act
+            JsonException? exception = null;
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            try
+            {
+                _ = JsonSerializer.Deserialize<Hash>(json);
+            }
+            catch (JsonException error)
+            {
+                exception = error;
+            }
+
+            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+            // Assert
+            exception.Should().NotBeNull();
+            exception.Message.Length.Should().BeLessThan(256);
+            exception.Message.Should().NotContain(input);
+            allocated.Should().BeLessThan(256_000, "the oversized token should not become a UTF-16 string");
+        }
+
+        [Test]
+        public void Deserialize_MaximumLengthEscapedValue_RemainsAccepted()
+        {
+            // Arrange: every base58 character may legally be represented as a six-byte JSON \uXXXX escape.
+            var bytes = Enumerable.Repeat(byte.MaxValue, Hash.Length).ToArray();
+            var escaped = string.Concat(new Hash(bytes).ToString().Select(static character => $"\\u{(int)character:x4}"));
+
+            // Act
+            var hash = JsonSerializer.Deserialize<Hash>($"\"{escaped}\"");
+
+            // Assert
+            hash.ToBytes().Should().Equal(bytes);
         }
 
         [TestCase("123")]

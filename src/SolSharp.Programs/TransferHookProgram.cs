@@ -16,6 +16,7 @@ public static partial class TransferHookProgram
 {
     private const int TlvHeaderLength = 8 + sizeof(uint);
     private const int ListHeaderLength = sizeof(uint);
+    private const int MaxResolvableExtraAccountMetas = Message.MaxAccounts;
     private const byte ExternalProgramBit = 0x80;
     private static readonly byte[] ExecuteDiscriminator = [0x69, 0x25, 0x65, 0xc5, 0x4b, 0xfb, 0x66, 0x1a];
     private static readonly byte[] InitializeExtraAccountMetasDiscriminator = [0x2b, 0x22, 0x0d, 0x31, 0xa7, 0x58, 0xeb, 0xeb];
@@ -178,29 +179,7 @@ public static partial class TransferHookProgram
     /// <returns>The decoded entries, or <c>null</c> when the TLV data is malformed or has no execute entry.</returns>
     public static IReadOnlyList<ExtraAccountMeta>? DecodeExecuteExtraAccountMetaList(
         ReadOnlySpan<byte> validationAccountData)
-    {
-        var offset = 0;
-        while (offset < validationAccountData.Length)
-        {
-            var remaining = validationAccountData[offset..];
-            if (remaining.Length < 8)
-                return null;
-            if (remaining[..8].IndexOfAnyExcept((byte)0) < 0)
-                return null;
-            if (remaining.Length < TlvHeaderLength)
-                return null;
-
-            var valueLength = BinaryPrimitives.ReadUInt32LittleEndian(remaining[8..]);
-            if (valueLength > int.MaxValue || valueLength > remaining.Length - TlvHeaderLength)
-                return null;
-            var value = remaining.Slice(TlvHeaderLength, (int)valueLength);
-            if (remaining[..8].SequenceEqual(ExecuteDiscriminator))
-                return DecodeMetaListValue(value);
-            offset += TlvHeaderLength + (int)valueLength;
-        }
-
-        return null;
-    }
+        => DecodeExecuteExtraAccountMetaList(validationAccountData, int.MaxValue, out _);
 
     /// <summary>Resolves the execute extra accounts from already-fetched validation-state data.</summary>
     /// <param name="hookProgramId">The transfer-hook program.</param>
@@ -214,7 +193,10 @@ public static partial class TransferHookProgram
     /// <param name="cancellationToken">A token that cancels account fetches.</param>
     /// <returns>The resolved extra account metas in validation-list order.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="accountDataResolver"/> is <c>null</c>.</exception>
-    /// <exception cref="FormatException">The validation data or a metadata configuration is malformed.</exception>
+    /// <exception cref="FormatException">
+    /// The validation data or a metadata configuration is malformed, or the list exceeds the resolver's
+    /// bounded budget of <see cref="Message.MaxAccounts"/> entries.
+    /// </exception>
     /// <exception cref="InvalidOperationException">A required account or account-data slice cannot be resolved.</exception>
     public static async ValueTask<IReadOnlyList<AccountMeta>> ResolveExecuteExtraAccountMetasAsync(
         PublicKey hookProgramId,
@@ -228,31 +210,56 @@ public static partial class TransferHookProgram
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(accountDataResolver);
-        var configurations = DecodeExecuteExtraAccountMetaList(validationAccountData.Span)
-            ?? throw new FormatException("The validation account does not contain a valid transfer-hook execute metadata list.");
-        var validationAccount = GetExtraAccountMetasAddress(mint, hookProgramId);
-        var execute = Execute(hookProgramId, source, mint, destination, authority, amount);
-        var workingAccounts = new List<AccountMeta>(5 + configurations.Count);
-        workingAccounts.AddRange(execute.Accounts);
-        workingAccounts.Add(AccountMeta.Readonly(validationAccount));
-        var accountData = new List<ReadOnlyMemory<byte>?>(workingAccounts.Count + configurations.Count);
-        for (var i = 0; i < execute.Accounts.Count; i++)
+        var configurations = DecodeExecuteExtraAccountMetaList(
+            validationAccountData.Span,
+            MaxResolvableExtraAccountMetas,
+            out var exceedsEntryLimit);
+        if (exceedsEntryLimit)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            accountData.Add(await accountDataResolver(execute.Accounts[i].PublicKey, cancellationToken));
+            throw new FormatException(
+                $"A transfer-hook execute metadata list may contain at most {MaxResolvableExtraAccountMetas} entries.");
         }
 
-        accountData.Add(validationAccountData);
+        if (configurations is null)
+            throw new FormatException("The validation account does not contain a valid transfer-hook execute metadata list.");
 
-        var resolved = new List<AccountMeta>(configurations.Count);
-        for (var i = 0; i < configurations.Count; i++)
+        cancellationToken.ThrowIfCancellationRequested();
+        var validationAccount = GetExtraAccountMetasAddress(mint, hookProgramId);
+        var execute = Execute(hookProgramId, source, mint, destination, authority, amount);
+        var workingAccounts = new List<AccountMeta>(5 + configurations.Length);
+        workingAccounts.AddRange(execute.Accounts);
+        workingAccounts.Add(AccountMeta.Readonly(validationAccount));
+        var accountData = new List<ReadOnlyMemory<byte>?>(workingAccounts.Count + configurations.Length);
+        var accountDataFetched = new List<bool>(workingAccounts.Count + configurations.Length);
+        for (var i = 0; i < workingAccounts.Count; i++)
         {
+            accountData.Add(null);
+            accountDataFetched.Add(false);
+        }
+
+        accountData[execute.Accounts.Count] = validationAccountData;
+        accountDataFetched[execute.Accounts.Count] = true;
+
+        var resolved = new List<AccountMeta>(configurations.Length);
+        for (var i = 0; i < configurations.Length; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            foreach (var accountIndex in RequiredAccountDataIndexes(configurations[i]))
+            {
+                var account = AccountAt(workingAccounts, accountIndex);
+                if (!accountDataFetched[accountIndex])
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    accountData[accountIndex] = await accountDataResolver(account.PublicKey, cancellationToken);
+                    accountDataFetched[accountIndex] = true;
+                }
+            }
+
             var meta = Resolve(configurations[i], execute.Data, hookProgramId, workingAccounts, accountData);
             meta = DeEscalate(meta, workingAccounts);
-            cancellationToken.ThrowIfCancellationRequested();
-            var resolvedData = await accountDataResolver(meta.PublicKey, cancellationToken);
             workingAccounts.Add(meta);
-            accountData.Add(resolvedData);
+            accountData.Add(null);
+            accountDataFetched.Add(false);
             resolved.Add(meta);
         }
 
@@ -316,6 +323,35 @@ public static partial class TransferHookProgram
         return new() { ProgramId = tokenInstruction.ProgramId, Accounts = accounts, Data = tokenInstruction.Data };
     }
 
+    private static ExtraAccountMeta[]? DecodeExecuteExtraAccountMetaList(
+        ReadOnlySpan<byte> validationAccountData,
+        int maximumEntries,
+        out bool exceedsEntryLimit)
+    {
+        exceedsEntryLimit = false;
+        var offset = 0;
+        while (offset < validationAccountData.Length)
+        {
+            var remaining = validationAccountData[offset..];
+            if (remaining.Length < 8)
+                return null;
+            if (remaining[..8].IndexOfAnyExcept((byte)0) < 0)
+                return null;
+            if (remaining.Length < TlvHeaderLength)
+                return null;
+
+            var valueLength = BinaryPrimitives.ReadUInt32LittleEndian(remaining[8..]);
+            if (valueLength > int.MaxValue || valueLength > remaining.Length - TlvHeaderLength)
+                return null;
+            var value = remaining.Slice(TlvHeaderLength, (int)valueLength);
+            if (remaining[..8].SequenceEqual(ExecuteDiscriminator))
+                return DecodeMetaListValue(value, maximumEntries, out exceedsEntryLimit);
+            offset += TlvHeaderLength + (int)valueLength;
+        }
+
+        return null;
+    }
+
     private static byte[] PackMetaListInstruction(
         ReadOnlySpan<byte> discriminator,
         IReadOnlyList<ExtraAccountMeta> extraAccountMetas)
@@ -352,13 +388,23 @@ public static partial class TransferHookProgram
         return data;
     }
 
-    private static ExtraAccountMeta[]? DecodeMetaListValue(ReadOnlySpan<byte> value)
+    private static ExtraAccountMeta[]? DecodeMetaListValue(
+        ReadOnlySpan<byte> value,
+        int maximumEntries,
+        out bool exceedsEntryLimit)
     {
+        exceedsEntryLimit = false;
         if (value.Length < ListHeaderLength)
             return null;
         var count = BinaryPrimitives.ReadUInt32LittleEndian(value);
         if (count > int.MaxValue)
             return null;
+        if (count > (uint)maximumEntries)
+        {
+            exceedsEntryLimit = true;
+            return null;
+        }
+
         var requiredLength = ListHeaderLength + ((long)count * ExtraAccountMeta.Length);
         if (requiredLength > value.Length)
             return null;
@@ -411,6 +457,29 @@ public static partial class TransferHookProgram
         }
 
         return new(address, configuration.IsSigner, configuration.IsWritable);
+    }
+
+    private static List<byte> RequiredAccountDataIndexes(ExtraAccountMeta configuration)
+    {
+        if (configuration.Discriminator == 2)
+        {
+            var data = configuration.AddressConfigurationSpan;
+            return data[0] == 2 ? [data[1]] : [];
+        }
+
+        if (configuration.Discriminator is not 1 and < ExternalProgramBit)
+            return [];
+
+        var seeds = configuration.DecodeSeeds()
+            ?? throw new FormatException("An extra-account PDA has an invalid seed configuration.");
+        var indexes = new List<byte>();
+        foreach (var seed in seeds)
+        {
+            if (seed.Kind == ExtraAccountSeedKind.AccountData && !indexes.Contains(seed.AccountIndex))
+                indexes.Add(seed.AccountIndex);
+        }
+
+        return indexes;
     }
 
     private static byte[] ResolveSeed(

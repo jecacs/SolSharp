@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using FluentAssertions;
 using NUnit.Framework;
 using SolSharp.Core.Primitives;
@@ -45,7 +46,7 @@ public static class SolanaRpcClientConfirmTests
             statuses.Should().HaveCount(2);
             statuses[0]!.Slot.Should().Be(10ul);
             statuses[0]!.Confirmations.Should().Be(5);
-            statuses[0]!.Status!.Value.GetProperty("Ok").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+            statuses[0]!.Status!.Value.GetProperty("Ok").ValueKind.Should().Be(JsonValueKind.Null);
             statuses[0]!.ConfirmationStatus.Should().Be("confirmed");
             statuses[0]!.IsError.Should().BeFalse();
             statuses[1].Should().BeNull();
@@ -70,7 +71,7 @@ public static class SolanaRpcClientConfirmTests
             var act = async () => await client.GetSignatureStatusesAsync(["Sig111"]);
 
             // Assert
-            await act.Should().ThrowAsync<System.Text.Json.JsonException>();
+            await act.Should().ThrowAsync<JsonException>();
         }
     }
 
@@ -115,7 +116,7 @@ public static class SolanaRpcClientConfirmTests
             var act = async () => await client.ConfirmTransactionAsync("Sig111", Commitment.Finalized);
 
             // Assert
-            await act.Should().ThrowAsync<System.Text.Json.JsonException>();
+            await act.Should().ThrowAsync<JsonException>();
         }
 
         [Test]
@@ -220,6 +221,26 @@ public static class SolanaRpcClientConfirmTests
 
             // Assert
             await act.Should().ThrowAsync<TransactionFailedException>();
+        }
+    }
+
+    [TestFixture]
+    public sealed class TransactionFailedExceptionConstructor
+    {
+        [Test]
+        public void Error_RemainsUsableAfterSourceDocumentIsDisposed()
+        {
+            // Arrange
+            TransactionFailedException exception;
+            using (var document = JsonDocument.Parse("""{"InstructionError":[0,"Custom"]}"""))
+                exception = new("Sig111", document.RootElement);
+
+            // Act
+            var error = exception.Error;
+
+            // Assert
+            error.Should().NotBeNull();
+            error.Value.GetProperty("InstructionError")[1].GetString().Should().Be("Custom");
         }
     }
 

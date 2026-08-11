@@ -14,6 +14,19 @@ internal ref struct SysvarBincodeReader(ReadOnlySpan<byte> data)
             throw Invalid($"Account data has {_data.Length - _offset} trailing bytes.");
     }
 
+    /// <summary>
+    /// Accepts the zero padding the runtime leaves behind. Sysvar accounts are allocated at their
+    /// canonical size and the value is serialized into that buffer, so a collection holding fewer
+    /// than its maximum number of entries is followed by zero bytes. Only zeros are tolerated, so
+    /// trailing garbage is still rejected.
+    /// </summary>
+    public readonly void EnsureEndOrZeroPadding()
+    {
+        var remainder = _data[_offset..];
+        if (remainder.IndexOfAnyExcept((byte)0) >= 0)
+            throw Invalid($"Account data has {remainder.Length} trailing bytes that are not zero padding.");
+    }
+
     public bool ReadBool()
     {
         var value = ReadByte();

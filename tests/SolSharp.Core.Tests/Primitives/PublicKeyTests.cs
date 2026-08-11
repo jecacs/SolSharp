@@ -56,6 +56,22 @@ public static class PublicKeyTests
             // Assert
             act.Should().Throw<ArgumentException>();
         }
+
+        [Test]
+        public void OverLongInput_IsNotCopiedIntoTheException()
+        {
+            // Arrange
+            var input = new string('z', 10_000);
+
+            // Act
+            Action act = () => PublicKey.Parse(input);
+
+            // Assert
+            var exception = act.Should().Throw<ArgumentException>().Which;
+            exception.Message.Length.Should().BeLessThan(256);
+            exception.Message.Should().NotContain(input);
+            exception.Message.Should().Contain(input.Length.ToString());
+        }
     }
 
     [TestFixture]
@@ -160,6 +176,56 @@ public static class PublicKeyTests
         {
             Action act = static () => JsonSerializer.Deserialize<PublicKey>("\"0\"");
             act.Should().Throw<JsonException>();
+        }
+
+        [Test]
+        public void Deserialize_OverLongInput_IsRejectedBeforeMaterializingIt()
+        {
+            // Arrange
+            var input = new string('z', 1_000_000);
+            var json = JsonSerializer.Serialize(input);
+            try
+            {
+                _ = JsonSerializer.Deserialize<PublicKey>($"\"{new string('z', PublicKey.MaxBase58Length + 1)}\"");
+            }
+            catch (JsonException)
+            {
+                // Warm serializer metadata and the converter's oversized-token path before measuring.
+            }
+
+            // Act
+            JsonException? exception = null;
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            try
+            {
+                _ = JsonSerializer.Deserialize<PublicKey>(json);
+            }
+            catch (JsonException error)
+            {
+                exception = error;
+            }
+
+            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+            // Assert
+            exception.Should().NotBeNull();
+            exception.Message.Length.Should().BeLessThan(256);
+            exception.Message.Should().NotContain(input);
+            allocated.Should().BeLessThan(256_000, "the oversized token should not become a UTF-16 string");
+        }
+
+        [Test]
+        public void Deserialize_MaximumLengthEscapedValue_RemainsAccepted()
+        {
+            // Arrange: every base58 character may legally be represented as a six-byte JSON \uXXXX escape.
+            var bytes = Enumerable.Repeat(byte.MaxValue, PublicKey.Length).ToArray();
+            var escaped = string.Concat(new PublicKey(bytes).ToString().Select(static character => $"\\u{(int)character:x4}"));
+
+            // Act
+            var key = JsonSerializer.Deserialize<PublicKey>($"\"{escaped}\"");
+
+            // Assert
+            key.ToBytes().Should().Equal(bytes);
         }
 
         [TestCase("123")]
