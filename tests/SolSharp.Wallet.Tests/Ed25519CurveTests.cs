@@ -43,5 +43,48 @@ public static class Ed25519CurveTests
             key[31] |= 0x80;
             Ed25519Curve.IsOnCurve(key).Should().BeTrue();
         }
+
+        // A y at or above p is reduced into the field rather than rejected, matching curve25519-dalek.
+        // Asserting that y = p + k answers exactly as y = k pins that reduction without needing an
+        // external oracle, and it is the property most at risk from any change to the field arithmetic.
+        // The range stops at 19 because p = 2^255 - 19, so p + 19 is the first value that overflows into
+        // bit 255 - the sign of x, which is masked off and would make the comparison meaningless.
+        [Test]
+        public void NonCanonicalYIsReducedModuloP()
+        {
+            // Arrange
+            var p = (System.Numerics.BigInteger.One << 255) - 19;
+
+            // Act & Assert
+            for (var k = 0; k < 19; k++)
+            {
+                Ed25519Curve.IsOnCurve(Encode(p + k))
+                    .Should().Be(Ed25519Curve.IsOnCurve(Encode(k)), "y = p + {0} must reduce to y = {0}", k);
+            }
+        }
+
+        // Above the 255-bit boundary the top bit is the sign of x, so it is masked off and y wraps to
+        // k - 19 rather than continuing the reduction above.
+        [Test]
+        public void ValuesAboveTheSignBitBoundaryDropTheTopBit()
+        {
+            // Arrange
+            var p = (System.Numerics.BigInteger.One << 255) - 19;
+
+            // Act & Assert
+            for (var k = 19; k < 40; k++)
+            {
+                Ed25519Curve.IsOnCurve(Encode(p + k))
+                    .Should().Be(Ed25519Curve.IsOnCurve(Encode(k - 19)), "y = p + {0} masks to y = {1}", k, k - 19);
+            }
+        }
+
+        private static byte[] Encode(System.Numerics.BigInteger value)
+        {
+            var bytes = new byte[32];
+            var raw = value.ToByteArray(isUnsigned: true, isBigEndian: false);
+            Array.Copy(raw, bytes, Math.Min(raw.Length, 32));
+            return bytes;
+        }
     }
 }

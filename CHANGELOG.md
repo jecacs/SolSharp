@@ -7,6 +7,49 @@ version (on the earlier 0.x releases, minor versions could carry them).
 
 ## [Unreleased]
 
+### Added
+
+- `Mints.Token2022NativeMint`, the Token-2022 native mint (`9pan9bMn5HatX4EJdBwg9VgCa7Uz5HL8N1m5D3NdXejP`),
+  a program address of the seeds `"native-mint"` and `255` under Token-2022. It is a different account from
+  the classic `Mints.WrappedSol`.
+- Length-bounded `Base58.Decode` and `Base58.TryDecode` overloads, plus `PublicKey.MaxBase58Length` (44),
+  `Hash.MaxBase58Length` (44), and `Signature.MaxBase58Length` (88).
+
+### Performance
+
+- `PublicKey.IsOnCurve` now uses the field arithmetic already present in the BouncyCastle dependency
+  (`X25519Field.SqrtRatioVar`) instead of two 255-bit `BigInteger.ModPow` operations: **309 µs → 7.8 µs
+  (39×)**. Program-derived and associated-token-account derivation inherit it — `GetAddress` goes from
+  642 µs to 18 µs (**35×**), so 10,000 ATA derivations drop from 5.7 s to 0.18 s. Results are unchanged:
+  verified identical on 200,000 random keys plus the non-canonical `y >= p` boundary, and all 300
+  reference program addresses still match the pinned Rust `find_program_address` byte for byte.
+- Base58 encoding and decoding of 32-byte values (every public key and hash) use a fixed-width codec
+  instead of the general byte-at-a-time bignum: **encode 3.0 µs → 0.53 µs**, **`PublicKey.TryParse`
+  1.18 µs → 0.25 µs**, and parsing no longer allocates an intermediate array. Output and accept/reject
+  behaviour were verified identical to the general codec across 300,000 values, including leading-zero,
+  all-zero and over-32-byte inputs. Other lengths continue to use the general codec unchanged.
+
+### Fixed
+
+- `Token2022Program.CreateNativeMint` named the classic SPL Token wSOL mint as account 1 instead of the
+  Token-2022 native mint, so the instruction was always rejected with `InvalidMint`. Verified against the
+  address derived from the pinned interface's seeds.
+- `SlotHashesSysvarState.Parse` and `StakeHistorySysvarState.Parse` rejected the canonical sysvar account
+  whenever its 512-entry ring was not yet full. The runtime allocates these accounts at their canonical size
+  and serializes into them, so a partly-filled ring is followed by zero padding; both decoders now accept
+  that padding, still reject non-zero trailing bytes, and bound the input to the canonical account length.
+  This affected fresh local validators and any cluster younger than 512 epochs, not mature clusters.
+- `PublicKey`, `Hash`, and `Signature` base58 parsing now bound the input length before decoding. Base58
+  decoding is quadratic, so a hostile string previously cost work proportional to its size (a 200,000-character
+  input took roughly 24 seconds to reject; it is now rejected immediately).
+- `AssociatedTokenAccount.DecodeInstructionData` returned `null` for empty instruction data. The program
+  decodes an empty input as `Create`, which is the original ATA encoding still present in historical
+  transactions.
+- The `AddSolanaRpc` resilience defaults allowed each attempt only 10 seconds, which aborted heavy but valid
+  reads (large `getProgramAccounts`, full `getBlock`) that the reference client completes within its 30-second
+  per-request budget. The per-attempt budget now matches the reference and the total request budget was
+  widened so retries still fit; an explicit `configureResilience` callback continues to override both.
+
 ## [3.0.0] - 2026-08-10
 
 ### Changed

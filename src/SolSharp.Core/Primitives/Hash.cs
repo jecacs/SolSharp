@@ -15,6 +15,9 @@ public readonly struct Hash : IEquatable<Hash>
     /// <summary>The length of a Solana hash in bytes (32).</summary>
     public const int Length = 32;
 
+    /// <summary>The longest base58 string that can encode a <see cref="Length"/>-byte hash.</summary>
+    public const int MaxBase58Length = 44;
+
     private readonly ulong _a;
     private readonly ulong _b;
     private readonly ulong _c;
@@ -71,7 +74,8 @@ public readonly struct Hash : IEquatable<Hash>
     /// <returns><c>true</c> if <paramref name="base58"/> decoded to a valid <see cref="Length"/>-byte hash.</returns>
     public static bool TryParse(string? base58, out Hash hash)
     {
-        if (Base58.TryDecode(base58, out var bytes) && bytes.Length == Length)
+        Span<byte> bytes = stackalloc byte[Length];
+        if (base58 is not null && Base58.TryDecode32(base58, bytes))
         {
             hash = new(bytes, base58);
             return true;
@@ -129,7 +133,8 @@ public readonly struct Hash : IEquatable<Hash>
 
     private static byte[] Decode(string base58)
     {
-        if (!Base58.TryDecode(base58, out var bytes))
+        var bytes = new byte[Length];
+        if (base58 is null || !Base58.TryDecode32(base58, bytes))
             throw new ArgumentException($"Not a valid base58 string: '{base58}'.", nameof(base58));
 
         return bytes;

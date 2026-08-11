@@ -39,6 +39,47 @@ public static class SlotHashesSysvarStateTests
             FluentActions.Invoking(() => SlotHashesSysvarState.Parse(data))
                 .Should().Throw<ArgumentException>().WithMessage("*exceeds the maximum*");
         }
+
+        [Test]
+        public void CanonicalZeroPadding_IsAccepted()
+        {
+            // Arrange: the runtime allocates the account at its canonical size and serializes into it, so a
+            // ring that is not yet full is followed by zero bytes. Rust's bincode decode ignores that tail.
+            var data = new byte[SlotHashesSysvarState.MaximumDataLength];
+            Convert.FromHexString(
+                    "01000000000000000900000000000000" +
+                    "0102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F20")
+                .CopyTo(data, 0);
+
+            // Act
+            var state = SlotHashesSysvarState.Parse(data);
+
+            // Assert
+            state.Entries.Should().HaveCount(1);
+            state.Entries[0].Slot.Should().Be(9);
+        }
+
+        [Test]
+        public void NonZeroTrailingBytes_AreStillRejected()
+        {
+            // Arrange
+            var data = new byte[SlotHashesSysvarState.MaximumDataLength];
+            Convert.FromHexString(
+                    "01000000000000000900000000000000" +
+                    "0102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F20")
+                .CopyTo(data, 0);
+            data[^1] = 0x42;
+
+            // Act & Assert
+            FluentActions.Invoking(() => SlotHashesSysvarState.Parse(data))
+                .Should().Throw<ArgumentException>().WithMessage("*not zero padding*");
+        }
+
+        [Test]
+        public void DataLongerThanTheCanonicalAccount_IsRejected() =>
+            // Act & Assert
+            FluentActions.Invoking(static () => SlotHashesSysvarState.Parse(new byte[SlotHashesSysvarState.MaximumDataLength + 1]))
+                .Should().Throw<ArgumentException>().WithMessage("*exceeds*");
     }
 }
 
@@ -76,6 +117,39 @@ public static class StakeHistorySysvarStateTests
             // Act & Assert
             FluentActions.Invoking(() => StakeHistorySysvarState.Parse(data))
                 .Should().Throw<ArgumentException>();
+        }
+
+        [Test]
+        public void CanonicalZeroPadding_IsAccepted()
+        {
+            // Arrange: a cluster younger than 512 epochs holds fewer entries, zero-padded to the canonical size.
+            var data = new byte[StakeHistorySysvarState.MaximumDataLength];
+            Convert.FromHexString(
+                    "0100000000000000" +
+                    "09000000000000000A000000000000000B000000000000000C00000000000000")
+                .CopyTo(data, 0);
+
+            // Act
+            var state = StakeHistorySysvarState.Parse(data);
+
+            // Assert
+            state.Entries.Should().Equal(new StakeHistoryEpoch(9, new(10, 11, 12)));
+        }
+
+        [Test]
+        public void NonZeroTrailingBytes_AreStillRejected()
+        {
+            // Arrange
+            var data = new byte[StakeHistorySysvarState.MaximumDataLength];
+            Convert.FromHexString(
+                    "0100000000000000" +
+                    "09000000000000000A000000000000000B000000000000000C00000000000000")
+                .CopyTo(data, 0);
+            data[^1] = 0x42;
+
+            // Act & Assert
+            FluentActions.Invoking(() => StakeHistorySysvarState.Parse(data))
+                .Should().Throw<ArgumentException>().WithMessage("*not zero padding*");
         }
     }
 }

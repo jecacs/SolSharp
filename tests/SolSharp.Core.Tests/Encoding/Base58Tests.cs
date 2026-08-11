@@ -89,4 +89,55 @@ public static class Base58Tests
             bytes.Should().BeEmpty();
         }
     }
+
+    [TestFixture]
+    public sealed class BoundedTryDecode
+    {
+        private const int PublicKeyMaxBase58Length = 44;
+
+        [Test]
+        public void OverLongInput_IsRejectedWithoutDecoding()
+        {
+            // Arrange: base58 decoding is quadratic, so an over-long string must be rejected on length
+            // alone. A 200k-character input took ~24 s to reject before the bound existed.
+            var input = new string('z', 200_000);
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+            // Act
+            var decoded = Base58.TryDecode(input, PublicKeyMaxBase58Length, out var bytes);
+            stopwatch.Stop();
+
+            // Assert
+            decoded.Should().BeFalse();
+            bytes.Should().BeEmpty();
+            stopwatch.ElapsedMilliseconds.Should().BeLessThan(1_000);
+        }
+
+        [Test]
+        public void InputWithinTheBound_StillDecodes()
+        {
+            // Act
+            var decoded = Base58.TryDecode("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", PublicKeyMaxBase58Length, out var bytes);
+
+            // Assert
+            decoded.Should().BeTrue();
+            bytes.Should().HaveCount(32);
+        }
+
+        [Test]
+        public void NegativeBound_Throws() =>
+            // Act & Assert
+            FluentActions.Invoking(static () => Base58.TryDecode("abc", -1, out _))
+                .Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [TestFixture]
+    public sealed class BoundedDecode
+    {
+        [Test]
+        public void OverLongInput_ThrowsFormatException() =>
+            // Act & Assert
+            FluentActions.Invoking(static () => Base58.Decode(new('z', 100), 44))
+                .Should().Throw<FormatException>().WithMessage("*at most 44*");
+    }
 }

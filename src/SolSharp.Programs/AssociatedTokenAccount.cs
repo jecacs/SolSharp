@@ -12,18 +12,24 @@ public static class AssociatedTokenAccount
     private static readonly PublicKey DefaultTokenProgram = PublicKey.Parse(SolanaProgramIds.TokenProgram);
 
     /// <summary>Decodes an ATA instruction tag.</summary>
-    /// <param name="data">Complete ATA instruction data.</param>
+    /// <param name="data">
+    /// Complete ATA instruction data. Empty data is the original encoding the program still accepts and
+    /// decodes as <c>Create</c>, so historical instructions classify the same way the program does.
+    /// </param>
     /// <returns><c>Create</c>, <c>CreateIdempotent</c>, or <c>RecoverNested</c>; otherwise <c>null</c>.</returns>
     public static string? DecodeInstructionData(ReadOnlySpan<byte> data)
-        => data.Length == 1
-            ? data[0] switch
+        => data.Length switch
+        {
+            0 => "Create",
+            1 => data[0] switch
             {
                 0 => "Create",
                 1 => "CreateIdempotent",
                 2 => "RecoverNested",
                 _ => null
-            }
-            : null;
+            },
+            _ => null
+        };
 
     /// <summary>Derives the associated token account address holding <paramref name="mint"/> for <paramref name="owner"/>.</summary>
     /// <param name="owner">The wallet that owns the token account.</param>

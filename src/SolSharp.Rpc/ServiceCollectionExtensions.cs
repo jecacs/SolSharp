@@ -57,6 +57,18 @@ public static class ServiceCollectionExtensions
         });
 
         var resilience = builder.AddStandardResilienceHandler();
+
+        // The standard pipeline defaults to a 10 s per-attempt budget, which aborts heavy but valid reads
+        // (large getProgramAccounts, full getBlock) that the reference client completes: it allows a single
+        // attempt 30 s. Match that per-attempt budget and widen the total so retries still fit. Applied
+        // before the caller's callback so an explicit configuration still wins.
+        resilience.Configure(static options =>
+        {
+            options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(30);
+            options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(100);
+            options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(60);
+        });
+
         if (configureResilience is not null)
             resilience.Configure(configureResilience);
 

@@ -13,6 +13,9 @@ public readonly struct Signature : IEquatable<Signature>
     /// <summary>The length of an Ed25519 signature in bytes (64).</summary>
     public const int Length = 64;
 
+    /// <summary>The longest base58 string that can encode a <see cref="Length"/>-byte signature.</summary>
+    public const int MaxBase58Length = 88;
+
     private readonly ulong _a;
     private readonly ulong _b;
     private readonly ulong _c;
@@ -77,7 +80,7 @@ public readonly struct Signature : IEquatable<Signature>
     /// <returns><c>true</c> if <paramref name="base58"/> decoded to a valid <see cref="Length"/>-byte signature.</returns>
     public static bool TryParse(string? base58, out Signature signature)
     {
-        if (Base58.TryDecode(base58, out var bytes) && bytes.Length == Length)
+        if (Base58.TryDecode(base58, MaxBase58Length, out var bytes) && bytes.Length == Length)
         {
             signature = new(bytes, base58);
             return true;
@@ -168,7 +171,7 @@ public readonly struct Signature : IEquatable<Signature>
 
     private static byte[] Decode(string base58)
     {
-        if (!Base58.TryDecode(base58, out var bytes))
+        if (!Base58.TryDecode(base58, MaxBase58Length, out var bytes))
             throw new ArgumentException($"Not a valid base58 string: '{base58}'.", nameof(base58));
 
         return bytes;
