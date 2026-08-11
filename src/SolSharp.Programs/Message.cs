@@ -57,10 +57,13 @@ public sealed class Message : ITransactionMessage
     /// <param name="recentBlockhash">A recent blockhash, e.g. from <c>getLatestBlockhash</c>.</param>
     /// <param name="instructions">The instructions to include, in execution order.</param>
     /// <returns>The compiled message.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="instructions"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="instructions"/>, an instruction, or one of its account/data collections is <c>null</c>.
+    /// </exception>
     /// <exception cref="ArgumentException">
-    /// The instructions reference more than <see cref="MaxAccounts"/> distinct accounts or require more
-    /// than 127 signatures, whose high bit would collide with the versioned-message prefix.
+    /// A compact-u16 collection limit is exceeded, the instructions reference more than
+    /// <see cref="MaxAccounts"/> distinct accounts, or they require more than 127 signatures, whose high
+    /// bit would collide with the versioned-message prefix.
     /// </exception>
     public static Message Compile(PublicKey feePayer, Hash recentBlockhash, IReadOnlyList<Instruction> instructions)
         => Compile(feePayer, recentBlockhash.ToString(), instructions);
@@ -72,15 +75,27 @@ public sealed class Message : ITransactionMessage
     /// <param name="recentBlockhash">A recent blockhash (base58), e.g. from <c>getLatestBlockhash</c>.</param>
     /// <param name="instructions">The instructions to include, in execution order.</param>
     /// <returns>The compiled message.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="recentBlockhash"/> or <paramref name="instructions"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="recentBlockhash"/>, <paramref name="instructions"/>, an instruction, or one of its
+    /// account/data collections is <c>null</c>.
+    /// </exception>
     /// <exception cref="ArgumentException">
-    /// The instructions reference more than <see cref="MaxAccounts"/> distinct accounts or require more
-    /// than 127 signatures, whose high bit would collide with the versioned-message prefix.
+    /// A compact-u16 collection limit is exceeded, the instructions reference more than
+    /// <see cref="MaxAccounts"/> distinct accounts, or they require more than 127 signatures, whose high
+    /// bit would collide with the versioned-message prefix.
     /// </exception>
     public static Message Compile(PublicKey feePayer, string recentBlockhash, IReadOnlyList<Instruction> instructions)
     {
         ArgumentNullException.ThrowIfNull(recentBlockhash);
         ArgumentNullException.ThrowIfNull(instructions);
+        if (instructions.Count > ShortVec.MaxValue)
+            throw new ArgumentException(
+                $"A legacy message can contain at most {ShortVec.MaxValue} instructions, got {instructions.Count}.",
+                nameof(instructions));
+
+        // Snapshot once. IReadOnlyList<T> promises no immutability, so validating one view and compiling
+        // another lets a concurrently-mutated or lazily-materialised collection slip past every check below.
+        Instruction[] source = [.. instructions];
 
         var flags = new Dictionary<PublicKey, AccountFlags>();
 
@@ -91,9 +106,24 @@ public sealed class Message : ITransactionMessage
         }
 
         Merge(feePayer, signer: true, writable: true);
-        foreach (var instruction in instructions)
+        for (var index = 0; index < source.Length; index++)
         {
-            foreach (var account in instruction.Accounts)
+            var instruction = source[index]
+                ?? throw new ArgumentNullException(nameof(instructions), $"Instruction at index {index} is null.");
+            var accounts = instruction.Accounts
+                ?? throw new ArgumentNullException(nameof(instructions), $"Instruction at index {index} has null accounts.");
+            var instructionData = instruction.Data
+                ?? throw new ArgumentNullException(nameof(instructions), $"Instruction at index {index} has null data.");
+            if (accounts.Count > ShortVec.MaxValue)
+                throw new ArgumentException(
+                    $"Legacy instruction {index} can reference at most {ShortVec.MaxValue} account slots, got {accounts.Count}.",
+                    nameof(instructions));
+            if (instructionData.Length > ShortVec.MaxValue)
+                throw new ArgumentException(
+                    $"Legacy instruction {index} can carry at most {ShortVec.MaxValue} data bytes, got {instructionData.Length}.",
+                    nameof(instructions));
+
+            foreach (var account in accounts)
                 Merge(account.PublicKey, account.IsSigner, account.IsWritable);
 
             Merge(instruction.ProgramId, signer: false, writable: false);
@@ -145,10 +175,10 @@ public sealed class Message : ITransactionMessage
                 $"A legacy message can require at most {MessageV0.VersionPrefix - 1} signatures, got {requiredSignatures}.",
                 nameof(instructions));
 
-        var compiled = new CompiledInstruction[instructions.Count];
-        for (var n = 0; n < instructions.Count; n++)
+        var compiled = new CompiledInstruction[source.Length];
+        for (var n = 0; n < source.Length; n++)
         {
-            var instruction = instructions[n];
+            var instruction = source[n];
             var accountIndexes = new byte[instruction.Accounts.Count];
             for (var a = 0; a < instruction.Accounts.Count; a++)
                 accountIndexes[a] = (byte)finalPosition[instruction.Accounts[a].PublicKey];
@@ -228,19 +258,23 @@ public sealed class Message : ITransactionMessage
 
     /// <summary>Returns the exact length of the serialized message, in bytes.</summary>
     /// <returns>The serialized length.</returns>
+    /// <exception cref="OverflowException">The aggregate message length exceeds <see cref="int.MaxValue"/>.</exception>
     public int GetSerializedLength()
     {
-        var length = 3 // the header counts
-            + ShortVec.GetByteCount(AccountKeys.Count) + (AccountKeys.Count * PublicKey.Length)
-            + PublicKey.Length // the recent blockhash
-            + ShortVec.GetByteCount(Instructions.Count);
+        checked
+        {
+            var length = 3 // the header counts
+                + ShortVec.GetByteCount(AccountKeys.Count) + (AccountKeys.Count * PublicKey.Length)
+                + PublicKey.Length // the recent blockhash
+                + ShortVec.GetByteCount(Instructions.Count);
 
-        foreach (var instruction in Instructions)
-            length += 1
-                + ShortVec.GetByteCount(instruction.AccountIndexes.Length) + instruction.AccountIndexes.Length
-                + ShortVec.GetByteCount(instruction.Data.Length) + instruction.Data.Length;
+            foreach (var instruction in Instructions)
+                length += 1
+                    + ShortVec.GetByteCount(instruction.AccountIndexes.Length) + instruction.AccountIndexes.Length
+                    + ShortVec.GetByteCount(instruction.Data.Length) + instruction.Data.Length;
 
-        return length;
+            return length;
+        }
     }
 
     /// <summary>Serializes the message into <paramref name="destination"/> without allocating.</summary>

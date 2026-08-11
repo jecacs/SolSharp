@@ -72,6 +72,106 @@ public static class MessageTests
             typed.Serialize().Should().Equal(text.Serialize());
         }
 
+        [Test]
+        public void NullInstruction_ThrowsArgumentNullException()
+        {
+            // Arrange
+            Instruction[] instructions = [null!];
+
+            // Act
+            Action act = () => Message.Compile(Key(1), Key(8).ToString(), instructions);
+
+            // Assert
+            act.Should().Throw<ArgumentNullException>()
+                .WithParameterName("instructions")
+                .WithMessage("*index 0 is null*");
+        }
+
+        [Test]
+        public void NullInstructionAccounts_ThrowsArgumentNullException()
+        {
+            // Arrange
+            var instruction = new Instruction { ProgramId = Key(9), Accounts = null!, Data = [] };
+
+            // Act
+            Action act = () => Message.Compile(Key(1), Key(8).ToString(), [instruction]);
+
+            // Assert
+            act.Should().Throw<ArgumentNullException>()
+                .WithParameterName("instructions")
+                .WithMessage("*index 0 has null accounts*");
+        }
+
+        [Test]
+        public void NullInstructionData_ThrowsArgumentNullException()
+        {
+            // Arrange
+            var instruction = new Instruction { ProgramId = Key(9), Accounts = [], Data = null! };
+
+            // Act
+            Action act = () => Message.Compile(Key(1), Key(8).ToString(), [instruction]);
+
+            // Assert
+            act.Should().Throw<ArgumentNullException>()
+                .WithParameterName("instructions")
+                .WithMessage("*index 0 has null data*");
+        }
+
+        [Test]
+        public void MoreThanCompactU16Instructions_ThrowsBeforeReadingElements()
+        {
+            // Arrange: the empty slots also verify that the collection limit is checked first.
+            var instructions = new Instruction[ushort.MaxValue + 1];
+
+            // Act
+            Action act = () => Message.Compile(Key(1), Key(8).ToString(), instructions);
+
+            // Assert
+            act.Should().Throw<ArgumentException>()
+                .WithParameterName("instructions")
+                .WithMessage("*at most 65535 instructions*");
+        }
+
+        [Test]
+        public void MoreThanCompactU16AccountSlots_ThrowsBeforeCompilation()
+        {
+            // Arrange
+            var instruction = new Instruction
+            {
+                ProgramId = Key(9),
+                Accounts = new AccountMeta[ushort.MaxValue + 1],
+                Data = []
+            };
+
+            // Act
+            Action act = () => Message.Compile(Key(1), Key(8).ToString(), [instruction]);
+
+            // Assert
+            act.Should().Throw<ArgumentException>()
+                .WithParameterName("instructions")
+                .WithMessage("*instruction 0*at most 65535 account slots*");
+        }
+
+        [Test]
+        public void MoreThanCompactU16DataBytes_ThrowsBeforeCompilation()
+        {
+            // Arrange
+            var instruction = new Instruction
+            {
+                ProgramId = Key(9),
+                Accounts = [],
+                Data = new byte[ushort.MaxValue + 1]
+            };
+
+            // Act
+            Action act = () => Message.Compile(Key(1), Key(8).ToString(), [instruction]);
+
+            // Assert
+            act.Should().Throw<ArgumentException>()
+                .WithParameterName("instructions")
+                .WithMessage("*instruction 0*at most 65535 data bytes*");
+        }
+
         // Reference bytes from solders for a case that exercises dedup, flag merging (an account that is
         // read-only in one instruction and writable in another becomes writable), all four account
         // classes, and the by-public-key ordering within each class.

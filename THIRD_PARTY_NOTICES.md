@@ -41,14 +41,14 @@ byte vector identify the originating contract in their name or surrounding docum
 ## BLS runtime dependency
 
 SolSharp's optional-in-use BLS12-381 key and signature API is backed by
-[`Nethermind.Crypto.Bls` 1.0.5](https://www.nuget.org/packages/Nethermind.Crypto.Bls/1.0.5),
+[`Nethermind.Crypto.Bls` 1.1.0](https://www.nuget.org/packages/Nethermind.Crypto.Bls/1.1.0),
 an MIT-licensed .NET binding at repository commit
-[`a53533fc0112f16a453f744c39cb12cecf953784`](https://github.com/NethermindEth/blst-bindings/tree/a53533fc0112f16a453f744c39cb12cecf953784).
+[`77442f26c7ee4bb46b3c12e7120c6325baa0f2e3`](https://github.com/NethermindEth/blst-bindings/tree/77442f26c7ee4bb46b3c12e7120c6325baa0f2e3).
 That package carries native [Supranational `blst`](https://github.com/supranational/blst)
 binaries, copyright Supranational LLC, licensed under Apache-2.0. Its package SHA-256 is
-`108f09b2210ac3e95a4610379fe3c58af26d01cc9f19927e748b8196aa5d88ac`.
+`10d8b2438a9a4112b784750ce66eefc7a4ddbe9458931703cc86ec590c544408`.
 
-Version 1.0.5 supplies native assets for Linux x64/arm64, macOS x64/arm64, and Windows x64.
+Version 1.1.0 supplies native assets for Linux x64/arm64, macOS x64/arm64, and Windows x64.
 It does not supply win-arm64, musl, mobile, or browser assets; applications that call the BLS
 API therefore need one of the packaged native RIDs. The rest of SolSharp remains managed and
 does not load `blst` unless a BLS operation is used.

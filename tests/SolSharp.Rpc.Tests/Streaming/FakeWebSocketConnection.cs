@@ -56,7 +56,7 @@ internal sealed class FakeWebSocketConnection : IWebSocketConnection
             Sent.Add(text);
     }
 
-    public async ValueTask<string?> ReceiveAsync(CancellationToken cancellationToken)
+    public async ValueTask<WebSocketTextMessage?> ReceiveAsync(CancellationToken cancellationToken)
     {
         LastReceiveCancellationToken = cancellationToken;
         ReceiveStarted.TrySetResult();
@@ -65,7 +65,9 @@ internal sealed class FakeWebSocketConnection : IWebSocketConnection
             var message = await _incoming.Reader.ReadAsync(cancellationToken);
             if (ReceiveMessageBehavior is not null)
                 await ReceiveMessageBehavior(message, cancellationToken);
-            return message;
+
+            // Mirrors the real transport: the wire size is the UTF-8 length of what the peer sent.
+            return new WebSocketTextMessage(message, System.Text.Encoding.UTF8.GetByteCount(message));
         }
         catch (ChannelClosedException)
         {

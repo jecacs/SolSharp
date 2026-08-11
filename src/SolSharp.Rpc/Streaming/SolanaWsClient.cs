@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
@@ -33,6 +34,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
     private readonly SemaphoreSlim _sendLock = new(1, 1);
     private readonly CancellationTokenSource _lifetimeCts = new();
     private readonly ILogger _logger;
+    private readonly NotificationBufferBudget _notificationBufferBudget;
 
     private ConnectionEpoch? _connection;
     private ConnectionEpoch? _connecting;
@@ -72,6 +74,20 @@ public sealed class SolanaWsClient : IAsyncDisposable
             throw new ArgumentOutOfRangeException(nameof(options), "Maximum message size must be positive.");
         if (options.SubscriptionBufferCapacity <= 0)
             throw new ArgumentOutOfRangeException(nameof(options), "Subscription buffer capacity must be positive.");
+        if (options.MaxBufferedNotificationBytesPerSubscription <= 0)
+            throw new ArgumentOutOfRangeException(nameof(options), "Per-subscription notification byte limit must be positive.");
+        if (options.MaxBufferedNotificationBytesTotal <= 0)
+            throw new ArgumentOutOfRangeException(nameof(options), "Total notification byte limit must be positive.");
+
+        // A per-subscription limit above the total can never be reached, so every overflow would be
+        // reported as a client-wide one and the per-subscription limit would silently mean nothing.
+        if (options.MaxBufferedNotificationBytesPerSubscription > options.MaxBufferedNotificationBytesTotal)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(options),
+                "Per-subscription notification byte limit cannot exceed the total notification byte limit.");
+        }
+
         if (options.ReconnectInitialDelay < TimeSpan.Zero || options.ReconnectInitialDelay > MaximumTimerDuration)
             throw new ArgumentOutOfRangeException(nameof(options), "Initial reconnect delay must be non-negative and supported by a timer.");
         if (options.ReconnectMaxDelay < options.ReconnectInitialDelay || options.ReconnectMaxDelay > MaximumTimerDuration)
@@ -90,6 +106,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         _connectionFactory = connectionFactory;
         _options = options;
         _logger = loggerFactory?.CreateLogger<SolanaWsClient>() ?? NullLogger<SolanaWsClient>.Instance;
+        _notificationBufferBudget = new(options.MaxBufferedNotificationBytesTotal);
     }
 
     internal SolanaWsClient(IWebSocketConnection connection)
@@ -130,9 +147,17 @@ public sealed class SolanaWsClient : IAsyncDisposable
         Failed
     }
 
+    private enum BufferReservationResult
+    {
+        Reserved,
+        Completed,
+        SubscriptionLimitExceeded,
+        TotalLimitExceeded
+    }
+
     private interface ISubscriptionSink
     {
-        void Deliver(JsonElement result);
+        void Deliver(JsonElement result, int encodedMessageSizeBytes);
 
         void Complete(Exception? exception);
     }
@@ -163,6 +188,8 @@ public sealed class SolanaWsClient : IAsyncDisposable
                 return _pending.Values.Count(static pending => pending.State == PendingState.Abandoned);
         }
     }
+
+    internal long RetainedBufferedNotificationBytes => _notificationBufferBudget.BufferedBytes;
 
     /// <summary>
     /// Opens the WebSocket connection and starts the receive loop. The loop runs until the client is
@@ -975,7 +1002,10 @@ public sealed class SolanaWsClient : IAsyncDisposable
     }
 
     private SubscriptionSink<T> CreateSubscriptionSink<T>()
-        => new(_options.SubscriptionBufferCapacity);
+        => new(
+            _options.SubscriptionBufferCapacity,
+            _options.MaxBufferedNotificationBytesPerSubscription,
+            _notificationBufferBudget);
 
     private async IAsyncEnumerable<T> SubscribeAsync<T>(
         string subscribeMethod,
@@ -993,9 +1023,18 @@ public sealed class SolanaWsClient : IAsyncDisposable
         }
         finally
         {
-            var work = TryTerminate(subscription, exception: null, unsubscribe: true);
-            if (work is not null)
-                await ExecuteTerminalWorkAsync(work);
+            try
+            {
+                var work = TryTerminate(subscription, exception: null, unsubscribe: true);
+                if (work is not null)
+                    await ExecuteTerminalWorkAsync(work);
+            }
+            finally
+            {
+                // No reader escapes this iterator. If enumeration stops early, discard anything that
+                // raced into its channel so the shared byte budget is returned deterministically.
+                sink.DiscardBuffered();
+            }
         }
     }
 
@@ -1454,11 +1493,11 @@ public sealed class SolanaWsClient : IAsyncDisposable
         {
             while (true)
             {
-                var message = await ReceiveWithTimeoutAsync(epoch.Connection, token);
-                if (message is null)
+                var received = await ReceiveWithTimeoutAsync(epoch.Connection, token);
+                if (received is not { } message)
                     return null;
 
-                await RouteAsync(message, epoch);
+                await RouteAsync(message.Text, message.WireByteCount, epoch);
             }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
@@ -1471,7 +1510,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         }
     }
 
-    private async ValueTask<string?> ReceiveWithTimeoutAsync(
+    private async ValueTask<WebSocketTextMessage?> ReceiveWithTimeoutAsync(
         IWebSocketConnection connection,
         CancellationToken cancellationToken)
     {
@@ -1683,7 +1722,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         }
     }
 
-    private async Task RouteAsync(string message, ConnectionEpoch epoch)
+    private async Task RouteAsync(string message, int wireByteCount, ConnectionEpoch epoch)
     {
         using var document = JsonDocument.Parse(message);
         var root = document.RootElement;
@@ -1771,7 +1810,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
             try
             {
                 subscription.ValidateNotification(notification);
-                subscription.Sink.Deliver(notification);
+                subscription.Sink.Deliver(notification, wireByteCount);
                 subscription.Sink.Complete(exception: null);
             }
             catch (Exception exception)
@@ -1787,7 +1826,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         try
         {
             subscription.ValidateNotification(notification);
-            subscription.Sink.Deliver(notification);
+            subscription.Sink.Deliver(notification, wireByteCount);
         }
         catch (Exception exception)
         {
@@ -2001,6 +2040,8 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
     private readonly record struct RouteBinding(ConnectionEpoch Epoch, ulong ServerId);
 
+    private readonly record struct BufferedNotification<T>(T Value, int EncodedMessageSizeBytes);
+
     private sealed class PendingSubscribe(
         int requestId,
         ConnectionEpoch epoch,
@@ -2161,50 +2202,261 @@ public sealed class SolanaWsClient : IAsyncDisposable
     {
     }
 
+    /// <summary>
+    /// Owns the client-wide counter and serializes it with every per-subscription counter. Accounts are
+    /// deliberately not retained here: once a completed reader and its buffered values become unreachable,
+    /// the account finalizer can return their aggregate reservation as a last-resort accounting backstop.
+    /// </summary>
+    private sealed class NotificationBufferBudget(long limit)
+    {
+        private readonly Lock _gate = new();
+        private long _bufferedBytes;
+
+        public long BufferedBytes
+        {
+            get
+            {
+                lock (_gate)
+                    return _bufferedBytes;
+            }
+        }
+
+        public long Limit => limit;
+
+        public NotificationBufferAccount CreateAccount(long accountLimit) => new(this, accountLimit);
+
+        public BufferReservationResult TryReserve(NotificationBufferAccount account, int byteCount)
+        {
+            lock (_gate)
+            {
+                if (account.Completed)
+                    return BufferReservationResult.Completed;
+                if (byteCount > account.Limit - account.BufferedBytes)
+                    return BufferReservationResult.SubscriptionLimitExceeded;
+                if (byteCount > limit - _bufferedBytes)
+                    return BufferReservationResult.TotalLimitExceeded;
+
+                account.BufferedBytes += byteCount;
+                _bufferedBytes += byteCount;
+                return BufferReservationResult.Reserved;
+            }
+        }
+
+        public void Complete(NotificationBufferAccount account)
+        {
+            lock (_gate)
+            {
+                account.Completed = true;
+                DisposeAccountIfDrained(account);
+            }
+        }
+
+        public bool IsCompleted(NotificationBufferAccount account)
+        {
+            lock (_gate)
+                return account.Completed;
+        }
+
+        public void Release(NotificationBufferAccount account, int byteCount)
+        {
+            lock (_gate)
+            {
+                // Releasing more than was reserved would drive the counters negative and silently *inflate*
+                // the budget rather than fail, so clamp instead of trusting the caller's bookkeeping.
+                var released = Math.Min(byteCount, account.BufferedBytes);
+                account.BufferedBytes -= released;
+                _bufferedBytes -= released;
+                DisposeAccountIfDrained(account);
+            }
+        }
+
+        public void ReleaseAll(NotificationBufferAccount account)
+        {
+            lock (_gate)
+            {
+                _bufferedBytes -= account.BufferedBytes;
+                account.BufferedBytes = 0;
+                account.Completed = true;
+
+                // Same drain check as the other release paths: without it an account emptied this way stays
+                // registered for finalization and costs a second GC cycle to collect for no benefit.
+                DisposeAccountIfDrained(account);
+            }
+        }
+
+        private static void DisposeAccountIfDrained(NotificationBufferAccount account)
+        {
+            if (account.Completed && account.BufferedBytes == 0)
+                account.Dispose();
+        }
+    }
+
+    private sealed class NotificationBufferAccount(NotificationBufferBudget budget, long limit) : IDisposable
+    {
+        private readonly NotificationBufferBudget _budget = budget;
+
+        ~NotificationBufferAccount() => _budget.ReleaseAll(this);
+
+        public long Limit { get; } = limit;
+
+        public long TotalLimit => _budget.Limit;
+
+        // Accessed only while NotificationBufferBudget._gate is held.
+        public long BufferedBytes { get; set; }
+
+        // Accessed only while NotificationBufferBudget._gate is held.
+        public bool Completed { get; set; }
+
+        public bool IsCompleted => _budget.IsCompleted(this);
+
+        public BufferReservationResult TryReserve(int byteCount) => _budget.TryReserve(this, byteCount);
+
+        public void Complete() => _budget.Complete(this);
+
+        public void Release(int byteCount) => _budget.Release(this, byteCount);
+
+        // The budget calls this only after completion and a full drain. No recovery work remains.
+        public void Dispose() => GC.SuppressFinalize(this);
+    }
+
+    private sealed class BufferedNotificationReader<T>(
+        ChannelReader<BufferedNotification<T>> inner,
+        NotificationBufferAccount account) : ChannelReader<T>
+    {
+        public override Task Completion => inner.Completion;
+
+        public override bool CanCount => inner.CanCount;
+
+        public override int Count => inner.Count;
+
+        public override bool CanPeek => inner.CanPeek;
+
+        public override ValueTask<T> ReadAsync(CancellationToken cancellationToken = default)
+        {
+            var read = inner.ReadAsync(cancellationToken);
+            if (!read.IsCompletedSuccessfully)
+                return CompleteReadAsync(read, account);
+
+            var buffered = read.Result;
+            account.Release(buffered.EncodedMessageSizeBytes);
+            return ValueTask.FromResult(buffered.Value);
+        }
+
+        public override bool TryPeek([MaybeNullWhen(false)] out T item)
+        {
+            if (inner.TryPeek(out var buffered))
+            {
+                item = buffered.Value;
+                return true;
+            }
+
+            item = default;
+            return false;
+        }
+
+        public override bool TryRead([MaybeNullWhen(false)] out T item)
+        {
+            if (!inner.TryRead(out var buffered))
+            {
+                item = default;
+                return false;
+            }
+
+            item = buffered.Value;
+            account.Release(buffered.EncodedMessageSizeBytes);
+            return true;
+        }
+
+        public override ValueTask<bool> WaitToReadAsync(CancellationToken cancellationToken = default)
+            => inner.WaitToReadAsync(cancellationToken);
+
+        private static async ValueTask<T> CompleteReadAsync(
+            ValueTask<BufferedNotification<T>> read,
+            NotificationBufferAccount bufferAccount)
+        {
+            var buffered = await read;
+            bufferAccount.Release(buffered.EncodedMessageSizeBytes);
+            return buffered.Value;
+        }
+    }
+
     private sealed class SubscriptionSink<T> : ISubscriptionSink
     {
-        private readonly Channel<T> _channel;
+        private readonly Channel<BufferedNotification<T>> _channel;
         private readonly int _capacity;
+        private readonly NotificationBufferAccount _bufferAccount;
+        private readonly BufferedNotificationReader<T> _reader;
 
         // Resolved once per sink so an unregistered notification type fails at subscribe time, not on
         // first delivery deep inside the receive loop.
         private readonly JsonTypeInfo<T> _typeInfo = RpcJson.TypeInfo<T>();
-        private volatile bool _completed;
 
-        public SubscriptionSink(int capacity)
+        public SubscriptionSink(
+            int capacity,
+            long maxBufferedBytes,
+            NotificationBufferBudget sharedBudget)
         {
             _capacity = capacity;
-            _channel = Channel.CreateBounded<T>(new BoundedChannelOptions(capacity)
+            _bufferAccount = sharedBudget.CreateAccount(maxBufferedBytes);
+            _channel = Channel.CreateBounded<BufferedNotification<T>>(new BoundedChannelOptions(capacity)
             {
                 SingleWriter = false,
                 SingleReader = false,
                 FullMode = BoundedChannelFullMode.Wait
             });
+            _reader = new(_channel.Reader, _bufferAccount);
         }
 
-        public ChannelReader<T> Reader => _channel.Reader;
+        public ChannelReader<T> Reader => _reader;
 
-        public void Deliver(JsonElement result)
+        public void Deliver(JsonElement result, int encodedMessageSizeBytes)
         {
-            var value = result.Deserialize(_typeInfo)
-                        ?? throw new JsonException("A WebSocket notification result decoded to null.");
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(encodedMessageSizeBytes);
 
-            if (_channel.Writer.TryWrite(value))
-                return;
+            switch (_bufferAccount.TryReserve(encodedMessageSizeBytes))
+            {
+                case BufferReservationResult.Completed:
+                    return;
+                case BufferReservationResult.SubscriptionLimitExceeded:
+                    throw new InvalidOperationException(
+                        $"Subscription notification buffer exceeded its encoded-size limit of " +
+                        $"{_bufferAccount.Limit} byte(s).");
+                case BufferReservationResult.TotalLimitExceeded:
+                    throw new InvalidOperationException(
+                        "The client's total notification buffer exceeded its encoded-size limit of " +
+                        $"{_bufferAccount.TotalLimit} byte(s).");
+            }
 
-            // TryWrite also fails on a channel that was already completed - a notification racing the
-            // subscription's cancellation or fault - which is a benign late delivery, not an overflow.
-            if (_completed)
-                return;
+            var written = false;
+            try
+            {
+                var value = result.Deserialize(_typeInfo)
+                            ?? throw new JsonException("A WebSocket notification result decoded to null.");
 
-            throw new InvalidOperationException(
-                $"Subscription notification buffer exceeded its capacity of {_capacity} item(s).");
+                written = _channel.Writer.TryWrite(new(value, encodedMessageSizeBytes));
+                if (written || _bufferAccount.IsCompleted)
+                    return;
+
+                throw new InvalidOperationException(
+                    $"Subscription notification buffer exceeded its capacity of {_capacity} item(s).");
+            }
+            finally
+            {
+                if (!written)
+                    _bufferAccount.Release(encodedMessageSizeBytes);
+            }
         }
 
         public void Complete(Exception? exception)
         {
-            _completed = true;
+            _bufferAccount.Complete();
             _channel.Writer.TryComplete(exception);
+        }
+
+        public void DiscardBuffered()
+        {
+            while (_channel.Reader.TryRead(out var buffered))
+                _bufferAccount.Release(buffered.EncodedMessageSizeBytes);
         }
     }
 }

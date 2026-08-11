@@ -14,6 +14,12 @@ public sealed class TransactionFailedException(string signature, JsonElement? er
     /// <summary>The signature of the transaction that failed.</summary>
     public string Signature { get; } = signature;
 
-    /// <summary>The on-chain error reported by the cluster.</summary>
-    public JsonElement? Error { get; } = error;
+    /// <summary>
+    /// The on-chain error reported by the cluster. Cloned on construction: a <see cref="JsonElement"/> is a
+    /// view over its <see cref="JsonDocument"/> and becomes unusable once that document is disposed, which
+    /// an exception outlives. A default (<see cref="JsonValueKind.Undefined"/>) element has no document to
+    /// clone and is stored as-is.
+    /// </summary>
+    public JsonElement? Error { get; } =
+        error is { ValueKind: not JsonValueKind.Undefined } value ? value.Clone() : error;
 }

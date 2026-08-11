@@ -14,6 +14,12 @@ version (on the earlier 0.x releases, minor versions could carry them).
   the classic `Mints.WrappedSol`.
 - Length-bounded `Base58.Decode` and `Base58.TryDecode` overloads, plus `PublicKey.MaxBase58Length` (44),
   `Hash.MaxBase58Length` (44), and `Signature.MaxBase58Length` (88).
+- `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, a pull-request template, and issue templates.
+- `BannedSymbols.txt`, enforced as a build error by `Microsoft.CodeAnalysis.BannedApiAnalyzers` (RS0030).
+  It currently carries the repository's permanent `ConfigureAwait` ban across every `Task`, `Task<T>`,
+  `ValueTask`, `ValueTask<T>`, `IAsyncEnumerable<T>` and `IAsyncDisposable` overload, so the rule is
+  enforced by the compiler rather than by review. The analyzer is development-only and is not a dependency
+  of the published package.
 
 ### Performance
 
@@ -23,14 +29,23 @@ version (on the earlier 0.x releases, minor versions could carry them).
   642 µs to 18 µs (**35×**), so 10,000 ATA derivations drop from 5.7 s to 0.18 s. Results are unchanged:
   verified identical on 200,000 random keys plus the non-canonical `y >= p` boundary, and all 300
   reference program addresses still match the pinned Rust `find_program_address` byte for byte.
-- Base58 encoding and decoding of 32-byte values (every public key and hash) use a fixed-width codec
-  instead of the general byte-at-a-time bignum: **encode 3.0 µs → 0.53 µs**, **`PublicKey.TryParse`
-  1.18 µs → 0.25 µs**, and parsing no longer allocates an intermediate array. Output and accept/reject
-  behaviour were verified identical to the general codec across 300,000 values, including leading-zero,
-  all-zero and over-32-byte inputs. Other lengths continue to use the general codec unchanged.
+- Base58 encoding of 32-byte inputs and `PublicKey`/`Hash` parsing use a fixed-width codec instead of the
+  general byte-at-a-time bignum: **encode 3.0 µs → 0.53 µs**, **`PublicKey.TryParse` 1.18 µs → 0.25 µs**,
+  and parsing no longer allocates an intermediate array. Output and accept/reject behaviour were verified
+  identical to the general codec across 300,000 values, including leading-zero, all-zero and over-32-byte
+  inputs. General `Base58.Decode`/`Base58.TryDecode` and encoding of other input sizes continue to use the
+  general codec unchanged.
 
 ### Fixed
 
+- WebSocket notification budgets charged the re-encoded decoded message rather than the bytes that arrived.
+  UTF-8 decoding replaces every invalid byte with U+FFFD, which re-encodes to three bytes, so a peer could
+  make the client charge up to three times the traffic it actually sent — against a budget whose limit is
+  expressed in wire bytes. The transport now carries the exact received length alongside the decoded text
+  and that length is what is charged.
+- The AOT smoke restore passed `--force-evaluate` together with `--locked-mode`. `--force-evaluate` is the
+  documented way to re-evaluate and rewrite a lock file, so it cancelled locked mode and the rendered
+  package lock was regenerated instead of enforced.
 - `Token2022Program.CreateNativeMint` named the classic SPL Token wSOL mint as account 1 instead of the
   Token-2022 native mint, so the instruction was always rejected with `InvalidMint`. Verified against the
   address derived from the pinned interface's seeds.
@@ -42,7 +57,28 @@ version (on the earlier 0.x releases, minor versions could carry them).
 - Fixed-width base58 parsing now bounds public keys, hashes, signatures, keypairs, and legacy/v0 recent
   blockhashes before decoding. Base58 decoding is quadratic, so a hostile 200,000-character string previously
   took roughly 24 seconds to reject; it is now rejected immediately. Public-key and hash JSON converters reject
-  oversized raw tokens before materializing them, and validation exceptions no longer echo untrusted input.
+  oversized raw tokens before materializing them, commitment JSON is compared without creating a string, and
+  validation exceptions no longer echo untrusted input.
+- Secret-key hex import now decodes through a fixed zeroed buffer instead of creating an immutable string copy
+  and an input-sized byte array. Ed25519 and BLS JSON key imports reject representations above 4 KiB before
+  materializing their integer arrays, bounding allocations from malformed or hostile key files.
+- BLS signer-based derivation reports a null signature from a custom signer as malformed instead of leaking a
+  `NullReferenceException` through the public API.
+- Transfer-hook extra-account resolution rejects more than 256 metadata entries before allocating or fetching,
+  and fetches account data only when a later seed actually reads it. A hostile validation account could
+  previously amplify one operation into tens of thousands of sequential resolver/RPC calls.
+- WebSocket subscription queues now enforce wire-byte budgets as well as item counts: 64 MiB per
+  subscription and 256 MiB per client by default, both configurable, and the per-subscription limit may not
+  exceed the total. Reservations survive completion and reconnect while unread values remain buffered.
+  They are released as values are read, and deterministically on teardown for the `IAsyncEnumerable`
+  subscriptions. The subscriptions that hand back a `ChannelReader` cannot observe an abandoned reader, so
+  a caller that stops reading without draining releases its reservation only when the reader is finalized.
+  Note that the total budget is a whole-client circuit breaker: once it is exhausted, the next subscription
+  to receive a notification is the one that faults, which is not necessarily the one holding the bytes.
+- Legacy and v0 message compilation validates null instruction state and compact-u16 collection limits before
+  copying, and serialized-length calculations now fail deterministically on integer overflow.
+- `TransactionFailedException` now owns a clone of its structured JSON error, so the public `Error` property
+  remains usable after the source `JsonDocument` is disposed.
 - `AssociatedTokenAccount.DecodeInstructionData` returned `null` for empty instruction data. The program
   decodes an empty input as `Create`, which is the original ATA encoding still present in historical
   transactions.

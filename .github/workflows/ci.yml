@@ -195,33 +195,41 @@ jobs:
           NUGET_PACKAGES: ${{ runner.temp }}/solsharp-ci-packages
         run: |
           package_version="999.0.0-ci"
-          # This package is produced by the current job, so refresh the isolated consumer lock.
+          artifact_path="artifacts/SolSharp.${package_version}.nupkg"
+          packed_lock="${RUNNER_TEMP}/solsharp-aot-packages.lock.json"
+          bash samples/SolSharp.AotSmoke/render-packed-lock.sh \
+            samples/SolSharp.AotSmoke/packages.packed.lock.template.json \
+            "${artifact_path}" \
+            "${package_version}" \
+            "${packed_lock}"
+
+          # The template pins every remote package; the rendered entry pins this job's exact nupkg.
           dotnet restore samples/SolSharp.AotSmoke \
             --runtime linux-x64 \
-            --force-evaluate \
+            --locked-mode \
             -p:UsePackedSolSharp=true \
             -p:SolSharpPackageVersion="${package_version}" \
-            -p:RestoreLockedMode=false \
+            -p:NuGetLockFilePath="${packed_lock}" \
             --source artifacts \
             --source https://api.nuget.org/v3/index.json \
             -p:NuGetAuditMode=all \
             -warnaserror
 
-          artifact_path="$(find artifacts -maxdepth 1 -iname "solsharp.${package_version}.nupkg" -print -quit)"
           restored_path="${NUGET_PACKAGES}/solsharp/${package_version}/solsharp.${package_version}.nupkg"
-          if [[ -z "${artifact_path}" || ! -f "${restored_path}" ]] || ! cmp --silent "${artifact_path}" "${restored_path}"; then
+          if [[ ! -f "${restored_path}" ]] || ! cmp --silent "${artifact_path}" "${restored_path}"; then
             echo "The AOT consumer did not restore the exact package artifact produced by this job."
             sha256sum "${artifact_path}" "${restored_path}" 2>/dev/null || true
             exit 1
           fi
 
-          # Publish resolves Native AOT runtime packs; lock that restore to the graph above.
+          # Publish resolves Native AOT runtime packs during its implicit restore; reuse the same lock.
           dotnet publish samples/SolSharp.AotSmoke \
             --configuration Release \
             --runtime linux-x64 \
             -warnaserror \
             -p:UsePackedSolSharp=true \
             -p:SolSharpPackageVersion="${package_version}" \
+            -p:NuGetLockFilePath="${packed_lock}" \
             -p:RestoreLockedMode=true
 
       - name: Run sample

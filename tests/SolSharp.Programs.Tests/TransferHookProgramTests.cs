@@ -177,9 +177,13 @@ public static class TransferHookProgramTests
                     expectedFirstPda.ToBytes()
                 ],
                 hookProgram).Address;
+            var resolverCalls = 0;
 
             ValueTask<ReadOnlyMemory<byte>?> Resolve(PublicKey key, CancellationToken cancellationToken)
-                => ValueTask.FromResult<ReadOnlyMemory<byte>?>(key == validation ? validationData : null);
+            {
+                resolverCalls++;
+                return ValueTask.FromResult<ReadOnlyMemory<byte>?>(key == validation ? validationData : null);
+            }
 
             // Act
             var extras = await TransferHookProgram.ResolveExecuteExtraAccountMetasAsync(
@@ -197,6 +201,79 @@ public static class TransferHookProgramTests
                 (staticExtra, false, false),
                 (expectedFirstPda, false, true),
                 (expectedSecondPda, false, true));
+            resolverCalls.Should().Be(0, "account data should only be fetched when a later configuration reads it");
+        }
+
+        [Test]
+        public async Task AccountDataSeed_FetchesOnlyTheReferencedAccount()
+        {
+            // Arrange
+            var hookProgram = Key(9);
+            var staticExtra = Key(6);
+            var validationData = TransferHookProgram.EncodeExecuteExtraAccountMetaList(
+                [
+                    ExtraAccountMeta.FromPublicKey(staticExtra, isSigner: false, isWritable: false),
+                    ExtraAccountMeta.FromProgramDerivedAddress(
+                        [ExtraAccountSeed.FromAccountData(5, 0, 1)],
+                        isSigner: false,
+                        isWritable: false)
+                ]);
+            byte[][] pdaSeeds = [[7]];
+            var expectedPda = ProgramDerivedAddress.FindProgramAddress(pdaSeeds, hookProgram).Address;
+            var resolverCalls = 0;
+
+            ValueTask<ReadOnlyMemory<byte>?> Resolve(PublicKey key, CancellationToken cancellationToken)
+            {
+                resolverCalls++;
+                return ValueTask.FromResult<ReadOnlyMemory<byte>?>(key == staticExtra ? new byte[] { 7 } : null);
+            }
+
+            // Act
+            var extras = await TransferHookProgram.ResolveExecuteExtraAccountMetasAsync(
+                hookProgram,
+                Key(1),
+                Key(2),
+                Key(3),
+                Key(4),
+                1,
+                validationData,
+                Resolve);
+
+            // Assert
+            extras.Select(static meta => meta.PublicKey).Should().Equal(staticExtra, expectedPda);
+            resolverCalls.Should().Be(1);
+        }
+
+        [Test]
+        public async Task ExcessiveMetadataList_IsRejectedBeforeFetchingAccounts()
+        {
+            // Arrange
+            var meta = ExtraAccountMeta.FromPublicKey(Key(6), isSigner: false, isWritable: false);
+            var validationData = TransferHookProgram.EncodeExecuteExtraAccountMetaList(
+                [.. Enumerable.Repeat(meta, Message.MaxAccounts + 1)]);
+            var resolverCalls = 0;
+
+            ValueTask<ReadOnlyMemory<byte>?> Resolve(PublicKey key, CancellationToken cancellationToken)
+            {
+                resolverCalls++;
+                return ValueTask.FromResult<ReadOnlyMemory<byte>?>(null);
+            }
+
+            // Act
+            Func<Task> act = () =>
+                TransferHookProgram.ResolveExecuteExtraAccountMetasAsync(
+                    Key(9),
+                    Key(1),
+                    Key(2),
+                    Key(3),
+                    Key(4),
+                    1,
+                    validationData,
+                    Resolve).AsTask();
+
+            // Assert
+            await act.Should().ThrowAsync<FormatException>().WithMessage("*at most 256 entries*");
+            resolverCalls.Should().Be(0);
         }
     }
 

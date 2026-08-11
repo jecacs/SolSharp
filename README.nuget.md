@@ -129,5 +129,5 @@ BLS operations use the packaged native `blst` backend on `linux-x64`, `linux-arm
 `osx-arm64`, and `win-x64`. Other RIDs can use the rest of SolSharp, but cannot call its BLS API.
 
 To report a vulnerability, use the
-[security policy](https://github.com/jecacs/SolSharp/blob/main/SECURITY.md) — private reporting,
+[security policy](https://github.com/jecacs/SolSharp/blob/v3.0.0/SECURITY.md) — private reporting,
 not a public issue.

@@ -62,4 +62,14 @@
     </PackageReference>
   </ItemGroup>
 
+  <!-- Enforces the repository's banned-API rules (see BannedSymbols.txt) at build time rather than by
+       review. Analyzer-only, so it never becomes a dependency of the shipped package. -->
+  <ItemGroup>
+    <AdditionalFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.txt" />
+    <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="4.14.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
 </Project>

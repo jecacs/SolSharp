@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 using FluentAssertions;
@@ -855,6 +856,51 @@ public static class SolanaWsClientTests
             // A notification carrying the new id reaches the original, still-open reader.
             second.PushFromServer(AccountNotification(subscription: 22, lamports: 2));
             (await reader.ReadAsync()).Value!.Lamports.Should().Be(2);
+        }
+
+        [Test]
+        public async Task BufferedByteAccounting_SurvivesReconnectWithoutResetOrDoubleCharge()
+        {
+            // Arrange
+            var beforeDrop = AccountNotification(subscription: 11, lamports: 1);
+            var afterReconnect = AccountNotification(subscription: 22, lamports: 2);
+            var beforeDropSize = Encoding.UTF8.GetByteCount(beforeDrop);
+            var afterReconnectSize = Encoding.UTF8.GetByteCount(afterReconnect);
+            var first = new FakeWebSocketConnection();
+            var second = new FakeWebSocketConnection();
+            var connections = new[] { first, second };
+            var index = -1;
+            var options = new SolanaWsClientOptions
+            {
+                ReconnectInitialDelay = TimeSpan.FromMilliseconds(1),
+                ReconnectMaxDelay = TimeSpan.FromMilliseconds(1),
+                MaxBufferedNotificationBytesPerSubscription = beforeDropSize + (long)afterReconnectSize,
+                MaxBufferedNotificationBytesTotal = beforeDropSize + (long)afterReconnectSize
+            };
+            await using var client = new SolanaWsClient(
+                () => connections[Interlocked.Increment(ref index)], options);
+            await client.ConnectAsync(new("wss://localhost"));
+            var subscribe = client.SubscribeAccountAsync(PublicKey.Parse(SolanaProgramIds.TokenProgram));
+            await WaitUntil(() => first.SentCount == 1);
+            first.PushFromServer(Acknowledgement(RequestId(first.SentSnapshot()[0]), subscriptionId: 11));
+            var reader = await subscribe;
+            first.PushFromServer(beforeDrop);
+            await WaitUntil(() => client.RetainedBufferedNotificationBytes == beforeDropSize);
+
+            // Act: reconnect reuses the subscription sink containing the first unread item.
+            first.Drop();
+            await WaitUntil(() => second.SentCount == 1);
+            client.RetainedBufferedNotificationBytes.Should().Be(beforeDropSize);
+            second.PushFromServer(Acknowledgement(RequestId(second.SentSnapshot()[0]), subscriptionId: 22));
+            second.PushFromServer(afterReconnect);
+            await WaitUntil(
+                () => client.RetainedBufferedNotificationBytes == beforeDropSize + (long)afterReconnectSize);
+
+            // Assert
+            (await reader.ReadAsync()).Value!.Lamports.Should().Be(1);
+            client.RetainedBufferedNotificationBytes.Should().Be(afterReconnectSize);
+            (await reader.ReadAsync()).Value!.Lamports.Should().Be(2);
+            client.RetainedBufferedNotificationBytes.Should().Be(0);
         }
 
         [Test]
@@ -2062,6 +2108,230 @@ public static class SolanaWsClientTests
     public sealed class SubscriptionBuffer
     {
         [Test]
+        public async Task EarlyAsyncEnumerationExit_DiscardsUnreadReservation()
+        {
+            // Arrange
+            const string firstNotification =
+                "{\"jsonrpc\":\"2.0\",\"method\":\"slotNotification\",\"params\":{\"subscription\":42," +
+                "\"result\":{\"parent\":10,\"root\":9,\"slot\":11}}}";
+            const string queuedNotification =
+                "{\"jsonrpc\":\"2.0\",\"method\":\"slotNotification\",\"params\":{\"subscription\":42," +
+                "\"result\":{\"parent\":11,\"root\":10,\"slot\":12}}}";
+            var queuedSize = Encoding.UTF8.GetByteCount(queuedNotification);
+            var fake = new FakeWebSocketConnection();
+            var options = new SolanaWsClientOptions
+            {
+                MaxBufferedNotificationBytesPerSubscription = queuedSize * 2L,
+                MaxBufferedNotificationBytesTotal = queuedSize * 2L
+            };
+            await using var client = new SolanaWsClient(() => fake, options);
+            await client.ConnectAsync(new("wss://localhost"));
+            var enumerator = client.SubscribeSlotsAsync().GetAsyncEnumerator();
+            var firstMove = enumerator.MoveNextAsync();
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 42));
+            fake.PushFromServer(firstNotification);
+            (await firstMove).Should().BeTrue();
+            // Seeing the second reservation proves the first notification completed delivery because the
+            // receive loop processes messages serially. The second may still be in flight when disposal starts.
+            fake.PushFromServer(queuedNotification);
+            fake.PushFromServer(queuedNotification);
+            await WaitUntil(() => client.RetainedBufferedNotificationBytes == queuedSize * 2L);
+
+            // Act
+            await enumerator.DisposeAsync();
+
+            // Assert: no reader escapes an async iterator, so its unread item is dropped and released.
+            await WaitUntil(() => client.RetainedBufferedNotificationBytes == 0);
+            fake.SentSnapshot().Should().Contain(static message => message.Contains("slotUnsubscribe"));
+        }
+
+        [Test]
+        public async Task PerSubscriptionByteLimit_PreservesQueuedChargeUntilRead()
+        {
+            // Arrange
+            const ulong serverId = 42;
+            var notification = AccountNotification(serverId, lamports: 1);
+            var encodedSize = Encoding.UTF8.GetByteCount(notification);
+            var fake = new FakeWebSocketConnection();
+            var options = new SolanaWsClientOptions
+            {
+                SubscriptionBufferCapacity = 4,
+                MaxBufferedNotificationBytesPerSubscription = encodedSize,
+                MaxBufferedNotificationBytesTotal = encodedSize * 4L
+            };
+            await using var client = new SolanaWsClient(() => fake, options);
+            await client.ConnectAsync(new("wss://localhost"));
+            var subscribe = client.SubscribeAccountAsync(PublicKey.Parse(SolanaProgramIds.TokenProgram));
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), serverId));
+            var reader = await subscribe;
+
+            // Act: one message fits exactly. Peeking retains it; another message crosses the byte limit.
+            fake.PushFromServer(notification);
+            await WaitUntil(() => reader.TryPeek(out _));
+            client.RetainedBufferedNotificationBytes.Should().Be(encodedSize);
+            fake.PushFromServer(notification);
+            await WaitUntil(() => fake.SentSnapshot().Any(static message => message.Contains("accountUnsubscribe")));
+
+            // Assert: the rejected candidate was rolled back, while the queued item remains charged
+            // across fault completion and releases its reservation exactly when dequeued.
+            client.RetainedBufferedNotificationBytes.Should().Be(encodedSize);
+            reader.TryRead(out var item).Should().BeTrue();
+            item!.Value!.Lamports.Should().Be(1);
+            client.RetainedBufferedNotificationBytes.Should().Be(0);
+            var read = async () => await reader.ReadAsync();
+            (await read.Should().ThrowAsync<ChannelClosedException>())
+                .Which.InnerException.Should().BeOfType<InvalidOperationException>()
+                .Which.Message.Should().Contain("encoded-size limit");
+        }
+
+        [Test]
+        public void PerSubscriptionByteLimitAboveTheTotal_IsRejected()
+        {
+            // Arrange: a per-subscription limit that cannot be reached would make every overflow report as a
+            // client-wide one, so the per-subscription limit would silently mean nothing.
+            var options = new SolanaWsClientOptions
+            {
+                MaxBufferedNotificationBytesPerSubscription = 1024,
+                MaxBufferedNotificationBytesTotal = 512
+            };
+
+            // Act & Assert
+            FluentActions.Invoking(() => new SolanaWsClient(() => new FakeWebSocketConnection(), options))
+                .Should().Throw<ArgumentOutOfRangeException>()
+                .WithMessage("*cannot exceed the total*");
+        }
+
+        [Test]
+        // The total budget is a whole-client circuit breaker: the subscription that faults is whichever
+        // one's notification arrives after the budget is exhausted, not the one holding the bytes.
+        public async Task TotalByteLimit_IsSharedAndFaultsTheSubscriptionThatHitsIt()
+        {
+            // Arrange: equal-width ids make both notification messages the same encoded size.
+            var firstNotification = AccountNotification(subscription: 11, lamports: 1);
+            var secondNotification = AccountNotification(subscription: 22, lamports: 1);
+            var encodedSize = Encoding.UTF8.GetByteCount(firstNotification);
+            Encoding.UTF8.GetByteCount(secondNotification).Should().Be(encodedSize);
+            var fake = new FakeWebSocketConnection();
+            var options = new SolanaWsClientOptions
+            {
+                SubscriptionBufferCapacity = 4,
+                // Both limits are one notification wide, so the first subscription's single buffered value
+                // exhausts the client budget while staying inside its own.
+                MaxBufferedNotificationBytesPerSubscription = encodedSize,
+                MaxBufferedNotificationBytesTotal = encodedSize
+            };
+            await using var client = new SolanaWsClient(() => fake, options);
+            await client.ConnectAsync(new("wss://localhost"));
+            var account = PublicKey.Parse(SolanaProgramIds.TokenProgram);
+
+            var subscribeFirst = client.SubscribeAccountAsync(account);
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 11));
+            var firstReader = await subscribeFirst;
+
+            var subscribeSecond = client.SubscribeAccountAsync(account);
+            await WaitUntil(() => fake.SentCount == 2);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[1]), subscriptionId: 22));
+            var secondReader = await subscribeSecond;
+
+            // Act
+            fake.PushFromServer(firstNotification);
+            await WaitUntil(() => client.RetainedBufferedNotificationBytes == encodedSize);
+            fake.PushFromServer(secondNotification);
+            await WaitUntil(() => fake.SentSnapshot().Any(static message => message.Contains("accountUnsubscribe")));
+
+            // Assert: only the second subscription faults. Reading the first item releases enough global
+            // budget for its still-active subscription to receive another notification.
+            client.RetainedBufferedNotificationBytes.Should().Be(encodedSize);
+            var secondRead = async () => await secondReader.ReadAsync();
+            (await secondRead.Should().ThrowAsync<ChannelClosedException>())
+                .Which.InnerException.Should().BeOfType<InvalidOperationException>()
+                .Which.Message.Should().Contain("total notification buffer");
+            (await firstReader.ReadAsync()).Value!.Lamports.Should().Be(1);
+            client.RetainedBufferedNotificationBytes.Should().Be(0);
+
+            fake.PushFromServer(firstNotification);
+            await WaitUntil(() => client.RetainedBufferedNotificationBytes == encodedSize);
+            (await firstReader.ReadAsync()).Value!.Lamports.Should().Be(1);
+            client.RetainedBufferedNotificationBytes.Should().Be(0);
+        }
+
+        [Test]
+        public async Task DecodeFailure_RollsBackByteReservation()
+        {
+            // Arrange
+            const string malformed =
+                "{\"jsonrpc\":\"2.0\",\"method\":\"accountNotification\",\"params\":{\"subscription\":7," +
+                "\"result\":{\"context\":{\"slot\":1},\"value\":{\"data\":[\"\",\"base64\"]," +
+                "\"executable\":false,\"lamports\":\"not-a-number\",\"owner\":" +
+                "\"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA\",\"rentEpoch\":0,\"space\":0}}}}";
+            var encodedSize = Encoding.UTF8.GetByteCount(malformed);
+            var fake = new FakeWebSocketConnection();
+            var options = new SolanaWsClientOptions
+            {
+                MaxBufferedNotificationBytesPerSubscription = encodedSize,
+                MaxBufferedNotificationBytesTotal = encodedSize
+            };
+            await using var client = new SolanaWsClient(() => fake, options);
+            await client.ConnectAsync(new("wss://localhost"));
+            var subscribe = client.SubscribeAccountAsync(PublicKey.Parse(SolanaProgramIds.TokenProgram));
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 7));
+            var reader = await subscribe;
+
+            // Act
+            fake.PushFromServer(malformed);
+            await WaitUntil(() => fake.SentSnapshot().Any(static message => message.Contains("accountUnsubscribe")));
+
+            // Assert
+            client.RetainedBufferedNotificationBytes.Should().Be(0);
+            var read = async () => await reader.ReadAsync();
+            (await read.Should().ThrowAsync<ChannelClosedException>())
+                .Which.InnerException.Should().BeOfType<JsonException>();
+        }
+
+        [Test]
+        public async Task Cancellation_KeepsUnreadChargeUntilChannelIsDrained()
+        {
+            // Arrange
+            const ulong serverId = 8;
+            var notification = AccountNotification(serverId, lamports: 9);
+            var encodedSize = Encoding.UTF8.GetByteCount(notification);
+            var fake = new FakeWebSocketConnection();
+            var options = new SolanaWsClientOptions
+            {
+                MaxBufferedNotificationBytesPerSubscription = encodedSize,
+                MaxBufferedNotificationBytesTotal = encodedSize
+            };
+            await using var client = new SolanaWsClient(() => fake, options);
+            await client.ConnectAsync(new("wss://localhost"));
+            using var cancellation = new CancellationTokenSource();
+            var subscribe = client.SubscribeAccountAsync(
+                PublicKey.Parse(SolanaProgramIds.TokenProgram), cancellationToken: cancellation.Token);
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), serverId));
+            var reader = await subscribe;
+            fake.PushFromServer(notification);
+            // A reservation is visible before deserialization and channel insertion finish. Wait for the
+            // item itself so cancellation cannot legitimately win that in-flight delivery race.
+            await WaitUntil(() => reader.TryPeek(out _));
+            client.RetainedBufferedNotificationBytes.Should().Be(encodedSize);
+
+            // Act
+            await cancellation.CancelAsync();
+            await WaitUntil(() => fake.SentSnapshot().Any(static message => message.Contains("accountUnsubscribe")));
+
+            // Assert: completion does not release an object the completed reader still owns.
+            client.RetainedBufferedNotificationBytes.Should().Be(encodedSize);
+            (await reader.ReadAsync()).Value!.Lamports.Should().Be(9);
+            client.RetainedBufferedNotificationBytes.Should().Be(0);
+            var read = async () => await reader.ReadAsync();
+            await read.Should().ThrowAsync<OperationCanceledException>();
+        }
+
+        [Test]
         public async Task CapacityExceeded_FaultsSubscription()
         {
             // Arrange
@@ -2080,10 +2350,14 @@ public static class SolanaWsClientTests
             // Act
             fake.PushFromServer(
                 "{\"jsonrpc\":\"2.0\",\"method\":\"slotNotification\",\"params\":{\"subscription\":42,\"result\":{\"parent\":11,\"root\":10,\"slot\":12}}}");
+            await WaitUntil(() => client.RetainedBufferedNotificationBytes > 0);
+            var retainedBeforeOverflow = client.RetainedBufferedNotificationBytes;
             fake.PushFromServer(
                 "{\"jsonrpc\":\"2.0\",\"method\":\"slotNotification\",\"params\":{\"subscription\":42,\"result\":{\"parent\":12,\"root\":11,\"slot\":13}}}");
             await WaitUntil(() => fake.Sent.Exists(static message => message.Contains("\"method\":\"slotUnsubscribe\"")));
+            client.RetainedBufferedNotificationBytes.Should().Be(retainedBeforeOverflow);
             (await subscription.MoveNextAsync()).Should().BeTrue();
+            client.RetainedBufferedNotificationBytes.Should().Be(0);
             var finalMove = subscription.MoveNextAsync().AsTask();
             var act = async () => await finalMove;
 
@@ -2146,6 +2420,34 @@ public static class SolanaWsClientTests
         {
             // Arrange
             var options = new SolanaWsClientOptions { SubscriptionBufferCapacity = 0 };
+
+            // Act
+            Action act = () => _ = new SolanaWsClient(options);
+
+            // Assert
+            act.Should().Throw<ArgumentOutOfRangeException>();
+        }
+
+        [TestCase(0L)]
+        [TestCase(-1L)]
+        public void NonPositivePerSubscriptionByteLimit_ThrowsArgumentOutOfRangeException(long limit)
+        {
+            // Arrange
+            var options = new SolanaWsClientOptions { MaxBufferedNotificationBytesPerSubscription = limit };
+
+            // Act
+            Action act = () => _ = new SolanaWsClient(options);
+
+            // Assert
+            act.Should().Throw<ArgumentOutOfRangeException>();
+        }
+
+        [TestCase(0L)]
+        [TestCase(-1L)]
+        public void NonPositiveTotalByteLimit_ThrowsArgumentOutOfRangeException(long limit)
+        {
+            // Arrange
+            var options = new SolanaWsClientOptions { MaxBufferedNotificationBytesTotal = limit };
 
             // Act
             Action act = () => _ = new SolanaWsClient(options);

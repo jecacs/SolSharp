@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Text;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
@@ -9,6 +10,7 @@ namespace SolSharp.Wallet;
 public sealed partial class Keypair
 {
     private const int MaxBase58KeyLength = 88;
+    private const int MaxJsonKeyLength = 4 * 1024;
 
     /// <summary>
     /// Parses a Solana secret key, auto-detecting the format: a JSON number array (the <c>id.json</c>
@@ -141,19 +143,24 @@ public sealed partial class Keypair
         if (digits.StartsWith("0x") || digits.StartsWith("0X"))
             digits = digits[2..];
 
-        byte[] bytes;
+        Span<byte> bytes = stackalloc byte[SecretKeyLength];
         try
         {
-            bytes = Convert.FromHexString(digits.ToString());
-        }
-        catch (FormatException e)
-        {
-            throw new FormatException("Key is not a valid hex string.", e);
-        }
+            var status = Convert.FromHexString(digits, bytes, out var charsConsumed, out var bytesWritten);
 
-        try
-        {
-            return FromDecoded(bytes, "hex key");
+            // The buffer only fits a well-formed key, so valid hex that is merely too long comes back as
+            // DestinationTooSmall. Reporting that as malformed hex would hide the real problem, and the
+            // decoded length is derivable from the input without decoding it.
+            if (status == OperationStatus.DestinationTooSmall)
+            {
+                throw new FormatException(
+                    $"Expected a {SeedLength}- or {SecretKeyLength}-byte hex key, got {digits.Length / 2} bytes.");
+            }
+
+            if (status != OperationStatus.Done || charsConsumed != digits.Length)
+                throw new FormatException("Key is not a valid hex string.");
+
+            return FromDecoded(bytes[..bytesWritten], "hex key");
         }
         finally
         {
@@ -165,10 +172,12 @@ public sealed partial class Keypair
     /// <param name="json">A JSON array of 32 or 64 integers, each in the range 0-255.</param>
     /// <returns>The keypair.</returns>
     /// <exception cref="ArgumentException"><paramref name="json"/> is null, empty, or whitespace.</exception>
-    /// <exception cref="FormatException"><paramref name="json"/> is not a JSON number array, holds a value outside 0-255, or is not 32 or 64 bytes long.</exception>
+    /// <exception cref="FormatException"><paramref name="json"/> is too large, is not a JSON number array, holds a value outside 0-255, or is not 32 or 64 bytes long.</exception>
     public static Keypair FromJsonArray(string json)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(json);
+        if (json.Length > MaxJsonKeyLength)
+            throw new FormatException($"Key JSON cannot exceed {MaxJsonKeyLength} characters.");
 
         int[]? values;
         try
@@ -190,7 +199,7 @@ public sealed partial class Keypair
             for (var i = 0; i < values.Length; i++)
             {
                 if (values[i] is < 0 or > byte.MaxValue)
-                    throw new FormatException($"Key JSON value at index {i} is outside the byte range 0-255: {values[i]}.");
+                    throw new FormatException($"Key JSON value at index {i} is outside the byte range 0-255.");
 
                 bytes[i] = (byte)values[i];
             }
@@ -297,13 +306,17 @@ public sealed partial class Keypair
         if (digits.Length is not (SeedLength * 2 or SecretKeyLength * 2))
             return null;
 
+        Span<byte> decoded = stackalloc byte[SecretKeyLength];
         try
         {
-            return Convert.FromHexString(digits.ToString());
+            var status = Convert.FromHexString(digits, decoded, out var charsConsumed, out var bytesWritten);
+            return status == OperationStatus.Done && charsConsumed == digits.Length
+                ? decoded[..bytesWritten].ToArray()
+                : null;
         }
-        catch (FormatException)
+        finally
         {
-            return null;
+            CryptographicOperations.ZeroMemory(decoded);
         }
     }
 

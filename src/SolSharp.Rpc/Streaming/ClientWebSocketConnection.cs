@@ -54,7 +54,7 @@ internal sealed class ClientWebSocketConnection : IWebSocketConnection
     public ValueTask SendAsync(string text, CancellationToken cancellationToken)
         => _socket.SendAsync(Encoding.UTF8.GetBytes(text).AsMemory(), WebSocketMessageType.Text, endOfMessage: true, cancellationToken);
 
-    public ValueTask<string?> ReceiveAsync(CancellationToken cancellationToken)
+    public ValueTask<WebSocketTextMessage?> ReceiveAsync(CancellationToken cancellationToken)
     {
         lock (_lifecycleGate)
         {
@@ -62,13 +62,13 @@ internal sealed class ClientWebSocketConnection : IWebSocketConnection
                 (_disposeTask is not null &&
                  (_closeOwnsReceive || _peerCloseReceived.Task.IsCompleted)))
             {
-                return ValueTask.FromException<string?>(
+                return ValueTask.FromException<WebSocketTextMessage?>(
                     new ObjectDisposedException(nameof(ClientWebSocketConnection)));
             }
 
             if (_receiveActive)
             {
-                return ValueTask.FromException<string?>(
+                return ValueTask.FromException<WebSocketTextMessage?>(
                     new InvalidOperationException("Only one WebSocket receive may be active at a time."));
             }
 
@@ -97,7 +97,7 @@ internal sealed class ClientWebSocketConnection : IWebSocketConnection
         return new(completion.Task);
     }
 
-    private async ValueTask<string?> ReceiveCoreAsync(CancellationToken cancellationToken)
+    private async ValueTask<WebSocketTextMessage?> ReceiveCoreAsync(CancellationToken cancellationToken)
     {
         var buffer = ArrayPool<byte>.Shared.Rent(BufferSize);
         try
@@ -146,7 +146,10 @@ internal sealed class ClientWebSocketConnection : IWebSocketConnection
                     break;
             }
 
-            return Encoding.UTF8.GetString(message.ToArray());
+            // The wire length is exact here; the decoded string is not a proxy for it, because UTF-8
+            // decoding replaces each invalid byte with U+FFFD, which re-encodes to three bytes.
+            var wireByteCount = (int)message.Length;
+            return new WebSocketTextMessage(Encoding.UTF8.GetString(message.ToArray()), wireByteCount);
         }
         catch (Exception exception)
         {

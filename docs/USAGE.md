@@ -109,6 +109,8 @@ services.AddSolanaWs(new SolanaWsClientOptions
     ReceiveTimeout = TimeSpan.FromMinutes(2),   // opt-in: only for high-frequency subscriptions
     MaxMessageSizeBytes = 64 * 1024 * 1024,
     SubscriptionBufferCapacity = 1024,
+    MaxBufferedNotificationBytesPerSubscription = 64L * 1024 * 1024,
+    MaxBufferedNotificationBytesTotal = 256L * 1024 * 1024,
     MaxPendingSubscriptionRequests = 1024
 });
 
@@ -1687,6 +1689,12 @@ WebSocket message; the connection then closes and, with auto-reconnect on, is re
 limit if you stream heavy parsed blocks. `SubscriptionBufferCapacity` (1,024 by default) limits unread
 notifications per subscription: a consumer that falls behind is faulted and unsubscribed rather than
 consuming memory without bound, so raise it for bursty feeds like `programSubscribe` on a busy program.
+The item limit is reinforced by encoded-size budgets: `MaxBufferedNotificationBytesPerSubscription`
+(64 MiB by default) and `MaxBufferedNotificationBytesTotal` (256 MiB by default). Each unread notification
+is charged by the UTF-8 size of its full JSON-RPC WebSocket message. A subscription that would exceed either
+byte budget is faulted and unsubscribed. Reading an item releases its charge; writer completion and reconnect
+do not release unread items because completed channel readers can still drain their buffered data. Stopping an
+`IAsyncEnumerable` early discards its private unread backlog and releases that budget immediately.
 Other subscriptions and the shared connection continue running. A subscribe the node rejects throws
 `InvalidOperationException` carrying the node error code and message; a notification that fails to decode
 also faults only its own subscription. Disposing the client completes every channel and stream.

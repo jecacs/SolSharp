@@ -135,6 +135,19 @@ nothing else in the solution and pulls no network or crypto package.
 
 See the [changelog](CHANGELOG.md) for what changed in each release.
 
+GitHub releases include the exact NuGet package, a SHA-256 checksum, and its Sigstore/SLSA provenance bundle.
+After downloading all three assets, verify them before using the package outside NuGet's repository-signature
+flow (replace the version in the filenames):
+
+```bash
+sha256sum --check SolSharp.3.0.0.nupkg.sha256
+gh attestation verify SolSharp.3.0.0.nupkg \
+  --repo jecacs/SolSharp \
+  --bundle SolSharp.3.0.0.nupkg.sigstore.json \
+  --signer-workflow jecacs/SolSharp/.github/workflows/release.yml \
+  --deny-self-hosted-runners
+```
+
 ## What's inside
 
 `SolSharp.Core`:
@@ -320,11 +333,13 @@ var signature = await rpc.SendTransactionAsync(tx.Serialize());
 
 - .NET 10 SDK. `global.json` selects the latest installed stable .NET 10 feature band beginning at
   SDK 10.0.100, and CI asserts that the resolver actually selected .NET 10.
-- Calling the BLS12-381 API requires one of the native RIDs shipped by `Nethermind.Crypto.Bls` 1.0.5:
+- Calling the BLS12-381 API requires one of the native RIDs shipped by `Nethermind.Crypto.Bls` 1.1.0:
   `linux-x64`, `linux-arm64`, `osx-x64`, `osx-arm64`, or `win-x64`. All non-BLS SolSharp APIs remain
   managed and do not load that native backend.
 
 ## Build & test
+
+Contributions are welcome; read the [contribution guide](CONTRIBUTING.md) before opening a pull request.
 
 ```bash
 dotnet build
@@ -378,6 +393,11 @@ SolSharp/
   Directory.Build.props
   THIRD_PARTY_NOTICES.md exact compatibility pins and native BLS attribution
   CLAUDE.md            conventions and decisions for contributors/agents
+  CONTRIBUTING.md      how to propose a change, and the rules the build enforces
+  CODE_OF_CONDUCT.md   community expectations
+  SECURITY.md          vulnerability disclosure policy and automated security gates
+  BannedSymbols.txt    APIs banned at build time (RS0030), currently the ConfigureAwait ban
+  .github/             CI/release workflows, issue and pull-request templates
   docs/USAGE.md        task-oriented usage guide with runnable examples
   docs/RUST_PARITY.md  pinned Rust/Agave/SPL client-contract coverage matrix
 ```

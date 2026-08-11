@@ -112,16 +112,17 @@ public static class KeypairParsingTests
             keypair.Sign([]).Should().Equal(Convert.FromHexString(SignatureHex));
         }
 
-        [TestCase("[300]")]
-        [TestCase("[-1]")]
-        [TestCase("[1,2,300]")]
-        public void ValueOutOfByteRange_Throws(string json)
+        [TestCase("[300]", "300")]
+        [TestCase("[-1]", "-1")]
+        [TestCase("[1,2,300]", "300")]
+        public void ValueOutOfByteRange_ThrowsWithoutEchoingValue(string json, string rejectedValue)
         {
             // Act
             Action act = () => _ = Keypair.FromJsonArray(json);
 
             // Assert
-            act.Should().Throw<FormatException>();
+            act.Should().Throw<FormatException>()
+                .Which.Message.Should().NotContain(rejectedValue);
         }
 
         [TestCase("{}")]
@@ -143,6 +144,39 @@ public static class KeypairParsingTests
 
             // Assert
             act.Should().Throw<FormatException>();
+        }
+
+        [Test]
+        public void OversizedArray_IsRejectedWithoutInputSizedAllocation()
+        {
+            // Arrange
+            var json = "[" + string.Join(",", Enumerable.Repeat("0", 100_000)) + "]";
+            try
+            {
+                _ = Keypair.FromJsonArray("[" + new string(' ', 5000) + "]");
+            }
+            catch (FormatException)
+            {
+                // Warm the rejection path before measuring allocations.
+            }
+
+            // Act
+            FormatException? exception = null;
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            try
+            {
+                _ = Keypair.FromJsonArray(json);
+            }
+            catch (FormatException error)
+            {
+                exception = error;
+            }
+
+            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+            // Assert
+            exception.Should().NotBeNull();
+            allocated.Should().BeLessThan(256_000, "oversized JSON must be rejected before materializing its array");
         }
     }
 
@@ -182,6 +216,39 @@ public static class KeypairParsingTests
         {
             Action act = static () => _ = Keypair.FromHexString("00010203");
             act.Should().Throw<FormatException>();
+        }
+
+        [Test]
+        public void OverLongInput_IsRejectedWithoutInputSizedAllocation()
+        {
+            // Arrange
+            var input = new string('a', 1_000_000);
+            try
+            {
+                _ = Keypair.FromHexString(new('a', 1000));
+            }
+            catch (FormatException)
+            {
+                // Warm the rejection path before measuring allocations.
+            }
+
+            // Act
+            FormatException? exception = null;
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            try
+            {
+                _ = Keypair.FromHexString(input);
+            }
+            catch (FormatException error)
+            {
+                exception = error;
+            }
+
+            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+            // Assert
+            exception.Should().NotBeNull();
+            allocated.Should().BeLessThan(256_000, "hex decoding should use a fixed zeroable buffer");
         }
     }
 

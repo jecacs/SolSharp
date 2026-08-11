@@ -25,7 +25,27 @@ public static class ClientWebSocketConnectionTests
             var message = await connection.ReceiveAsync(CancellationToken.None);
 
             // Assert
-            message.Should().Be("hello");
+            message!.Value.Text.Should().Be("hello");
+            // The fragmented message is five UTF-8 bytes on the wire; the client budgets that number,
+            // not a re-measurement of the decoded string.
+            message.Value.WireByteCount.Should().Be(5);
+        }
+
+        [Test]
+        public async Task InvalidUtf8_ChargesTheWireSizeNotTheReplacedDecoding()
+        {
+            // Arrange: lone 0xFF bytes are invalid UTF-8. Decoding replaces each with U+FFFD, which
+            // re-encodes to three bytes, so measuring the decoded string would charge 3x what arrived.
+            var socket = new FakeClientWebSocket();
+            socket.Push([0xFF, 0xFF, 0xFF, 0xFF], WebSocketMessageType.Text, endOfMessage: true);
+            await using var connection = new ClientWebSocketConnection(socket, 64, TimeSpan.FromMilliseconds(20));
+
+            // Act
+            var message = await connection.ReceiveAsync(CancellationToken.None);
+
+            // Assert
+            message!.Value.WireByteCount.Should().Be(4);
+            Encoding.UTF8.GetByteCount(message.Value.Text).Should().Be(12, "the decoded form is three times larger");
         }
 
         [Test]
@@ -109,7 +129,7 @@ public static class ClientWebSocketConnectionTests
                 socket.Push("first", WebSocketMessageType.Text, endOfMessage: true);
             }
 
-            (await first).Should().Be("first");
+            (await first)!.Value.Text.Should().Be("first");
         }
     }
 
@@ -187,7 +207,7 @@ public static class ClientWebSocketConnectionTests
             var dispose = connection.DisposeAsync().AsTask();
             await socket.CloseOutputStarted.Task;
             socket.Push("in-flight", WebSocketMessageType.Text, endOfMessage: true);
-            (await firstReceive).Should().Be("in-flight");
+            (await firstReceive)!.Value.Text.Should().Be("in-flight");
 
             var secondReceive = connection.ReceiveAsync(CancellationToken.None).AsTask();
             socket.Push([], WebSocketMessageType.Close, endOfMessage: true);

@@ -1,0 +1,67 @@
+name: Bug report
+description: Report reproducible incorrect behavior in SolSharp
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please do not report vulnerabilities here. Use the private process in SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: SolSharp version
+      placeholder: 3.0.0
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Core / encoding
+        - Wallet / signing
+        - RPC / HTTP
+        - RPC / WebSocket
+        - Programs / transactions
+        - Packaging / Native AOT
+        - Documentation
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Actual behavior
+      description: Include the exception type and bounded diagnostic details, but remove keys, tokens, endpoints containing credentials, and other secrets.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide the smallest safe code sample or wire input that demonstrates the issue.
+      render: csharp
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, architecture/RID, .NET SDK/runtime, and RPC node/version when relevant.
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed private keys, mnemonics, credentials, and other secrets from this report.
+          required: true
+        - label: This is not a security vulnerability; suspected vulnerabilities go through SECURITY.md.
+          required: true

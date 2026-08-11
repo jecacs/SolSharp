@@ -28,6 +28,14 @@ public static class FixedWidthJsonConverterTests
             result.Allocated.Should().BeLessThan(256_000);
         }
 
+        [Test]
+        public void Commitment_IsRejectedWithoutMaterializingTheSequence()
+        {
+            var result = ReadOversized(new CommitmentJsonConverter());
+            result.Exception.Message.Should().Be("Unknown commitment value.");
+            result.Allocated.Should().BeLessThan(256_000);
+        }
+
         private static (JsonException Exception, long Allocated) ReadOversized<T>(JsonConverter<T> converter)
         {
             var first = new BufferSegment(System.Text.Encoding.UTF8.GetBytes('"' + new string('z', 500_000)));

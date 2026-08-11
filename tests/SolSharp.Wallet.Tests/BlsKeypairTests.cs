@@ -179,11 +179,48 @@ public static class BlsKeypairTests
                 CryptographicOperations.ZeroMemory(utf8Json);
             }
         }
+
+        [Test]
+        public void OversizedString_IsRejectedBeforeDeserialization()
+        {
+            // Arrange
+            var json = "[" + string.Join(",", Enumerable.Repeat("0", 10_000)) + "]";
+
+            // Act
+            Action act = () => _ = BlsKeypair.FromJsonArray(json);
+
+            // Assert
+            act.Should().Throw<FormatException>().WithMessage("*cannot exceed*");
+        }
+
+        [Test]
+        public void OversizedUtf8_IsRejectedBeforeDeserialization()
+        {
+            // Arrange
+            var json = System.Text.Encoding.UTF8.GetBytes(
+                "[" + string.Join(",", Enumerable.Repeat("0", 10_000)) + "]");
+
+            // Act
+            Action act = () => _ = BlsKeypair.FromJsonArray(json);
+
+            // Assert
+            act.Should().Throw<FormatException>().WithMessage("*cannot exceed*");
+        }
     }
 
     [TestFixture]
     public sealed class DeriveFromSigner
     {
+        [Test]
+        public void NullSignature_IsReportedAsMalformed()
+        {
+            // Act
+            Action act = static () => _ = BlsKeypair.DeriveFromSigner(new NullReturningSigner(), "seed"u8);
+
+            // Assert
+            act.Should().Throw<CryptographicException>().WithMessage("*returned 0 bytes*");
+        }
+
         [Test]
         public void NullSignerPlaceholder_IsRejectedBeforeKeyDerivation()
         {
@@ -211,6 +248,13 @@ public static class BlsKeypairTests
             // Assert
             first.PublicKey.Should().Be(repeat.PublicKey);
             first.PublicKey.Should().NotBe(second.PublicKey);
+        }
+
+        private sealed class NullReturningSigner : ISigner
+        {
+            PublicKey ISigner.PublicKey => default;
+
+            byte[] ISigner.Sign(ReadOnlySpan<byte> message) => null!;
         }
     }
 
