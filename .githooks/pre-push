@@ -31,9 +31,36 @@ if [[ "${only_deletes}" -eq 1 ]]; then
   exit 0
 fi
 
-if ! command -v dotnet >/dev/null 2>&1; then
-  echo "pre-push: dotnet not found on PATH." >&2
-  exit 1
+# global.json pins one exact SDK, and a GUI-launched IDE does not inherit a shell's PATH, so the pinned SDK
+# is often reachable only from a side-by-side install. Look there before giving up, otherwise pushing from
+# Rider fails while the identical push from a terminal succeeds.
+pinned_sdk="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' global.json | head -1)"
+
+resolves_to_pin() {
+  [[ -x "$1" ]] && [[ "$("$1" --version 2>/dev/null)" == "${pinned_sdk}" ]]
+}
+
+dotnet_root=""
+if ! resolves_to_pin "$(command -v dotnet 2>/dev/null)"; then
+  for candidate in "${DOTNET_ROOT:-}" "${HOME}/.dotnet" /usr/share/dotnet /usr/lib/dotnet /usr/local/share/dotnet; do
+    [[ -n "${candidate}" ]] || continue
+    if resolves_to_pin "${candidate}/dotnet"; then
+      dotnet_root="${candidate}"
+      break
+    fi
+  done
+
+  if [[ -z "${dotnet_root}" ]]; then
+    echo "pre-push: global.json pins SDK ${pinned_sdk}, and no dotnet on PATH or in a known install root provides it." >&2
+    echo "pre-push: the pin is required because IsAotCompatible/PublishAot record SDK-versioned packages in" >&2
+    echo "pre-push: packages.lock.json, so any other SDK fails the locked restore." >&2
+    echo "pre-push:   curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --version ${pinned_sdk}" >&2
+    exit 1
+  fi
+
+  export DOTNET_ROOT="${dotnet_root}"
+  export PATH="${dotnet_root}:${PATH}"
+  echo "pre-push: using SDK ${pinned_sdk} from ${dotnet_root} (not on PATH)."
 fi
 
 benchmarks="benchmarks/SolSharp.Benchmarks/SolSharp.Benchmarks.csproj"
@@ -53,21 +80,6 @@ run() {
     exit 1
   fi
 }
-
-# global.json pins one exact SDK because the AOT packages it injects are recorded in packages.lock.json.
-pinned_sdk="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' global.json | head -1)"
-# `dotnet --version` itself exits non-zero when the pinned SDK is missing, so tolerate that and report it
-# as the same problem rather than letting `set -e` kill the hook without an explanation.
-if ! selected_sdk="$(dotnet --version 2>/dev/null)"; then
-  selected_sdk="(none installed)"
-fi
-if [[ "${selected_sdk}" != "${pinned_sdk}" ]]; then
-  echo "pre-push: global.json pins SDK ${pinned_sdk}, but dotnet resolved ${selected_sdk}." >&2
-  echo "pre-push: install that exact SDK. The pin is required because IsAotCompatible/PublishAot record" >&2
-  echo "pre-push: SDK-versioned packages in packages.lock.json, so any other SDK fails the locked restore." >&2
-  echo "pre-push:   curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --version ${pinned_sdk}" >&2
-  exit 1
-fi
 
 # Restore first: a lock file that drifted from the projects is the cheapest failure to surface, and the
 # solution restore does not cover benchmarks/, which lives outside SolSharp.sln.
