@@ -261,7 +261,7 @@ public static class HashTests
 
             // Assert
             exception.Should().NotBeNull();
-            exception!.Message.Length.Should().BeLessThan(256);
+            exception.Message.Length.Should().BeLessThan(256);
             exception.Message.Should().NotContain(input);
             allocated.Should().BeLessThan(256_000, "the oversized token should not become a UTF-16 string");
         }

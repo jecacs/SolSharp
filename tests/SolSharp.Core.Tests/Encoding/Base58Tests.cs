@@ -199,7 +199,7 @@ public static class Base58Tests
         [TestCase(32, true)]
         [TestCase(33, false)]
         public void LeadingOnes_MustDecodeToExactlyThirtyTwoZeroBytes(int count, bool expected)
-            => PublicKey.TryParse(new string('1', count), out _).Should().Be(expected);
+            => PublicKey.TryParse(new('1', count), out _).Should().Be(expected);
 
         [Test]
         public void LeadingOnesPlusAValue_PreserveTheExactDecodedWidth()
