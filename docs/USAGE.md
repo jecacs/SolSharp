@@ -1,7 +1,7 @@
 # SolSharp — Usage Guide
 
 A task-oriented tour of SolSharp with copy-pasteable C# examples. For the high-level overview and design
-notes see the [README](../README.md); for conventions and architecture see [CLAUDE.md](../CLAUDE.md).
+notes see the [README](../README.md); for conventions and architecture see [AGENTS.md](../AGENTS.md).
 
 Every snippet targets **.NET 10** and uses the single `SolSharp` NuGet package, which bundles four
 functional assemblies plus a minimal packaging facade — the namespaces `SolSharp.Core.*`, `SolSharp.Rpc`,

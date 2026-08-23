@@ -57,7 +57,7 @@ changes to performance-sensitive code should also build and format it explicitly
   or another independently generated compatibility vector. A local round trip alone is insufficient.
 - Bound work and allocation before consuming lengths or collections from untrusted input. Never include
   private key material, mnemonics, tokens, complete hostile inputs, or other secrets in logs or exceptions.
-- Preserve the dependency layering documented in [CLAUDE.md](CLAUDE.md): Core has no I/O or crypto engine;
+- Preserve the dependency layering documented in [AGENTS.md](AGENTS.md): Core has no I/O or crypto engine;
   Wallet owns key and signature engines; Rpc owns transport; Programs owns Solana program and transaction
   contracts.
 - Update XML documentation for public APIs. User-visible additions or changes also require the relevant
