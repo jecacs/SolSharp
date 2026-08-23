@@ -389,10 +389,11 @@ SolSharp/
   .github/workflows/   CI, coverage, dependency/security review, Scorecard, and trusted publishing
   assets/              package icon and README logo
   .editorconfig        modern C# style, enforced on build
-  global.json          .NET 10 SDK policy with feature-band roll-forward (CI asserts SDK 10)
+  global.json          exact .NET 10 SDK pin (CI asserts the pinned version)
   Directory.Build.props
   THIRD_PARTY_NOTICES.md exact compatibility pins and native BLS attribution
-  CLAUDE.md            conventions and decisions for contributors/agents
+  AGENTS.md            conventions and decisions for contributors/agents
+  CLAUDE.md            Claude Code import of AGENTS.md
   CONTRIBUTING.md      how to propose a change, and the rules the build enforces
   CODE_OF_CONDUCT.md   community expectations
   SECURITY.md          vulnerability disclosure policy and automated security gates
@@ -431,7 +432,7 @@ a claim that the library is vulnerability-free or a substitute for an independen
   network or Ed25519 lives in a higher layer.
 - Wire formats and signing are money-critical: they are validated against known-good vectors,
   not just round-trips.
-- Conventions, layering rules, and design decisions are documented in [`CLAUDE.md`](CLAUDE.md).
+- Conventions, layering rules, and design decisions are documented in [`AGENTS.md`](AGENTS.md).
 
 ## Security
 
