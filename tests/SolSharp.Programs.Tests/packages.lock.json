@@ -19,11 +19,11 @@
       },
       "FsCheck.NUnit": {
         "type": "Direct",
-        "requested": "[3.3.4, )",
-        "resolved": "3.3.4",
-        "contentHash": "ftTAfOkLd1TNLyr155BZ2Y+IHzwXvfYINsqzUxotCZioBPZqBa8fIgtX9EoJ/xpn2fXsHj6LKENdSZ54pzauUg==",
+        "requested": "[3.4.0, )",
+        "resolved": "3.4.0",
+        "contentHash": "EZ1Lh2LA5Qv2GE7kh0YZcT7QJTI4lrRpEj9tfvZyEa+zGB9R23oKQEI6TM8wQfPXiVKNtjq1qyIuIkiAPN++aQ==",
         "dependencies": {
-          "FsCheck": "[3.3.4]",
+          "FsCheck": "[3.4.0]",
           "NUnit": "[4.0.0, 5.0.0)"
         }
       },
@@ -93,8 +93,8 @@
       },
       "FsCheck": {
         "type": "Transitive",
-        "resolved": "3.3.4",
-        "contentHash": "Gintz/p4eTVb3EW3P8tg5wZB66sHbUBO42kHwuDZJ9BRHurOuC3+JF5YPq4rfeURMxuGs5YgzW/DDneIUsTNqA==",
+        "resolved": "3.4.0",
+        "contentHash": "wkWR1DORrKd46W6MEhmS4muo/0kgrtUV/AGW1ohMWemy7WukcRH8T3JjkDpn/daOHk0yVqf0CBvScU17Ab//PA==",
         "dependencies": {
           "FSharp.Core": "5.0.2"
         }
