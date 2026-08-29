@@ -16,6 +16,7 @@ using SolSharp.Core.SysvarStates;
 using SolSharp.Programs;
 using SolSharp.Rpc;
 using SolSharp.Rpc.Models;
+using SolSharp.Rpc.Protocol;
 using SolSharp.Rpc.Streaming;
 using SolSharp.Wallet;
 ```
@@ -212,13 +213,14 @@ byte[] message = System.Text.Encoding.UTF8.GetBytes("hello");
 byte[] signatureBytes = wallet.Sign(message);
 Signature signature = wallet.SignSignature(message);
 
-bool ok = signature.Verify(wallet.PublicKey, message);   // strict Ed25519 verification
+bool ok = signature.Verify(wallet.PublicKey, message);   // Wallet's Ed25519 verification policy
 bool same = wallet.PublicKey.Verify(message, signature); // equivalent Wallet extension
 ```
 
-Verification follows Solana's strict Ed25519 rules and rejects small-order public keys and signature
-points instead of accepting malleable signatures. `Signature.Parse` / `TryParse` use the base58 form
-returned by Solana RPC, while `ToBytes` and `CopyTo` expose its exact 64 bytes.
+Verification uses Bouncy Castle plus an additional small-order signature-point rejection. It interoperates
+for ordinary signatures but is not a consensus-acceptance predicate for pathological point encodings; the
+exact pinned `verify_dalek` difference is recorded in `docs/RUST_PARITY.md`. `Signature.Parse` / `TryParse`
+use the base58 form returned by Solana RPC, while `ToBytes` and `CopyTo` expose its exact 64 bytes.
 
 Current Vote v2/v4 contracts use the pinned minimal-public-key-size BLS12-381 proof-of-possession
 scheme. Derive the BLS key from high-entropy input key material (or from an existing signer), bind its
@@ -1100,10 +1102,15 @@ Instruction verify = Ed25519Program.CreateInstruction(
     signer.PublicKey.ToBytes());
 ```
 
-Secp256k1 and Secp256r1 use the same account-free precompile model. Supply signatures produced by the
-appropriate external curve implementation; SolSharp constructs the exact self-contained verifier layout:
+Secp256k1 and Secp256r1 use the same account-free precompile model. The Rust-compatible Secp256k1
+convenience helper writes transaction instruction index 0 into its offset record, so add the returned
+instruction first in the transaction. For any other position, use `CreateOffsetsInstruction` with explicit
+instruction indexes. Ed25519 and Secp256r1 self-contained helpers use the current-instruction sentinel and
+do not have this position constraint. Supply signatures produced by the appropriate external curve
+implementation; SolSharp constructs the exact verifier layouts:
 
 ```csharp
+// This helper must be transaction instruction 0.
 Instruction verifyEthereumSignature = Secp256k1Program.CreateInstruction(
     payload,
     compactSecp256k1Signature,
@@ -1757,7 +1764,7 @@ blockhash. A nonce-advance-only transaction is valid too; no additional instruct
 
 `CreateNonceAccount` above is a convenience pair — `CreateAccount` + `InitializeNonceAccount`, also
 available separately. `CreateNonceAccountWithSeed` returns the corresponding seeded create+initialize
-pair when the nonce address was derived with `SystemProgram.CreateWithSeed`. The rest of the nonce
+pair when the nonce address was derived with `ProgramDerivedAddress.CreateWithSeed`. The rest of the nonce
 lifecycle is one instruction each:
 `SystemProgram.WithdrawNonceAccount(nonceAccount, authority, recipient, lamports)` moves lamports out of
 the account, and `SystemProgram.AuthorizeNonceAccount(nonceAccount, authority, newAuthority)` hands it to

@@ -9,9 +9,10 @@ namespace SolSharp.Wallet.Tests;
 public static class Ed25519CurveTests
 {
     // (hex, expected) from solders' Pubkey.is_on_curve(): on- and off-curve keys plus the canonical
-    // edge encodings - all-zero, all-0x01, and all-0xff (a non-canonical y >= p, which exercises the
-    // reduction mod p). The v == 0 branch is unreachable: -1/d is a quadratic non-residue mod p, so no
-    // field element y satisfies d*y^2 + 1 == 0, and y is always reduced into the field first.
+    // edge encodings - all-zero, all-0x01, all-0xff, the u == 0 boundaries, and the order-eight points.
+    // The all-0xff vector is a non-canonical y >= p, which exercises reduction mod p. The v == 0 branch
+    // is unreachable: -1/d is a quadratic non-residue mod p, so no field element y satisfies
+    // d*y^2 + 1 == 0, and y is always reduced into the field first.
     public static IEnumerable<TestCaseData> Vectors()
     {
         yield return new("c28a70a61c7510a1cd89216ca16cffcaea4987477e86dbccb97046fc2e18384e", true);
@@ -23,6 +24,13 @@ public static class Ed25519CurveTests
         yield return new("0000000000000000000000000000000000000000000000000000000000000000", true);
         yield return new("0101010101010101010101010101010101010101010101010101010101010101", true);
         yield return new("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", true);
+        yield return new("0100000000000000000000000000000000000000000000000000000000000000", true);
+        yield return new("ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f", true);
+        yield return new("0000000000000000000000000000000000000000000000000000000000000080", true);
+        yield return new("26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05", true);
+        yield return new("26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85", true);
+        yield return new("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a", true);
+        yield return new("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa", true);
     }
 
     [TestFixture]

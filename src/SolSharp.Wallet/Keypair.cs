@@ -106,7 +106,7 @@ public sealed partial class Keypair : ISigner, IDisposable
 
     /// <summary>Signs <paramref name="message"/> and returns the signature as a typed Solana value.</summary>
     /// <param name="message">The bytes to sign; for a transaction, the serialized message.</param>
-    /// <returns>The strict Ed25519 signature.</returns>
+    /// <returns>The typed Ed25519 signature.</returns>
     /// <exception cref="ObjectDisposedException">The keypair has already been disposed.</exception>
     public Signature SignSignature(ReadOnlySpan<byte> message)
     {

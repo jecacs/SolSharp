@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using SolSharp.Core.Primitives;
 
 namespace SolSharp.Rpc.Models;
 
@@ -14,14 +15,14 @@ internal sealed class AccountInfoJsonConverter : JsonConverter<AccountInfo>
         using var document = JsonDocument.ParseValue(ref reader);
         var root = document.RootElement;
 
-        var bytes = DecodeBase64Tuple(root.GetProperty("data"));
+        var bytes = DecodeBase64Tuple(ReadRequiredProperty(root, "data"));
 
         return new()
         {
-            Lamports = root.GetProperty("lamports").GetUInt64(),
-            Owner = new(root.GetProperty("owner").GetString()!),
-            Executable = root.GetProperty("executable").GetBoolean(),
-            RentEpoch = root.GetProperty("rentEpoch").GetUInt64(),
+            Lamports = ReadRequiredUInt64(root, "lamports"),
+            Owner = ReadRequiredPublicKey(root, "owner"),
+            Executable = ReadRequiredBoolean(root, "executable"),
+            RentEpoch = ReadRequiredUInt64(root, "rentEpoch"),
             Space = ReadOptionalSpace(root),
             Data = bytes
         };
@@ -73,5 +74,43 @@ internal sealed class AccountInfoJsonConverter : JsonConverter<AccountInfo>
             return value;
 
         throw new JsonException("Account space must be null or a u64 value.");
+    }
+
+    internal static bool ReadRequiredBoolean(JsonElement value, string propertyName)
+    {
+        var property = ReadRequiredProperty(value, propertyName);
+        if (property.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            return property.GetBoolean();
+
+        throw new JsonException($"Account {propertyName} must be a boolean value.");
+    }
+
+    internal static JsonElement ReadRequiredProperty(JsonElement value, string propertyName)
+    {
+        if (value.ValueKind is JsonValueKind.Object && value.TryGetProperty(propertyName, out var property))
+            return property;
+
+        throw new JsonException($"Account is missing mandatory property {propertyName}.");
+    }
+
+    internal static PublicKey ReadRequiredPublicKey(JsonElement value, string propertyName)
+    {
+        var property = ReadRequiredProperty(value, propertyName);
+        if (property.ValueKind is JsonValueKind.String &&
+            PublicKey.TryParse(property.GetString(), out var publicKey))
+        {
+            return publicKey;
+        }
+
+        throw new JsonException($"Account {propertyName} must be a valid public key.");
+    }
+
+    internal static ulong ReadRequiredUInt64(JsonElement value, string propertyName)
+    {
+        var property = ReadRequiredProperty(value, propertyName);
+        if (property.ValueKind is JsonValueKind.Number && property.TryGetUInt64(out var number))
+            return number;
+
+        throw new JsonException($"Account {propertyName} must be a u64 value.");
     }
 }

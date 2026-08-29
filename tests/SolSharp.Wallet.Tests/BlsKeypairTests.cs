@@ -212,6 +212,31 @@ public static class BlsKeypairTests
     public sealed class DeriveFromSigner
     {
         [Test]
+        public void PinnedRustVector_MatchesSecretAndCompressedPublicKey()
+        {
+            // Arrange
+            using var signer = Keypair.FromSeed([.. Enumerable.Repeat((byte)7, Keypair.SeedLength)]);
+
+            // Act
+            using var keypair = BlsKeypair.DeriveFromSigner(signer, "first"u8);
+            var secret = keypair.ToSecretKeyBytes();
+
+            try
+            {
+                // Assert
+                Convert.ToHexString(secret).Should().Be(
+                    "40261DE2CAEBC0AC12E65BF032B9CADF9646BA9A732FC028548AFAC2C7C8FF09");
+                Convert.ToHexString(keypair.PublicKey.ToBytes()).Should().Be(
+                    "990805B1485691E6B8F4267753C934CA78B987821E6BF7E25706DE6734C34981" +
+                    "AD31C84CD70DA59D56E2613C6F83112A");
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(secret);
+            }
+        }
+
+        [Test]
         public void NullSignature_IsReportedAsMalformed()
         {
             // Act

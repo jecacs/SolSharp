@@ -210,7 +210,7 @@ public sealed class OffchainMessage : IEquatable<OffchainMessage>
     /// <summary>Verifies a signature over the exact serialized message.</summary>
     /// <param name="signer">The public key expected to have signed the message.</param>
     /// <param name="signature">The signature to verify.</param>
-    /// <returns><c>true</c> if the signature is valid under Solana's strict Ed25519 rules.</returns>
+    /// <returns><c>true</c> if the signature is accepted by Wallet's Ed25519 verifier.</returns>
     public bool Verify(PublicKey signer, Signature signature) => signature.Verify(signer, Serialize());
 
     /// <summary>Determines whether this message equals <paramref name="other"/>.</summary>

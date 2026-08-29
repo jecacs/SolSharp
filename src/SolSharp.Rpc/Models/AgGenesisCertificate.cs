@@ -70,8 +70,9 @@ public sealed record AgGenesisCertificateSignature
     }
 
     /// <summary>
-    /// A bitmap whose set bits identify the validator ranks included in the aggregate signature;
-    /// the pinned certificate format supports at most 4,096 validators (512 bytes).
+    /// A versioned Base2 signer-store blob whose bit payload identifies the participating validator
+    /// ranks. Its one-byte version and two-byte bit-count envelope make the pinned 4,096-validator
+    /// decoder limit 515 bytes.
     /// </summary>
     [JsonPropertyName("bitmap")]
     public required IReadOnlyList<byte> Bitmap
@@ -81,8 +82,8 @@ public sealed record AgGenesisCertificateSignature
         {
             if (value is null)
                 throw new JsonException("An Alpenglow validator bitmap cannot be null.");
-            if (value.Count > 512)
-                throw new JsonException("An Alpenglow validator bitmap cannot exceed 512 bytes.");
+            if (value.Count > 515)
+                throw new JsonException("An Alpenglow validator bitmap cannot exceed 515 bytes.");
             field = Array.AsReadOnly([.. value]);
         }
     }

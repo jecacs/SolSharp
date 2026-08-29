@@ -10,14 +10,15 @@ namespace SolSharp.Wallet;
 public static class PublicKeyExtensions
 {
     /// <summary>
-    /// Verifies a typed Ed25519 <paramref name="signature"/> using Solana-compatible strict validation.
+    /// Verifies a typed Ed25519 <paramref name="signature"/> with Bouncy Castle and an additional
+    /// small-order signature-point rejection.
     /// </summary>
     /// <param name="key">The public key the signature must verify under.</param>
     /// <param name="message">The signed message bytes.</param>
     /// <param name="signature">The signature to check.</param>
     /// <returns>
-    /// <c>true</c> if <paramref name="signature"/> is valid for <paramref name="message"/> and
-    /// <paramref name="key"/> under Solana's strict Ed25519 rules; <c>false</c> otherwise.
+    /// <c>true</c> if <paramref name="signature"/> is accepted for <paramref name="message"/> and
+    /// <paramref name="key"/> by the Wallet verifier; <c>false</c> otherwise.
     /// </returns>
     public static bool Verify(this PublicKey key, ReadOnlySpan<byte> message, Signature signature)
     {
@@ -27,9 +28,8 @@ public static class PublicKeyExtensions
     }
 
     /// <summary>
-    /// Verifies an Ed25519 signature of <paramref name="message"/> against this public key using
-    /// Solana-compatible strict validation, including rejection of small-order public-key and
-    /// signature <c>R</c> points.
+    /// Verifies an Ed25519 signature of <paramref name="message"/> against this public key using Bouncy
+    /// Castle with rejection of small-order public-key and signature <c>R</c> points.
     /// </summary>
     /// <param name="key">The public key the signature must verify under.</param>
     /// <param name="message">The signed message bytes.</param>
@@ -44,9 +44,9 @@ public static class PublicKeyExtensions
         if (signature.Length != Ed25519.SignatureSize)
             return false;
 
-        // Bouncy Castle's verifier rejects small-order public keys but accepts a small-order R.
-        // Solana's strict verifier rejects both; Partial rejects torsion-only points without the
-        // prime-subgroup requirement of ValidatePublicKeyFull, so mixed-torsion points remain valid.
+        // Bouncy Castle's verifier rejects small-order public keys but accepts a small-order R. Partial
+        // closes that gap without requiring prime-subgroup membership. This verifier intentionally remains
+        // distinct from pinned verify_dalek for pathological point encodings; see docs/RUST_PARITY.md.
         if (!Ed25519.ValidatePublicKeyPartial(signature[..PublicKey.Length]))
             return false;
 

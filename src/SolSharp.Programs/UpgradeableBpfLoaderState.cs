@@ -25,13 +25,13 @@ public sealed class UpgradeableBpfLoaderState
     /// <summary>The uninitialized-state metadata size.</summary>
     public const int UninitializedMetadataLength = 4;
 
-    /// <summary>The buffer metadata size, including reserved optional-authority space.</summary>
+    /// <summary>The fixed runtime buffer metadata size, including the optional-authority slot.</summary>
     public const int BufferMetadataLength = 37;
 
     /// <summary>The executable Program metadata size.</summary>
     public const int ProgramMetadataLength = 36;
 
-    /// <summary>The ProgramData metadata size, including reserved optional-authority space.</summary>
+    /// <summary>The fixed runtime ProgramData metadata size, including the optional-authority slot.</summary>
     public const int ProgramDataMetadataLength = 45;
     private readonly byte[] _programBytes;
 
@@ -61,10 +61,18 @@ public sealed class UpgradeableBpfLoaderState
     /// <summary>The last modification slot for ProgramData.</summary>
     public ulong? Slot { get; }
 
-    /// <summary>The bytes following Buffer or ProgramData metadata.</summary>
+    /// <summary>
+    /// The bytes after the runtime's fixed Buffer or ProgramData metadata region: offset 37 or 45,
+    /// respectively, including when <see cref="Authority"/> is <c>null</c>.
+    /// </summary>
     public ReadOnlyMemory<byte> ProgramBytes => _programBytes;
 
     /// <summary>Decodes upgradeable-loader account data.</summary>
+    /// <remarks>
+    /// This decoder follows the raw loader runtime layout, whose Buffer and ProgramData payload offsets remain
+    /// fixed at 37 and 45 when the authority option is <c>None</c>. Compact bincode and Agave's
+    /// <c>jsonParsed</c> client decoder instead use 5-byte and 13-byte metadata in that case.
+    /// </remarks>
     /// <param name="data">The complete account data.</param>
     /// <returns>The decoded state and any trailing program bytes.</returns>
     /// <exception cref="ArgumentException">The input is too short for its state variant.</exception>

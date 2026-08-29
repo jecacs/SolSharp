@@ -490,7 +490,7 @@
           "Microsoft.Extensions.Http": "[10.0.10, )",
           "Microsoft.Extensions.Http.Resilience": "[10.8.0, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )",
-          "SolSharp.Core": "[3.1.0, )"
+          "SolSharp.Core": "[3.2.0, )"
         }
       }
     }

@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using FluentAssertions;
 using NUnit.Framework;
 using SolSharp.Core.Constants;
@@ -119,6 +120,51 @@ public static class TransferHookProgramTests
             // Act & Assert
             TransferHookProgram.DecodeExecuteExtraAccountMetaList(encoded.AsSpan()[..^1]).Should().BeNull();
         }
+
+        [Test]
+        public void MalformedEntryAfterExecute_IsRejected()
+        {
+            // Arrange
+            var meta = ExtraAccountMeta.FromPublicKey(Key(1), isSigner: true, isWritable: false);
+            var encoded = TransferHookProgram.EncodeExecuteExtraAccountMetaList([meta]);
+            var malformedTail = new byte[12];
+            malformedTail[0] = 1;
+            BinaryPrimitives.WriteUInt32LittleEndian(malformedTail.AsSpan(8), 1);
+            var accountData = encoded.Concat(malformedTail).ToArray();
+
+            // Act & Assert
+            TransferHookProgram.DecodeExecuteExtraAccountMetaList(accountData).Should().BeNull();
+        }
+
+        [Test]
+        public void ListValueWithPartialCapacityEntry_IsRejected()
+        {
+            // Arrange
+            var meta = ExtraAccountMeta.FromPublicKey(Key(1), isSigner: true, isWritable: false);
+            var encoded = TransferHookProgram.EncodeExecuteExtraAccountMetaList([meta]);
+            Array.Resize(ref encoded, encoded.Length + 1);
+            BinaryPrimitives.WriteUInt32LittleEndian(encoded.AsSpan(8), checked((uint)(encoded.Length - 12)));
+
+            // Act & Assert
+            TransferHookProgram.DecodeExecuteExtraAccountMetaList(encoded).Should().BeNull();
+        }
+
+        [Test]
+        public void ListValueWithWholeSpareCapacityEntry_IsAccepted()
+        {
+            // Arrange: ListView permits unused capacity when it consists of complete POD entries.
+            var meta = ExtraAccountMeta.FromPublicKey(Key(1), isSigner: true, isWritable: false);
+            var encoded = TransferHookProgram.EncodeExecuteExtraAccountMetaList([meta]);
+            Array.Resize(ref encoded, encoded.Length + ExtraAccountMeta.Length);
+            BinaryPrimitives.WriteUInt32LittleEndian(encoded.AsSpan(8), checked((uint)(encoded.Length - 12)));
+
+            // Act
+            var decoded = TransferHookProgram.DecodeExecuteExtraAccountMetaList(encoded);
+
+            // Assert
+            decoded.Should().ContainSingle();
+            decoded![0].Encode().Should().Equal(meta.Encode());
+        }
     }
 
     [TestFixture]
@@ -127,6 +173,20 @@ public static class TransferHookProgramTests
         [Test]
         public void SingleEntry_HasPinnedTlvSize()
             => TransferHookProgram.GetExtraAccountMetaListSize(1).Should().Be(51);
+    }
+
+    [TestFixture]
+    public sealed class GetExtraAccountMetasAddress
+    {
+        [Test]
+        public void MatchesPinnedTransferHookInterface()
+        {
+            // Act
+            var address = TransferHookProgram.GetExtraAccountMetasAddress(Key(2), Key(9));
+
+            // Assert
+            address.Should().Be(PublicKey.Parse("2iduo7XYCLgVpy8HFdGckpweJ9r2mdRfXUQ9EPW2gjW9"));
+        }
     }
 
     [TestFixture]

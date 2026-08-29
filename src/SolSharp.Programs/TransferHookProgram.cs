@@ -329,14 +329,22 @@ public static partial class TransferHookProgram
         out bool exceedsEntryLimit)
     {
         exceedsEntryLimit = false;
+        ExtraAccountMeta[]? executeEntries = null;
+        var executeEntryLimitExceeded = false;
+        var foundExecuteEntry = false;
         var offset = 0;
         while (offset < validationAccountData.Length)
         {
             var remaining = validationAccountData[offset..];
             if (remaining.Length < 8)
-                return null;
+            {
+                if (remaining.IndexOfAnyExcept((byte)0) >= 0)
+                    return null;
+                break;
+            }
+
             if (remaining[..8].IndexOfAnyExcept((byte)0) < 0)
-                return null;
+                break;
             if (remaining.Length < TlvHeaderLength)
                 return null;
 
@@ -344,12 +352,17 @@ public static partial class TransferHookProgram
             if (valueLength > int.MaxValue || valueLength > remaining.Length - TlvHeaderLength)
                 return null;
             var value = remaining.Slice(TlvHeaderLength, (int)valueLength);
-            if (remaining[..8].SequenceEqual(ExecuteDiscriminator))
-                return DecodeMetaListValue(value, maximumEntries, out exceedsEntryLimit);
+            if (!foundExecuteEntry && remaining[..8].SequenceEqual(ExecuteDiscriminator))
+            {
+                executeEntries = DecodeMetaListValue(value, maximumEntries, out executeEntryLimitExceeded);
+                foundExecuteEntry = true;
+            }
+
             offset += TlvHeaderLength + (int)valueLength;
         }
 
-        return null;
+        exceedsEntryLimit = executeEntryLimitExceeded;
+        return executeEntries;
     }
 
     private static byte[] PackMetaListInstruction(
@@ -399,15 +412,20 @@ public static partial class TransferHookProgram
         var count = BinaryPrimitives.ReadUInt32LittleEndian(value);
         if (count > int.MaxValue)
             return null;
+
+        var dataLength = value.Length - ListHeaderLength;
+        if (dataLength % ExtraAccountMeta.Length != 0)
+            return null;
+
+        var requiredLength = ListHeaderLength + ((long)count * ExtraAccountMeta.Length);
+        if (requiredLength > value.Length)
+            return null;
         if (count > (uint)maximumEntries)
         {
             exceedsEntryLimit = true;
             return null;
         }
 
-        var requiredLength = ListHeaderLength + ((long)count * ExtraAccountMeta.Length);
-        if (requiredLength > value.Length)
-            return null;
         var entries = new ExtraAccountMeta[(int)count];
         for (var i = 0; i < entries.Length; i++)
         {

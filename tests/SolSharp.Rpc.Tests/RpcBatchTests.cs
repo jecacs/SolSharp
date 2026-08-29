@@ -163,17 +163,10 @@ public static class RpcBatchTests
         [TestCase("[null]")]
         [TestCase("[1]")]
         [TestCase("[[]]")]
-        [TestCase("[{\"jsonrpc\":\"1.0\",\"result\":1,\"id\":1}]")]
-        [TestCase("[{\"jsonrpc\":\"2.0\",\"result\":1,\"error\":{\"code\":-1,\"message\":\"bad\"},\"id\":1}]")]
-        [TestCase("[{\"jsonrpc\":\"2.0\",\"error\":null,\"id\":1}]")]
-        [TestCase("[{\"jsonrpc\":\"2.0\",\"id\":1}]")]
+        [TestCase("[{\"jsonrpc\":\"2.0\",\"result\":1}]")]
         [TestCase("[{\"jsonrpc\":\"2.0\",\"result\":1,\"id\":2}]")]
         [TestCase("[{\"jsonrpc\":\"2.0\",\"result\":1,\"id\":\"1\"}]")]
-        [TestCase("[{\"jsonrpc\":\"2.0\",\"error\":\"bad\",\"id\":1}]")]
-        [TestCase("[{\"jsonrpc\":\"2.0\",\"error\":{},\"id\":1}]")]
-        [TestCase("[{\"jsonrpc\":\"2.0\",\"error\":{\"code\":\"-1\",\"message\":\"bad\"},\"id\":1}]")]
-        [TestCase("[{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-1,\"message\":7},\"id\":1}]")]
-        public async Task MalformedResponse_ThrowsAndTerminatesEveryQueuedTask(string response)
+        public async Task MalformedUnattributedResponse_ThrowsAndTerminatesEveryQueuedTask(string response)
         {
             // Arrange
             var (client, _) = Make(response);
@@ -188,6 +181,103 @@ public static class RpcBatchTests
             call.IsCompleted.Should().BeTrue();
             var callAct = async () => await call;
             await callAct.Should().ThrowAsync<RpcException>();
+        }
+
+        [Test]
+        public async Task UnknownSibling_PreventsPartialBatchResolution()
+        {
+            // Arrange: the valid response appears first, before an injected id.
+            var (client, _) = Make(
+                """
+                [
+                  {"jsonrpc":"2.0","result":7,"id":1},
+                  {"jsonrpc":"2.0","result":8,"id":3}
+                ]
+                """);
+            var batch = client.CreateBatch();
+            var first = batch.GetSlotAsync();
+            var second = batch.GetSlotAsync();
+
+            // Act
+            var act = () => batch.ExecuteAsync();
+
+            // Assert
+            await act.Should().ThrowAsync<RpcException>();
+            var firstAct = async () => await first;
+            var secondAct = async () => await second;
+            await firstAct.Should().ThrowAsync<RpcException>();
+            await secondAct.Should().ThrowAsync<RpcException>();
+        }
+
+        [TestCase("[{\"jsonrpc\":\"1.0\",\"result\":1,\"id\":1}]")]
+        [TestCase("[{\"jsonrpc\":\"2.0\",\"result\":1,\"error\":{\"code\":-1,\"message\":\"bad\"},\"id\":1}]")]
+        [TestCase("[{\"jsonrpc\":\"2.0\",\"error\":null,\"id\":1}]")]
+        [TestCase("[{\"jsonrpc\":\"2.0\",\"id\":1}]")]
+        [TestCase("[{\"jsonrpc\":\"2.0\",\"error\":\"bad\",\"id\":1}]")]
+        [TestCase("[{\"jsonrpc\":\"2.0\",\"error\":{},\"id\":1}]")]
+        [TestCase("[{\"jsonrpc\":\"2.0\",\"error\":{\"code\":\"-1\",\"message\":\"bad\"},\"id\":1}]")]
+        [TestCase("[{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-1,\"message\":7},\"id\":1}]")]
+        public async Task MalformedAttributedResponse_FaultsOnlyThatTask(string response)
+        {
+            // Arrange
+            var (client, _) = Make(response);
+            var batch = client.CreateBatch();
+            var call = batch.GetSlotAsync();
+
+            // Act
+            await batch.ExecuteAsync();
+
+            // Assert
+            var callAct = async () => await call;
+            await callAct.Should().ThrowAsync<RpcException>();
+        }
+
+        [Test]
+        public async Task MalformedAttributedEntry_DoesNotFaultValidSibling()
+        {
+            // Arrange
+            var (client, _) = Make(
+                """
+                [
+                  {"jsonrpc":"2.0","result":7,"id":1},
+                  {"jsonrpc":"1.0","result":8,"id":2}
+                ]
+                """);
+            var batch = client.CreateBatch();
+            var valid = batch.GetSlotAsync();
+            var malformed = batch.GetSlotAsync();
+
+            // Act
+            await batch.ExecuteAsync();
+
+            // Assert
+            (await valid).Should().Be(7);
+            var malformedAct = async () => await malformed;
+            await malformedAct.Should().ThrowAsync<RpcException>();
+        }
+
+        [Test]
+        public async Task ResultMappingFailure_DoesNotFaultValidSibling()
+        {
+            // Arrange
+            var (client, _) = Make(
+                """
+                [
+                  {"jsonrpc":"2.0","result":7,"id":1},
+                  {"jsonrpc":"2.0","result":"not-a-slot","id":2}
+                ]
+                """);
+            var batch = client.CreateBatch();
+            var valid = batch.GetSlotAsync();
+            var malformed = batch.GetSlotAsync();
+
+            // Act
+            await batch.ExecuteAsync();
+
+            // Assert
+            (await valid).Should().Be(7);
+            var malformedAct = async () => await malformed;
+            await malformedAct.Should().ThrowAsync<InvalidOperationException>();
         }
 
         [Test]

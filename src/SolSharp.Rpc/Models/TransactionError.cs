@@ -36,6 +36,7 @@ public sealed record TransactionError
     /// <summary>Decodes a node's <c>err</c> value; returns <c>null</c> for a successful transaction (no error).</summary>
     /// <param name="err">The raw <c>err</c> JSON, or <c>null</c>.</param>
     /// <returns>The decoded error, or <c>null</c> when there is none.</returns>
+    /// <exception cref="JsonException">A known parameterized variant has an invalid wire shape or numeric range.</exception>
     public static TransactionError? Parse(JsonElement? err)
     {
         if (err is not { } value || value.ValueKind == JsonValueKind.Null)
@@ -48,23 +49,33 @@ public sealed record TransactionError
         {
             foreach (var member in value.EnumerateObject())
             {
-                if (member.NameEquals("InstructionError")
-                    && member.Value.ValueKind == JsonValueKind.Array
-                    && member.Value.GetArrayLength() >= 2)
+                if (member.NameEquals("InstructionError"))
                 {
+                    if (member.Value.ValueKind != JsonValueKind.Array ||
+                        member.Value.GetArrayLength() != 2 ||
+                        member.Value[0].ValueKind != JsonValueKind.Number ||
+                        !member.Value[0].TryGetByte(out var instructionIndex))
+                    {
+                        throw new JsonException("InstructionError must be a two-element tuple with a u8 instruction index.");
+                    }
+
                     return new()
                     {
                         Kind = member.Name,
-                        InstructionIndex = member.Value[0].ValueKind == JsonValueKind.Number ? member.Value[0].GetInt32() : null,
+                        InstructionIndex = instructionIndex,
                         InstructionError = InstructionError.Parse(member.Value[1]),
                         Details = member.Value.Clone()
                     };
                 }
 
-                if (member.NameEquals("DuplicateInstruction") &&
-                    member.Value.ValueKind == JsonValueKind.Number &&
-                    member.Value.TryGetInt32(out var duplicateInstructionIndex))
+                if (member.NameEquals("DuplicateInstruction"))
                 {
+                    if (member.Value.ValueKind != JsonValueKind.Number ||
+                        !member.Value.TryGetByte(out var duplicateInstructionIndex))
+                    {
+                        throw new JsonException("DuplicateInstruction must carry a u8 instruction index.");
+                    }
+
                     return new()
                     {
                         Kind = member.Name,
@@ -73,13 +84,17 @@ public sealed record TransactionError
                     };
                 }
 
-                if ((member.NameEquals("InsufficientFundsForRent") ||
-                     member.NameEquals("ProgramExecutionTemporarilyRestricted")) &&
-                    member.Value.ValueKind == JsonValueKind.Object &&
-                    member.Value.TryGetProperty("account_index", out var accountIndex) &&
-                    accountIndex.ValueKind == JsonValueKind.Number &&
-                    accountIndex.TryGetInt32(out var accountIndexValue))
+                if (member.NameEquals("InsufficientFundsForRent") ||
+                    member.NameEquals("ProgramExecutionTemporarilyRestricted"))
                 {
+                    if (member.Value.ValueKind != JsonValueKind.Object ||
+                        !member.Value.TryGetProperty("account_index", out var accountIndex) ||
+                        accountIndex.ValueKind != JsonValueKind.Number ||
+                        !accountIndex.TryGetByte(out var accountIndexValue))
+                    {
+                        throw new JsonException($"{member.Name} must carry a u8 account_index.");
+                    }
+
                     return new()
                     {
                         Kind = member.Name,
@@ -119,6 +134,7 @@ public sealed record InstructionError
     /// <summary>Decodes the instruction-error half of an <c>InstructionError</c> tuple.</summary>
     /// <param name="error">The raw instruction-error JSON (a string variant or a single-key object).</param>
     /// <returns>The decoded instruction error.</returns>
+    /// <exception cref="JsonException">The <c>Custom</c> variant does not carry a u32 value.</exception>
     public static InstructionError Parse(JsonElement error)
     {
         if (error.ValueKind == JsonValueKind.String)
@@ -128,9 +144,16 @@ public sealed record InstructionError
         {
             foreach (var member in error.EnumerateObject())
             {
-                return member.NameEquals("Custom") && member.Value.ValueKind == JsonValueKind.Number
-                    ? new() { Kind = "Custom", CustomCode = member.Value.GetUInt32() }
-                    : new InstructionError { Kind = member.Name };
+                if (!member.NameEquals("Custom"))
+                    return new() { Kind = member.Name };
+
+                if (member.Value.ValueKind != JsonValueKind.Number ||
+                    !member.Value.TryGetUInt32(out var customCode))
+                {
+                    throw new JsonException("Custom instruction errors must carry a u32 code.");
+                }
+
+                return new() { Kind = "Custom", CustomCode = customCode };
             }
         }
 

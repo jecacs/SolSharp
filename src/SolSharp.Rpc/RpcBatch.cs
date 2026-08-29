@@ -117,19 +117,15 @@ public sealed class RpcBatch
             if (root.ValueKind != JsonValueKind.Array)
                 throw new RpcException(-1, $"Expected a JSON-RPC batch response array, got {root.ValueKind}.");
 
-            // Responses may arrive in any order. Validate the complete envelope before resolving calls so
-            // malformed, duplicate, or injected ids cannot leave some TaskCompletionSources pending forever.
+            // Responses may arrive in any order. Correlate the complete set before resolving calls so
+            // duplicate or injected ids cannot leave TaskCompletionSources pending. Once an entry has a
+            // trustworthy expected id, its own malformed envelope faults only that call.
             var expectedIds = _pending.Select(static pending => pending.Id).ToHashSet();
             var responses = new Dictionary<int, JsonElement>(_pending.Count);
             foreach (var element in root.EnumerateArray())
             {
                 if (element.ValueKind != JsonValueKind.Object)
                     throw new RpcException(-1, $"Expected each JSON-RPC batch entry to be an object, got {element.ValueKind}.");
-
-                if (!element.TryGetProperty("jsonrpc", out var version) ||
-                    version.ValueKind != JsonValueKind.String ||
-                    version.GetString() != "2.0")
-                    throw new RpcException(-1, "A batch response entry carried an invalid JSON-RPC version.");
 
                 if (!element.TryGetProperty("id", out var id) ||
                     id.ValueKind != JsonValueKind.Number ||
@@ -139,23 +135,6 @@ public sealed class RpcBatch
                     throw new RpcException(-1, $"The batch response contained unknown request id {value}.");
                 if (!responses.TryAdd(value, element))
                     throw new RpcException(-1, $"The batch response contained duplicate request id {value}.");
-
-                var hasResult = element.TryGetProperty("result", out _);
-                var hasError = element.TryGetProperty("error", out var error) &&
-                               error.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined);
-                if (hasResult == hasError)
-                    throw new RpcException(
-                        -1,
-                        $"The batch response entry for request {value} must carry exactly one of result or error.");
-                if (hasError &&
-                    (error.ValueKind != JsonValueKind.Object ||
-                     !error.TryGetProperty("code", out var code) ||
-                     code.ValueKind != JsonValueKind.Number ||
-                     !code.TryGetInt32(out _) ||
-                     !error.TryGetProperty("message", out var message) || message.ValueKind != JsonValueKind.String))
-                    throw new RpcException(
-                        -1,
-                        $"The batch response entry for request {value} carried a malformed error object.");
             }
 
             foreach (var pending in _pending)
@@ -208,28 +187,43 @@ public sealed class RpcBatch
         {
             try
             {
-                if (response.TryGetProperty("error", out var error) && error.ValueKind is not JsonValueKind.Null)
+                if (!response.TryGetProperty("jsonrpc", out var version) ||
+                    version.ValueKind != JsonValueKind.String ||
+                    version.GetString() != "2.0")
                 {
-                    var code = error.ValueKind == JsonValueKind.Object &&
-                               error.TryGetProperty("code", out var codeElement) &&
-                               codeElement.TryGetInt32(out var codeValue)
-                        ? codeValue
-                        : -1;
-                    var message = error.ValueKind == JsonValueKind.Object &&
-                                  error.TryGetProperty("message", out var messageElement) &&
-                                  messageElement.ValueKind == JsonValueKind.String
-                        ? messageElement.GetString()!
-                        : error.GetRawText();
-                    var data = error.ValueKind == JsonValueKind.Object && error.TryGetProperty("data", out var dataElement)
-                        ? dataElement
-                        : (JsonElement?)null;
-
-                    Source.TrySetException(new RpcException(code, message, data));
-                    return;
+                    throw new RpcException(-1, $"The batch response entry for request {Id} carried an invalid JSON-RPC version.");
                 }
 
-                if (!response.TryGetProperty("result", out var result))
-                    throw new RpcException(-1, $"The batch response entry for request {Id} carried neither a result nor an error.");
+                var hasResult = response.TryGetProperty("result", out var result);
+                var hasError = response.TryGetProperty("error", out var error) &&
+                               error.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined);
+                if (hasResult == hasError)
+                {
+                    throw new RpcException(
+                        -1,
+                        $"The batch response entry for request {Id} must carry exactly one of result or error.");
+                }
+
+                if (hasError)
+                {
+                    if (error.ValueKind != JsonValueKind.Object ||
+                        !error.TryGetProperty("code", out var codeElement) ||
+                        codeElement.ValueKind != JsonValueKind.Number ||
+                        !codeElement.TryGetInt32(out var code) ||
+                        !error.TryGetProperty("message", out var messageElement) ||
+                        messageElement.ValueKind != JsonValueKind.String)
+                    {
+                        throw new RpcException(
+                            -1,
+                            $"The batch response entry for request {Id} carried a malformed error object.");
+                    }
+
+                    var data = error.TryGetProperty("data", out var dataElement)
+                        ? dataElement
+                        : (JsonElement?)null;
+                    Source.TrySetException(new RpcException(code, messageElement.GetString()!, data));
+                    return;
+                }
 
                 Source.TrySetResult(map(result));
             }
