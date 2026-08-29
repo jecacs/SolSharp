@@ -22,12 +22,15 @@ public static class Secp256k1Program
     public static readonly PublicKey ProgramId =
         PublicKey.Parse("KeccakSecp256k11111111111111111111111111111");
 
-    /// <summary>Builds a self-contained verification instruction for one precomputed signature.</summary>
+    /// <summary>
+    /// Builds a verification instruction with all payload bytes embedded. Its offsets refer to transaction
+    /// instruction index 0, so the returned instruction must be placed first in the transaction.
+    /// </summary>
     /// <param name="message">The signed message; the precompile hashes it with Keccak-256.</param>
     /// <param name="signature">The 64-byte compact Secp256k1 signature.</param>
     /// <param name="recoveryId">The signature recovery ID.</param>
     /// <param name="ethereumAddress">The 20-byte Ethereum address.</param>
-    /// <returns>The account-free precompile instruction.</returns>
+    /// <returns>The account-free precompile instruction, for transaction position 0.</returns>
     public static Instruction CreateInstruction(
         ReadOnlySpan<byte> message,
         ReadOnlySpan<byte> signature,

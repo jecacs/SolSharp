@@ -37,6 +37,23 @@ public static class Bip39Tests
         }
 
         [Test]
+        public void JapaneseNfkd_MatchesReferenceVector()
+        {
+            // Arrange
+            const string mnemonic =
+                "あいこくしん　あいこくしん　あいこくしん　あいこくしん　あいこくしん　あいこくしん　" +
+                "あいこくしん　あいこくしん　あいこくしん　あいこくしん　あいこくしん　あおぞら";
+
+            // Act
+            var seed = Bip39.ToSeed(mnemonic, "㍍ガバヴァぱばぐゞちぢ十人十色");
+
+            // Assert
+            Convert.ToHexString(seed).ToLowerInvariant().Should().Be(
+                "a262d6fb6122ecf45be09c50492b31f92e9beb7d9a845987a02cefda57a15f9c" +
+                "467a17872029a9e92299b5cbdf306e3a0ee620245cbd508959b6cb7ca637bd55");
+        }
+
+        [Test]
         public void WhitespaceMnemonic_Throws()
         {
             // Act & Assert

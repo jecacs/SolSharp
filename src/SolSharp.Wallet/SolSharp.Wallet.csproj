@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <IsAotCompatible>true</IsAotCompatible>
-    <Description>Strict Ed25519 and BLS12-381 keys/signatures for Solana on .NET: secure import/export, local/external/offline signers, signed off-chain messages, BIP-39/SLIP-0010 derivation, Vote proofs of possession, and PoP-gated same-message aggregation over vetted crypto backends.</Description>
+    <Description>Ed25519 and BLS12-381 keys/signatures for Solana on .NET: secure import/export, local/external/offline signers, signed off-chain messages, BIP-39/SLIP-0010 derivation, Vote proofs of possession, and PoP-gated same-message aggregation over vetted crypto backends.</Description>
   </PropertyGroup>
 
   <ItemGroup>

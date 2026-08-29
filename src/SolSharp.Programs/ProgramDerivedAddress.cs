@@ -71,7 +71,7 @@ public static class ProgramDerivedAddress
 
     /// <summary>
     /// Derives the canonical PDA for <paramref name="seeds"/> under <paramref name="programId"/>, trying bump
-    /// seeds from 255 downward and returning the first that produces an off-curve address.
+    /// seeds from 255 through 1 and returning the first that produces an off-curve address.
     /// </summary>
     /// <param name="seeds">The seeds; each may be at most <see cref="MaxSeedLength"/> bytes, and at most <see cref="MaxSeeds"/> - 1 of them (the bump occupies the last slot).</param>
     /// <param name="programId">The program the address is derived for.</param>
@@ -96,7 +96,7 @@ public static class ProgramDerivedAddress
             withBump[i] = seed;
         }
 
-        for (var bump = 255; bump >= 0; bump--)
+        for (var bump = 255; bump > 0; bump--)
         {
             withBump[^1] = [(byte)bump];
             if (TryCreateProgramAddress(withBump, programId, out var address))

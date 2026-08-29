@@ -101,5 +101,36 @@ public static class TransactionErrorTests
             error!.Kind.Should().Be("FutureParameterized");
             error.Details!.Value.GetProperty("value").GetInt32().Should().Be(7);
         }
+
+        [TestCase("-1")]
+        [TestCase("256")]
+        [TestCase("2147483648")]
+        public void InstructionIndexOutsideU8_ThrowsJsonException(string index)
+        {
+            // Arrange
+            var json = """{"InstructionError":[__INDEX__,"InvalidArgument"]}"""
+                .Replace("__INDEX__", index, StringComparison.Ordinal);
+
+            // Act
+            Action act = () => ParseJson(json);
+
+            // Assert
+            act.Should().Throw<JsonException>();
+        }
+
+        [TestCase("-1")]
+        [TestCase("4294967296")]
+        public void CustomCodeOutsideU32_ThrowsJsonException(string code)
+        {
+            // Arrange
+            var json = """{"InstructionError":[0,{"Custom":__CODE__}]}"""
+                .Replace("__CODE__", code, StringComparison.Ordinal);
+
+            // Act
+            Action act = () => ParseJson(json);
+
+            // Assert
+            act.Should().Throw<JsonException>();
+        }
     }
 }

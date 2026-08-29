@@ -26,7 +26,7 @@ bounded codecs, and typed network responses. If you are
 writing wallets, bots, indexers, or backend services that talk to Solana from .NET and care
 about correctness, speed, and control, this is aimed at you.
 
-> **Status: 3.1.0.** SolSharp ships as a single NuGet package — `SolSharp` —
+> **Status: 3.2.0.** SolSharp ships as a single NuGet package — `SolSharp` —
 > bundling the Core (primitives + encodings), Wallet (Ed25519 and BLS12-381 keys, signing, verification,
 > key import/export, BIP-39/SLIP-0010 derivation, and signed off-chain messages), Rpc (the full applicable
 > non-admin JSON-RPC HTTP surface + WebSocket streaming + DI), and
@@ -79,12 +79,12 @@ valuable ecosystem-oriented program surface. SolSharp is independently written w
 application-side parity with immutable official Rust contracts, plus a verifiable .NET deployment story.
 The official Rust column below is the reference contract rather than another client implementation.
 
-Comparison basis: SolSharp is release `3.1.0`; Solnet means its
+Comparison basis: SolSharp is release `3.2.0`; Solnet means its
 [published `8.7.0` release](https://github.com/bmresearch/Solnet/commit/e8df87bdb2006376ba3eea9e1d3b857c84fc5685)
 (2025-11-26), with unreleased-head differences called out explicitly; the Rust reference is the
 [pinned Anza SDK/Agave/SPL matrix](docs/RUST_PARITY.md).
 
-| Dimension | Official Rust SDK / Agave reference | SolSharp 3.1.0 | Solnet official packages/source |
+| Dimension | Official Rust SDK / Agave reference | SolSharp 3.2.0 | Solnet official packages/source |
 | --- | --- | --- | --- |
 | **Transaction formats** | Legacy, V0, and feature-gated [SIMD-0385 V1](https://github.com/anza-xyz/solana-sdk/blob/ec7a0467e268774b724d55120ad952b518f27d64/message/src/versions/v1/message.rs), including inline V1 configuration and a message-first signature envelope | Legacy/V0/V1 build, sanitize, parse, sign, serialize, and decompile; exact V1 config/framing and envelope vectors | Published 8.7: Legacy/V0 and [rejects versions above 0](https://github.com/bmresearch/Solnet/blob/e8df87bdb2006376ba3eea9e1d3b857c84fc5685/src/Solnet.Rpc/Models/Message.cs#L275-L286). Unreleased head names V1, but its current body/envelope is not the pinned SIMD-0385 layout (details below) |
 | **Native and SPL clients** | Canonical native-program and SPL interface crates, split by contract | System, Stake, Vote, legacy/upgradeable/V4 loaders, Compute Budget, ALT, Memo, three signature precompiles; Token, Token-2022 extensions/interfaces, ATA, metadata/group/transfer-hook, and ElGamal proof/registry client contracts with typed decoders | Broader ecosystem-oriented set including Governance, Stake Pool, Token Swap, Account Compression, Name Service, and Shared Memory; repository head adds an initial Token-2022 surface |
@@ -119,7 +119,7 @@ dotnet add package SolSharp
 ```
 
 ```xml
-<PackageReference Include="SolSharp" Version="3.1.0" />
+<PackageReference Include="SolSharp" Version="3.2.0" />
 ```
 
 | Assembly           | Purpose                                              |
@@ -140,10 +140,10 @@ After downloading all three assets, verify them before using the package outside
 flow (replace the version in the filenames):
 
 ```bash
-sha256sum --check SolSharp.3.1.0.nupkg.sha256
-gh attestation verify SolSharp.3.1.0.nupkg \
+sha256sum --check SolSharp.3.2.0.nupkg.sha256
+gh attestation verify SolSharp.3.2.0.nupkg \
   --repo jecacs/SolSharp \
-  --bundle SolSharp.3.1.0.nupkg.sigstore.json \
+  --bundle SolSharp.3.2.0.nupkg.sigstore.json \
   --signer-workflow jecacs/SolSharp/.github/workflows/release.yml \
   --deny-self-hosted-runners
 ```
@@ -257,7 +257,7 @@ await foreach (var slot in ws.SubscribeSlotsAsync())
 - `Keypair` — generate a key, or load one with `Parse` (auto-detecting a base58 export, a `solana-keygen`
   JSON array, hex, or base64); export the Rust/wallet 64-byte, base58, or `id.json` forms deliberately;
   signs messages and zeroes its stored seed on dispose (or finalization).
-- `Signature` — a typed 64-byte base58 value with strict verification; `Presigner` validates externally
+- `Signature` — a typed 64-byte base58 value with Wallet verification; `Presigner` validates externally
   produced signatures against the requested message, while `NullSigner` represents an absent offline cosigner.
 - `BlsKeypair`, `BlsPublicKey`, `BlsSignature`, and `BlsProofOfPossession` — the pinned minimal-public-key-size
   BLS12-381 proof-of-possession scheme used by current Vote v2/v4 contracts, with subgroup/infinity validation,
@@ -271,8 +271,12 @@ await foreach (var slot in ws.SubscribeSlotsAsync())
   Phantom / Solflare SLIP-0010 scheme), built on the public `Bip39` and `Slip10` helpers and validated
   against the official test vectors.
 - `ISigner` — the signing abstraction the transaction builder depends on, so the key stays swappable.
-- `PublicKey.Verify(message, signature)` — Solana-compatible strict Ed25519 verification (including rejection
-  of small-order public keys and signature points), kept in Wallet so Core stays crypto-free.
+- `PublicKey.Verify(message, signature)` — Bouncy Castle Ed25519 verification with an additional rejection
+  of small-order signature points, kept in Wallet so Core stays crypto-free. It interoperates for ordinary
+  signatures, but is not a consensus-acceptance predicate for adversarial point encodings: it differs from
+  the pinned Rust `verify_dalek` on 154/914 pathological C2SP CCTV vectors (63 accepted only here, 91 only by
+  dalek). A dalek-exact managed prototype was intentionally not shipped because it showed severe CPU and
+  allocation amplification suitable for denial-of-service abuse.
 
 ```csharp
 using SolSharp.Wallet;
@@ -331,8 +335,8 @@ var signature = await rpc.SendTransactionAsync(tx.Serialize());
 
 ## Requirements
 
-- .NET 10 SDK. `global.json` selects the latest installed stable .NET 10 feature band beginning at
-  SDK 10.0.100, and CI asserts that the resolver actually selected .NET 10.
+- .NET 10 SDK for consumers. Repository builds use the exact SDK 10.0.303 pinned by `global.json` with
+  `rollForward: disable`; CI jobs that restore or build the checkout assert that exact selection.
 - Calling the BLS12-381 API requires one of the native RIDs shipped by `Nethermind.Crypto.Bls` 1.1.0:
   `linux-x64`, `linux-arm64`, `osx-x64`, `osx-arm64`, or `win-x64`. All non-BLS SolSharp APIs remain
   managed and do not load that native backend.

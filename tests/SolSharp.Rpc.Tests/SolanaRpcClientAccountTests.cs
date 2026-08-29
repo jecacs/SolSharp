@@ -111,6 +111,36 @@ public static class SolanaRpcClientAccountTests
             // Assert
             await act.Should().ThrowAsync<JsonException>();
         }
+
+        [Test]
+        public async Task MissingMandatoryData_ThrowsJsonException()
+        {
+            // Arrange
+            var value =
+                """{"executable":false,"lamports":1,"owner":"11111111111111111111111111111111","rentEpoch":0}""";
+            var (client, _) = Make(ContextEnvelope(value));
+
+            // Act
+            var act = async () => await client.GetAccountInfoAsync(PublicKey.Parse(OwnerBase58));
+
+            // Assert
+            await act.Should().ThrowAsync<JsonException>();
+        }
+
+        [Test]
+        public async Task InvalidOwner_ThrowsJsonException()
+        {
+            // Arrange
+            var value =
+                """{"data":["AQID","base64"],"executable":false,"lamports":1,"owner":"not-base58","rentEpoch":0}""";
+            var (client, _) = Make(ContextEnvelope(value));
+
+            // Act
+            var act = async () => await client.GetAccountInfoAsync(PublicKey.Parse(OwnerBase58));
+
+            // Assert
+            await act.Should().ThrowAsync<JsonException>();
+        }
     }
 
     [TestFixture]

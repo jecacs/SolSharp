@@ -24,8 +24,10 @@ SDK fails the locked restore below with `NU1004`.
 curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --version "$(jq -r .sdk.version global.json)"
 ```
 
-Then enable the repository's pre-push hook once per clone. It runs exactly the checks CI runs, so a failing
-push is caught locally in about a minute instead of on the runner:
+Then enable the repository's pre-push hook once per clone. It runs the core developer gates with the same
+flags as their CI counterparts, so common failures are caught locally in about a minute instead of on the
+runner. CI additionally enforces coverage, documentation consistency, package/API validation, and the
+Native AOT consumer smoke:
 
 ```bash
 git config core.hooksPath .githooks
@@ -35,7 +37,8 @@ Rider and other JetBrains IDEs execute Git hooks on push by default (the push di
 checkbox). To bypass the hook for one push use `git push --no-verify`, or `SOLSHARP_SKIP_PREPUSH=1 git push`;
 `SOLSHARP_PREPUSH_SKIP_TESTS=1` keeps every check except the test run.
 
-Run these commands from the repository root — the hook runs the same list:
+Run these core solution commands from the repository root. The hook also restores, builds, and formats the
+benchmark project with its corresponding CI flags:
 
 ```bash
 dotnet restore --locked-mode -p:NuGetAuditMode=all -warnaserror

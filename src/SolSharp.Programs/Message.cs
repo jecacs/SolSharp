@@ -88,14 +88,17 @@ public sealed class Message : ITransactionMessage
     {
         ArgumentNullException.ThrowIfNull(recentBlockhash);
         ArgumentNullException.ThrowIfNull(instructions);
-        if (instructions.Count > ShortVec.MaxValue)
+        var instructionCount = instructions.Count;
+        if ((uint)instructionCount > ShortVec.MaxValue)
             throw new ArgumentException(
-                $"A legacy message can contain at most {ShortVec.MaxValue} instructions, got {instructions.Count}.",
+                $"A legacy message can contain at most {ShortVec.MaxValue} instructions, got {instructionCount}.",
                 nameof(instructions));
 
-        // Snapshot once. IReadOnlyList<T> promises no immutability, so validating one view and compiling
-        // another lets a concurrently-mutated or lazily-materialised collection slip past every check below.
-        Instruction[] source = [.. instructions];
+        // Use the already-bounded indexed view rather than trusting an unrelated, potentially lazy
+        // enumerator after validating Count.
+        var source = new Instruction[instructionCount];
+        for (var index = 0; index < source.Length; index++)
+            source[index] = instructions[index];
 
         var flags = new Dictionary<PublicKey, AccountFlags>();
 
@@ -114,16 +117,29 @@ public sealed class Message : ITransactionMessage
                 ?? throw new ArgumentNullException(nameof(instructions), $"Instruction at index {index} has null accounts.");
             var instructionData = instruction.Data
                 ?? throw new ArgumentNullException(nameof(instructions), $"Instruction at index {index} has null data.");
-            if (accounts.Count > ShortVec.MaxValue)
+            var accountCount = accounts.Count;
+            if ((uint)accountCount > ShortVec.MaxValue)
                 throw new ArgumentException(
-                    $"Legacy instruction {index} can reference at most {ShortVec.MaxValue} account slots, got {accounts.Count}.",
+                    $"Legacy instruction {index} can reference at most {ShortVec.MaxValue} account slots, got {accountCount}.",
                     nameof(instructions));
             if (instructionData.Length > ShortVec.MaxValue)
                 throw new ArgumentException(
                     $"Legacy instruction {index} can carry at most {ShortVec.MaxValue} data bytes, got {instructionData.Length}.",
                     nameof(instructions));
 
-            foreach (var account in accounts)
+            var accountSnapshot = new AccountMeta[accountCount];
+            for (var accountIndex = 0; accountIndex < accountSnapshot.Length; accountIndex++)
+                accountSnapshot[accountIndex] = accounts[accountIndex];
+            byte[] dataSnapshot = [.. instructionData];
+
+            source[index] = new()
+            {
+                ProgramId = instruction.ProgramId,
+                Accounts = accountSnapshot,
+                Data = dataSnapshot
+            };
+
+            foreach (var account in accountSnapshot)
                 Merge(account.PublicKey, account.IsSigner, account.IsWritable);
 
             Merge(instruction.ProgramId, signer: false, writable: false);

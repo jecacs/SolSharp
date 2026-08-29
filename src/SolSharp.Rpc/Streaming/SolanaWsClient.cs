@@ -5,6 +5,7 @@ using System.Text.Json.Serialization.Metadata;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using SolSharp.Core.Encoding;
 using SolSharp.Core.Primitives;
 using SolSharp.Rpc.Models;
 using SolSharp.Rpc.Models.Parsed;
@@ -30,7 +31,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
     private readonly Lock _stateGate = new();
     private readonly Dictionary<int, PendingSubscribe> _pending = [];
     private readonly Dictionary<long, Subscription> _active = [];
-    private readonly Dictionary<(long Generation, ulong ServerId), Subscription> _byServerId = [];
+    private readonly Dictionary<(long Generation, ulong ServerId), RouteGroup> _byServerId = [];
     private readonly SemaphoreSlim _sendLock = new(1, 1);
     private readonly CancellationTokenSource _lifetimeCts = new();
     private readonly ILogger _logger;
@@ -147,6 +148,13 @@ public sealed class SolanaWsClient : IAsyncDisposable
         Failed
     }
 
+    private enum RouteState
+    {
+        Active,
+        Closing,
+        Unsubscribing
+    }
+
     private enum BufferReservationResult
     {
         Reserved,
@@ -176,7 +184,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         get
         {
             lock (_stateGate)
-                return _pending.Values.Count(static pending => pending.Subscription is not null);
+                return _pending.Values.Sum(static pending => pending.Subscriptions.Count);
         }
     }
 
@@ -186,6 +194,24 @@ public sealed class SolanaWsClient : IAsyncDisposable
         {
             lock (_stateGate)
                 return _pending.Values.Count(static pending => pending.State == PendingState.Abandoned);
+        }
+    }
+
+    internal int RetainedSendOperationCount
+    {
+        get
+        {
+            lock (_stateGate)
+                return _sendOperationCount;
+        }
+    }
+
+    internal int RetainedServerRouteCount
+    {
+        get
+        {
+            lock (_stateGate)
+                return _byServerId.Count;
         }
     }
 
@@ -867,6 +893,93 @@ public sealed class SolanaWsClient : IAsyncDisposable
     private static ConnectionEpochEndedException ConnectionChangedBeforeSend()
         => new(new InvalidOperationException("The WebSocket connection changed before the request was sent."));
 
+    private static string CreateCoalescingKey(string method, object[] parameters)
+    {
+        var normalized = (method, parameters) switch
+        {
+            ("accountSubscribe", [var account, AccountInfoConfig config]) =>
+            [
+                account,
+                new AccountInfoConfig
+                {
+                    Encoding = config.Encoding ?? "binary",
+                    Commitment = config.Commitment ?? Commitment.Finalized,
+                    DataSlice = config.DataSlice
+                }
+            ],
+            ("programSubscribe", [var program, ProgramAccountsConfig config]) =>
+            [
+                program,
+                new ProgramAccountsConfig
+                {
+                    Encoding = config.Encoding ?? "binary",
+                    Commitment = config.Commitment ?? Commitment.Finalized,
+                    DataSlice = config.DataSlice,
+                    Filters = NormalizeProgramFilters(config.Filters),
+                    WithContext = config.WithContext ?? false
+                }
+            ],
+            ("logsSubscribe", [var filter, CommitmentConfig config]) =>
+            [filter, new CommitmentConfig { Commitment = config.Commitment ?? Commitment.Finalized }],
+            ("signatureSubscribe", [var signature, SignatureSubscribeConfig config]) =>
+            [
+                signature,
+                new SignatureSubscribeConfig
+                {
+                    Commitment = config.Commitment ?? Commitment.Finalized,
+                    EnableReceivedNotification = config.EnableReceivedNotification ?? false
+                }
+            ],
+            ("blockSubscribe", [var filter, BlockSubscribeConfig config]) =>
+            [
+                filter,
+                new BlockSubscribeConfig
+                {
+                    Commitment = config.Commitment ?? Commitment.Finalized,
+                    Encoding = config.Encoding ?? "base64",
+                    TransactionDetails = config.TransactionDetails ?? "full",
+                    ShowRewards = config.ShowRewards ?? false,
+                    MaxSupportedTransactionVersion = config.MaxSupportedTransactionVersion
+                }
+            ],
+            _ => parameters
+        };
+
+        return JsonSerializer.Serialize(
+            new RpcRequest { Id = 0, Method = method, Params = normalized },
+            RpcJson.TypeInfo<RpcRequest>());
+    }
+
+    private static object NormalizeProgramFilter(object filter)
+    {
+        if (filter is not MemcmpFilter { Memcmp: var memcmp })
+            return filter;
+
+        var bytes = memcmp.Encoding switch
+        {
+            "base58" => Base58.Decode(memcmp.Bytes),
+            "base64" => Convert.FromBase64String(memcmp.Bytes),
+            _ => null
+        };
+        return bytes is null
+            ? filter
+            : new RawMemcmpFilter
+            {
+                Memcmp = new() { Offset = memcmp.Offset, Bytes = bytes, Encoding = "bytes" }
+            };
+    }
+
+    private static object[] NormalizeProgramFilters(object[]? filters)
+        => filters?.Select(NormalizeProgramFilter).ToArray() ?? [];
+
+    private static bool RemovePendingSubscriptionLocked(PendingSubscribe pending, Subscription subscription)
+    {
+        pending.Subscriptions.Remove(subscription);
+        if (ReferenceEquals(subscription.Attempt, pending))
+            subscription.Attempt = null;
+        return pending.Subscriptions.Count == 0;
+    }
+
     private async Task ConnectInitialAsync(
         Uri endpoint,
         TaskCompletionSource completion,
@@ -1073,7 +1186,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            await EstablishAsync(subscription, epoch, initial: true, cancellationToken);
+            await EstablishAsync(subscription, epoch, cancellationToken);
         }
         catch (Exception exception)
         {
@@ -1092,58 +1205,96 @@ public sealed class SolanaWsClient : IAsyncDisposable
     private async Task EstablishAsync(
         Subscription subscription,
         ConnectionEpoch epoch,
-        bool initial,
         CancellationToken cancellationToken)
     {
         PendingSubscribe pending;
+        Task<ulong> acknowledgement;
+        var ownsRequest = false;
         lock (_stateGate)
         {
             if (subscription.Phase == SubscriptionPhase.Terminal)
                 throw new OperationCanceledException(cancellationToken);
             if (_phase != ClientPhase.Connected || !ReferenceEquals(_connection, epoch))
                 throw ConnectionChangedBeforeSend();
-            if (_pending.Count >= _options.MaxPendingSubscriptionRequests)
+
+            if (TryAttachToExistingRouteLocked(subscription, epoch))
+                return;
+
+            pending = _pending.Values.FirstOrDefault(candidate =>
+                candidate.State == PendingState.Awaiting &&
+                ReferenceEquals(candidate.Epoch, epoch) &&
+                string.Equals(candidate.CoalescingKey, subscription.CoalescingKey, StringComparison.Ordinal))!;
+            if (pending is not null)
             {
-                throw new InvalidOperationException(
-                    $"The maximum of {_options.MaxPendingSubscriptionRequests} pending subscription requests has been reached.");
+                pending.Add(subscription);
+            }
+            else
+            {
+                if (_pending.Count >= _options.MaxPendingSubscriptionRequests)
+                {
+                    throw new InvalidOperationException(
+                        $"The maximum of {_options.MaxPendingSubscriptionRequests} pending subscription requests has been reached.");
+                }
+
+                var requestId = ++_nextRequestId;
+                pending = new(requestId, epoch, subscription);
+                subscription.Attempt = pending;
+                _pending.Add(requestId, pending);
+                ownsRequest = true;
             }
 
-            var requestId = ++_nextRequestId;
-            pending = new(requestId, epoch, subscription, initial);
-            subscription.Attempt = pending;
-            _pending.Add(requestId, pending);
+            acknowledgement = pending.Acked.Task;
         }
 
         try
         {
-            var sendTask = SendAsync(
-                epoch,
-                new()
+            if (ownsRequest)
+            {
+                var sendTask = SendAsync(
+                    epoch,
+                    new()
+                    {
+                        Id = pending.RequestId,
+                        Method = subscription.SubscribeMethod,
+                        Params = subscription.Params
+                    },
+                    CancellationToken.None,
+                    pending: pending);
+
+                try
                 {
-                    Id = pending.RequestId,
-                    Method = subscription.SubscribeMethod,
-                    Params = subscription.Params
-                },
-                cancellationToken,
-                pending: pending);
+                    // The physical request is shared by every coalesced local subscriber. Caller
+                    // cancellation stops only this waiter; the pending group owns the transport send.
+                    // A compatible late ACK may also make this send redundant while it is blocked.
+                    var completed = await Task.WhenAny(sendTask, acknowledgement).WaitAsync(cancellationToken);
+                    if (ReferenceEquals(completed, acknowledgement))
+                    {
+                        _ = ObservePendingSendAsync(sendTask, pending);
+                        await acknowledgement;
+                        return;
+                    }
 
-            try
-            {
-                // Once the physical send starts it is owned by the connection rather than this caller.
-                // Keep cancellation prompt for the subscriber while observing the send in the background.
-                await sendTask.WaitAsync(cancellationToken);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                _ = SuppressAsync(sendTask);
-                throw;
+                    await sendTask;
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    _ = ObservePendingSendAsync(sendTask, pending);
+                    throw;
+                }
+                catch (Exception exception)
+                {
+                    FailPending(pending, exception);
+                    if (acknowledgement.IsCompletedSuccessfully)
+                        return;
+                    throw;
+                }
             }
 
-            await pending.Acked.Task.WaitAsync(_options.SubscriptionAckTimeout, cancellationToken);
+            await acknowledgement.WaitAsync(_options.SubscriptionAckTimeout, cancellationToken);
         }
         catch (TimeoutException exception)
         {
-            if (AbandonPendingOrObserveAcknowledged(pending))
+            if (AbandonPendingOrObserveAcknowledged(pending, subscription, acknowledgement))
                 return;
 
             throw new TimeoutException(
@@ -1152,25 +1303,84 @@ public sealed class SolanaWsClient : IAsyncDisposable
         }
         catch
         {
-            if (AbandonPendingOrObserveAcknowledged(pending))
+            if (AbandonPendingOrObserveAcknowledged(pending, subscription, acknowledgement))
                 return;
             throw;
         }
     }
 
-    private bool AbandonPendingOrObserveAcknowledged(PendingSubscribe pending)
+    private async Task ObservePendingSendAsync(Task sendTask, PendingSubscribe pending)
+    {
+        try
+        {
+            await sendTask;
+        }
+        catch (Exception exception)
+        {
+            FailPending(pending, exception);
+        }
+    }
+
+    private bool TryAttachToExistingRouteLocked(Subscription subscription, ConnectionEpoch epoch)
+    {
+        foreach (var (key, route) in _byServerId)
+        {
+            if (key.Generation != epoch.Generation ||
+                !string.Equals(route.CoalescingKey, subscription.CoalescingKey, StringComparison.Ordinal) ||
+                !route.CanRoute(subscription))
+            {
+                continue;
+            }
+
+            subscription.Binding = new(epoch, key.ServerId);
+            subscription.Phase = SubscriptionPhase.Active;
+            route.Subscriptions.Add(subscription);
+            route.State = RouteState.Active;
+            return true;
+        }
+
+        return false;
+    }
+
+    private void FailPending(PendingSubscribe pending, Exception exception)
+    {
+        lock (_stateGate)
+        {
+            if (pending.State != PendingState.Awaiting)
+                return;
+
+            _pending.Remove(pending.RequestId);
+            pending.State = PendingState.Failed;
+            foreach (var subscription in pending.Subscriptions)
+            {
+                if (ReferenceEquals(subscription.Attempt, pending))
+                    subscription.Attempt = null;
+            }
+
+            pending.ClearSubscriptions();
+            pending.Acked.TrySetException(exception);
+        }
+    }
+
+    private bool AbandonPendingOrObserveAcknowledged(
+        PendingSubscribe pending,
+        Subscription subscription,
+        Task<ulong> acknowledgement)
     {
         lock (_stateGate)
         {
             // A successful completion is the commit point. A late ACK may already have been routed
             // for cleanup, but it must not turn the caller's cancellation or timeout into success.
-            if (pending.Acked.Task.IsCompletedSuccessfully)
+            if (acknowledgement.IsCompletedSuccessfully)
                 return true;
 
-            if (pending.State == PendingState.Awaiting)
+            if (pending.State == PendingState.Awaiting && ReferenceEquals(subscription.Attempt, pending))
             {
-                AbandonPendingLocked(pending);
-                pending.Acked.TrySetCanceled();
+                if (RemovePendingSubscriptionLocked(pending, subscription))
+                {
+                    AbandonPendingLocked(pending);
+                    pending.Acked.TrySetCanceled();
+                }
             }
 
             return false;
@@ -1179,7 +1389,6 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
     private void AbandonPendingLocked(PendingSubscribe pending)
     {
-        var subscription = pending.Subscription;
         if (pending.MayHaveBeenSent)
         {
             // A possibly-sent request needs a generation-scoped tombstone so a late successful ACK
@@ -1191,13 +1400,6 @@ public sealed class SolanaWsClient : IAsyncDisposable
             _pending.Remove(pending.RequestId);
             pending.State = PendingState.Failed;
         }
-
-        if (subscription is not null && ReferenceEquals(subscription.Attempt, pending))
-            subscription.Attempt = null;
-
-        // Retain only request metadata needed to clean up a late successful ACK. In particular, the
-        // tombstone must not retain the sink, parameters, cancellation source, or consumer state.
-        pending.DetachSubscription();
     }
 
     private async ValueTask AttachCancellationAsync(
@@ -1241,7 +1443,10 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
         if (work.Binding is not null)
             _ = SendUnsubscribeReservedAsync(
-                work.Binding.Value, work.Subscription.UnsubscribeMethod, work.SendReservationHeld);
+                work.Binding.Value,
+                work.Subscription.UnsubscribeMethod,
+                work.SendReservationHeld,
+                work.ClosingRoute);
     }
 
     private TerminalWork? TryTerminate(
@@ -1266,18 +1471,39 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
         if (subscription.Attempt is { } attempt && attempt.State == PendingState.Awaiting)
         {
-            AbandonPendingLocked(attempt);
-            if (exception is OperationCanceledException canceled)
-                attempt.Acked.TrySetCanceled(canceled.CancellationToken);
-            else
-                attempt.Acked.TrySetException(
-                    exception ?? new InvalidOperationException("The subscription ended before acknowledgement."));
+            if (RemovePendingSubscriptionLocked(attempt, subscription))
+            {
+                AbandonPendingLocked(attempt);
+                if (exception is OperationCanceledException canceled)
+                    attempt.Acked.TrySetCanceled(canceled.CancellationToken);
+                else
+                    attempt.Acked.TrySetException(
+                        exception ?? new InvalidOperationException("The subscription ended before acknowledgement."));
+            }
         }
 
-        var binding = subscription.Binding;
-        if (binding is not null)
+        RouteBinding? unsubscribeBinding = null;
+        RouteGroup? closingRoute = null;
+        if (subscription.Binding is { } binding)
         {
-            _byServerId.Remove((binding.Value.Epoch.Generation, binding.Value.ServerId));
+            var key = (binding.Epoch.Generation, binding.ServerId);
+            if (_byServerId.TryGetValue(key, out var route) &&
+                route.Subscriptions.Remove(subscription) &&
+                route.Subscriptions.Count == 0)
+            {
+                if (unsubscribe)
+                {
+                    route.State = RouteState.Closing;
+                    unsubscribeBinding = binding;
+                    closingRoute = route;
+                }
+                else
+                {
+                    _byServerId.Remove(key);
+                    route.State = RouteState.Unsubscribing;
+                }
+            }
+
             subscription.Binding = null;
         }
 
@@ -1289,8 +1515,8 @@ public sealed class SolanaWsClient : IAsyncDisposable
             _cancellationRegistrationCount--;
         }
 
-        var reservationHeld = unsubscribe && binding is not null && TryReserveSendLocked(binding.Value.Epoch);
-        return new(subscription, exception, binding, registration, reservationHeld);
+        var reservationHeld = unsubscribeBinding is not null && TryReserveSendLocked(unsubscribeBinding.Value.Epoch);
+        return new(subscription, exception, unsubscribeBinding, closingRoute, registration, reservationHeld);
     }
 
     private async Task ExecuteTerminalWorkAsync(TerminalWork work)
@@ -1301,13 +1527,17 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
         if (work.Binding is not null)
             await SendUnsubscribeReservedAsync(
-                work.Binding.Value, work.Subscription.UnsubscribeMethod, work.SendReservationHeld);
+                work.Binding.Value,
+                work.Subscription.UnsubscribeMethod,
+                work.SendReservationHeld,
+                work.ClosingRoute);
     }
 
     private async Task SendUnsubscribeReservedAsync(
         RouteBinding binding,
         string method,
-        bool reservationHeld)
+        bool reservationHeld,
+        RouteGroup? closingRoute = null)
     {
         if (!reservationHeld)
             return;
@@ -1322,7 +1552,8 @@ public sealed class SolanaWsClient : IAsyncDisposable
                 binding.Epoch,
                 new() { Id = requestId, Method = method, Params = [binding.ServerId] },
                 _lifetimeCts.Token,
-                reservationHeld: true);
+                reservationHeld: true,
+                closingRoute: closingRoute);
         }
         catch (Exception exception)
         {
@@ -1342,7 +1573,8 @@ public sealed class SolanaWsClient : IAsyncDisposable
         RpcRequest request,
         CancellationToken cancellationToken,
         bool reservationHeld = false,
-        PendingSubscribe? pending = null)
+        PendingSubscribe? pending = null,
+        RouteGroup? closingRoute = null)
     {
         if (!reservationHeld)
         {
@@ -1365,6 +1597,21 @@ public sealed class SolanaWsClient : IAsyncDisposable
                 {
                     if (_phase != ClientPhase.Connected || !ReferenceEquals(_connection, epoch))
                         throw ConnectionChangedBeforeSend();
+
+                    if (closingRoute is not null)
+                    {
+                        var key = (epoch.Generation, closingRoute.ServerId);
+                        if (!_byServerId.TryGetValue(key, out var currentRoute) ||
+                            !ReferenceEquals(currentRoute, closingRoute) ||
+                            closingRoute.State != RouteState.Closing ||
+                            closingRoute.Subscriptions.Count != 0)
+                        {
+                            return;
+                        }
+
+                        _byServerId.Remove(key);
+                        closingRoute.State = RouteState.Unsubscribing;
+                    }
 
                     if (pending is not null)
                     {
@@ -1651,9 +1898,13 @@ public sealed class SolanaWsClient : IAsyncDisposable
                     continue;
 
                 pending.State = PendingState.Failed;
-                var subscription = pending.Subscription;
-                if (subscription is not null && ReferenceEquals(subscription.Attempt, pending))
-                    subscription.Attempt = null;
+                foreach (var subscription in pending.Subscriptions)
+                {
+                    if (ReferenceEquals(subscription.Attempt, pending))
+                        subscription.Attempt = null;
+                }
+
+                pending.ClearSubscriptions();
                 pending.Acked.TrySetException(new ConnectionEpochEndedException(exception));
             }
         }
@@ -1688,7 +1939,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
             try
             {
-                await EstablishAsync(subscription, epoch, initial: false, token);
+                await EstablishAsync(subscription, epoch, token);
             }
             catch (Exception exception)
             {
@@ -1776,67 +2027,92 @@ public sealed class SolanaWsClient : IAsyncDisposable
             return;
         }
 
-        Subscription? subscription;
-        TerminalWork? oneShotWork = null;
+        Subscription[] subscriptions;
+        List<TerminalWork>? oneShotWork = null;
         lock (_stateGate)
         {
             var key = (epoch.Generation, ServerId: notified);
-            if (!_byServerId.TryGetValue(key, out subscription) ||
-                subscription.Binding is not { } binding ||
-                !ReferenceEquals(binding.Epoch, epoch) ||
-                binding.ServerId != notified)
-            {
+            if (!_byServerId.TryGetValue(key, out var route))
                 return;
-            }
 
             if (!root.TryGetProperty("method", out var methodElement) ||
                 methodElement.ValueKind != JsonValueKind.String ||
                 !string.Equals(
                     methodElement.GetString(),
-                    subscription.NotificationMethod,
+                    route.NotificationMethod,
                     StringComparison.Ordinal))
             {
                 throw new InvalidDataException(
                     $"The node routed subscription id {notified} as an unexpected notification method; " +
-                    $"expected '{subscription.NotificationMethod}'.");
+                    $"expected '{route.NotificationMethod}'.");
             }
 
-            if (subscription.ShouldTerminateAfter(notification))
-                oneShotWork = TryTerminateLocked(subscription, exception: null, unsubscribe: false);
+            if (route.State == RouteState.Closing && route.Subscriptions.Count == 0)
+            {
+                if (route.ShouldTerminateAfter(notification))
+                {
+                    _byServerId.Remove(key);
+                    route.State = RouteState.Unsubscribing;
+                }
+
+                return;
+            }
+
+            if (route.State != RouteState.Active || route.Subscriptions.Count == 0)
+                return;
+
+            subscriptions = [.. route.Subscriptions];
+            if (subscriptions[0].ShouldTerminateAfter(notification))
+            {
+                oneShotWork =
+                [
+                    .. subscriptions
+                        .Select(subscription => TryTerminateLocked(subscription, exception: null, unsubscribe: false))
+                        .OfType<TerminalWork>()
+                ];
+            }
         }
 
         if (oneShotWork is not null)
+        {
+            foreach (var work in oneShotWork)
+            {
+                var subscription = work.Subscription;
+                try
+                {
+                    subscription.ValidateNotification(notification);
+                    subscription.Sink.Deliver(notification, wireByteCount);
+                    subscription.Sink.Complete(exception: null);
+                }
+                catch (Exception exception)
+                {
+                    subscription.Sink.Complete(exception);
+                }
+
+                if (work.CancellationRegistration is { } registration)
+                    await registration.DisposeAsync();
+            }
+
+            return;
+        }
+
+        foreach (var subscription in subscriptions)
         {
             try
             {
                 subscription.ValidateNotification(notification);
                 subscription.Sink.Deliver(notification, wireByteCount);
-                subscription.Sink.Complete(exception: null);
             }
             catch (Exception exception)
             {
-                subscription.Sink.Complete(exception);
+                _logger.LogWarning(
+                    exception,
+                    "Solana WS could not decode a '{Method}' notification; faulting that subscription",
+                    subscription.SubscribeMethod);
+                var work = TryTerminate(subscription, exception, unsubscribe: true);
+                if (work is not null)
+                    await ExecuteTerminalWorkAsync(work);
             }
-
-            if (oneShotWork.CancellationRegistration is { } registration)
-                await registration.DisposeAsync();
-            return;
-        }
-
-        try
-        {
-            subscription.ValidateNotification(notification);
-            subscription.Sink.Deliver(notification, wireByteCount);
-        }
-        catch (Exception exception)
-        {
-            _logger.LogWarning(
-                exception,
-                "Solana WS could not decode a '{Method}' notification; faulting that subscription",
-                subscription.SubscribeMethod);
-            var work = TryTerminate(subscription, exception, unsubscribe: true);
-            if (work is not null)
-                await ExecuteTerminalWorkAsync(work);
         }
     }
 
@@ -1847,6 +2123,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
     {
         RouteBinding? lateBinding = null;
         string? lateUnsubscribeMethod = null;
+        RouteGroup? lateClosingRoute = null;
         var reservationHeld = false;
 
         lock (_stateGate)
@@ -1857,58 +2134,133 @@ public sealed class SolanaWsClient : IAsyncDisposable
                 return;
             }
 
-            var subscription = pending.Subscription;
-            var wasAwaiting = pending.State == PendingState.Awaiting && subscription is not null;
+            var subscriptions = pending.Subscriptions
+                .Where(subscription =>
+                    subscription.Phase != SubscriptionPhase.Terminal &&
+                    ReferenceEquals(subscription.Attempt, pending))
+                .ToArray();
+            var wasAwaiting = pending.State == PendingState.Awaiting && subscriptions.Length > 0;
             if (result.ValueKind != JsonValueKind.Number || !result.TryGetUInt64(out var subscriptionId))
             {
                 _pending.Remove(requestId);
                 pending.State = PendingState.Failed;
-                if (subscription is not null && ReferenceEquals(subscription.Attempt, pending))
+                foreach (var subscription in subscriptions)
                     subscription.Attempt = null;
+                pending.ClearSubscriptions();
                 if (wasAwaiting)
                     pending.Acked.TrySetException(new InvalidOperationException("The node rejected the subscription."));
                 return;
             }
 
-            if (_byServerId.ContainsKey((epoch.Generation, subscriptionId)))
+            var canAccept = wasAwaiting &&
+                            _phase == ClientPhase.Connected &&
+                            ReferenceEquals(_connection, epoch);
+            var key = (epoch.Generation, subscriptionId);
+            _byServerId.TryGetValue(key, out var route);
+            if (canAccept && route is not null && subscriptions.Any(subscription => !route.CanRoute(subscription)))
             {
-                // The id is the sole routing key for notifications and unsubscriptions. Accepting
-                // an ambiguous id could misroute data or unsubscribe the existing subscription.
                 // Leave this pending entry intact so EndGeneration can fault its waiter.
                 throw new InvalidDataException(
                     $"The node assigned duplicate WebSocket subscription id {subscriptionId}.");
             }
 
-            var canAccept = wasAwaiting &&
-                            subscription!.Phase != SubscriptionPhase.Terminal &&
-                            ReferenceEquals(subscription.Attempt, pending) &&
-                            _phase == ClientPhase.Connected &&
-                            ReferenceEquals(_connection, epoch);
+            if (!canAccept && route is not null && !route.CanRoute(pending))
+            {
+                throw new InvalidDataException(
+                    $"The node assigned duplicate WebSocket subscription id {subscriptionId}.");
+            }
+
             _pending.Remove(requestId);
 
             if (canAccept)
             {
                 pending.State = PendingState.Acknowledged;
                 var binding = new RouteBinding(epoch, subscriptionId);
-                subscription!.Attempt = null;
-                subscription.Binding = binding;
-                if (pending.Initial)
+                if (route is null)
+                {
+                    route = new(subscriptions[0]) { ServerId = subscriptionId };
+                    _byServerId.Add(key, route);
+                }
+
+                route.State = RouteState.Active;
+                foreach (var subscription in subscriptions)
+                {
+                    subscription.Attempt = null;
+                    subscription.Binding = binding;
                     subscription.Phase = SubscriptionPhase.Active;
-                _byServerId[(epoch.Generation, subscriptionId)] = subscription;
+                    route.Subscriptions.Add(subscription);
+                }
+
+                pending.ClearSubscriptions();
                 pending.Acked.TrySetResult(subscriptionId);
+            }
+            else if (route is not null)
+            {
+                pending.State = PendingState.LateAcknowledged;
             }
             else
             {
                 pending.State = PendingState.LateAcknowledged;
-                lateBinding = new RouteBinding(epoch, subscriptionId);
-                lateUnsubscribeMethod = pending.UnsubscribeMethod;
-                reservationHeld = TryReserveSendLocked(epoch);
+                var closingRoute = new RouteGroup(pending)
+                {
+                    ServerId = subscriptionId,
+                    State = RouteState.Closing
+                };
+                var equivalentPending = _phase == ClientPhase.Connected && ReferenceEquals(_connection, epoch)
+                    ? _pending.Values.FirstOrDefault(candidate =>
+                        candidate.State == PendingState.Awaiting &&
+                        ReferenceEquals(candidate.Epoch, epoch) &&
+                        string.Equals(candidate.CoalescingKey, pending.CoalescingKey, StringComparison.Ordinal) &&
+                        candidate.Subscriptions.Count > 0 &&
+                        candidate.Subscriptions.All(closingRoute.CanRoute))
+                    : null;
+
+                if (equivalentPending is not null)
+                {
+                    var binding = new RouteBinding(epoch, subscriptionId);
+                    _byServerId.Add(key, closingRoute);
+                    closingRoute.State = RouteState.Active;
+                    foreach (var subscription in equivalentPending.Subscriptions)
+                    {
+                        subscription.Attempt = null;
+                        subscription.Binding = binding;
+                        subscription.Phase = SubscriptionPhase.Active;
+                        closingRoute.Subscriptions.Add(subscription);
+                    }
+
+                    equivalentPending.ClearSubscriptions();
+                    if (equivalentPending.MayHaveBeenSent)
+                    {
+                        equivalentPending.State = PendingState.Abandoned;
+                    }
+                    else
+                    {
+                        _pending.Remove(equivalentPending.RequestId);
+                        equivalentPending.State = PendingState.Acknowledged;
+                    }
+
+                    equivalentPending.Acked.TrySetResult(subscriptionId);
+                }
+                else
+                {
+                    reservationHeld = TryReserveSendLocked(epoch);
+                    if (reservationHeld)
+                    {
+                        _byServerId.Add(key, closingRoute);
+                        lateBinding = new RouteBinding(epoch, subscriptionId);
+                        lateUnsubscribeMethod = pending.UnsubscribeMethod;
+                        lateClosingRoute = closingRoute;
+                    }
+                }
             }
         }
 
         if (lateBinding is not null)
             await SendUnsubscribeReservedAsync(
-                lateBinding.Value, lateUnsubscribeMethod!, reservationHeld);
+                lateBinding.Value,
+                lateUnsubscribeMethod!,
+                reservationHeld,
+                lateClosingRoute);
     }
 
     private void CompletePendingError(int requestId, ConnectionEpoch epoch, JsonElement errorElement)
@@ -1930,11 +2282,16 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
             _pending.Remove(requestId);
             method = pending.SubscribeMethod;
-            var subscription = pending.Subscription;
-            var wasAwaiting = pending.State == PendingState.Awaiting && subscription is not null;
+            var subscriptions = pending.Subscriptions.ToArray();
+            var wasAwaiting = pending.State == PendingState.Awaiting && subscriptions.Length > 0;
             pending.State = PendingState.Failed;
-            if (subscription is not null && ReferenceEquals(subscription.Attempt, pending))
-                subscription.Attempt = null;
+            foreach (var subscription in subscriptions)
+            {
+                if (ReferenceEquals(subscription.Attempt, pending))
+                    subscription.Attempt = null;
+            }
+
+            pending.ClearSubscriptions();
             if (wasAwaiting)
             {
                 pending.Acked.TrySetException(
@@ -2042,23 +2399,115 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
     private readonly record struct BufferedNotification<T>(T Value, int EncodedMessageSizeBytes);
 
+    private sealed class RouteGroup
+    {
+        private readonly string _subscribeMethod;
+        private readonly string _unsubscribeMethod;
+        private readonly OneShotBehavior _oneShotBehavior;
+
+        public RouteGroup(Subscription subscription)
+            : this(
+                subscription.SubscribeMethod,
+                subscription.NotificationMethod,
+                subscription.UnsubscribeMethod,
+                subscription.CoalescingKey,
+                subscription.OneShotBehavior)
+        {
+        }
+
+        public RouteGroup(PendingSubscribe pending)
+            : this(
+                pending.SubscribeMethod,
+                pending.NotificationMethod,
+                pending.UnsubscribeMethod,
+                pending.CoalescingKey,
+                pending.OneShotBehavior)
+        {
+        }
+
+        private RouteGroup(
+            string subscribeMethod,
+            string notificationMethod,
+            string unsubscribeMethod,
+            string coalescingKey,
+            OneShotBehavior oneShotBehavior)
+        {
+            _subscribeMethod = subscribeMethod;
+            _unsubscribeMethod = unsubscribeMethod;
+            _oneShotBehavior = oneShotBehavior;
+            NotificationMethod = notificationMethod;
+            CoalescingKey = coalescingKey;
+        }
+
+        public string CoalescingKey { get; }
+
+        public string NotificationMethod { get; }
+
+        public ulong ServerId { get; set; }
+
+        public RouteState State { get; set; }
+
+        public HashSet<Subscription> Subscriptions { get; } = [];
+
+        public bool CanRoute(Subscription candidate)
+            => CanRoute(
+                candidate.CoalescingKey,
+                candidate.SubscribeMethod,
+                candidate.NotificationMethod,
+                candidate.UnsubscribeMethod,
+                candidate.OneShotBehavior);
+
+        public bool CanRoute(PendingSubscribe candidate)
+            => CanRoute(
+                candidate.CoalescingKey,
+                candidate.SubscribeMethod,
+                candidate.NotificationMethod,
+                candidate.UnsubscribeMethod,
+                candidate.OneShotBehavior);
+
+        public bool ShouldTerminateAfter(JsonElement notification) => _oneShotBehavior switch
+        {
+            OneShotBehavior.None => false,
+            OneShotBehavior.SignatureFinal =>
+                notification.ValueKind == JsonValueKind.Object &&
+                notification.TryGetProperty("value", out var value) &&
+                value.ValueKind == JsonValueKind.Object,
+            _ => false
+        };
+
+        private bool CanRoute(
+            string coalescingKey,
+            string subscribeMethod,
+            string notificationMethod,
+            string unsubscribeMethod,
+            OneShotBehavior oneShotBehavior)
+            => string.Equals(CoalescingKey, coalescingKey, StringComparison.Ordinal) &&
+               string.Equals(_subscribeMethod, subscribeMethod, StringComparison.Ordinal) &&
+               string.Equals(NotificationMethod, notificationMethod, StringComparison.Ordinal) &&
+               string.Equals(_unsubscribeMethod, unsubscribeMethod, StringComparison.Ordinal) &&
+               _oneShotBehavior == oneShotBehavior;
+    }
+
     private sealed class PendingSubscribe(
         int requestId,
         ConnectionEpoch epoch,
-        Subscription subscription,
-        bool initial)
+        Subscription subscription)
     {
         public int RequestId { get; } = requestId;
 
         public ConnectionEpoch Epoch { get; } = epoch;
 
-        public Subscription? Subscription { get; private set; } = subscription;
-
         public string SubscribeMethod { get; } = subscription.SubscribeMethod;
 
         public string UnsubscribeMethod { get; } = subscription.UnsubscribeMethod;
 
-        public bool Initial { get; } = initial;
+        public string NotificationMethod { get; } = subscription.NotificationMethod;
+
+        public string CoalescingKey { get; } = subscription.CoalescingKey;
+
+        public OneShotBehavior OneShotBehavior { get; } = subscription.OneShotBehavior;
+
+        public HashSet<Subscription> Subscriptions { get; } = [subscription];
 
         public TaskCompletionSource<ulong> Acked { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -2067,7 +2516,13 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
         public bool MayHaveBeenSent { get; set; }
 
-        public void DetachSubscription() => Subscription = null;
+        public void Add(Subscription added)
+        {
+            Subscriptions.Add(added);
+            added.Attempt = this;
+        }
+
+        public void ClearSubscriptions() => Subscriptions.Clear();
     }
 
     private sealed class ConnectionEpoch
@@ -2117,6 +2572,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
         Subscription Subscription,
         Exception? Exception,
         RouteBinding? Binding,
+        RouteGroup? ClosingRoute,
         CancellationTokenRegistration? CancellationRegistration,
         bool SendReservationHeld);
 
@@ -2148,6 +2604,8 @@ public sealed class SolanaWsClient : IAsyncDisposable
         public string NotificationMethod { get; } = subscribeMethod.EndsWith("Subscribe", StringComparison.Ordinal)
             ? subscribeMethod[..^"Subscribe".Length] + "Notification"
             : throw new ArgumentException("A subscription method must end with 'Subscribe'.", nameof(subscribeMethod));
+
+        public string CoalescingKey { get; } = CreateCoalescingKey(subscribeMethod, parameters);
 
         public ISubscriptionSink Sink { get; } = sink;
 

@@ -6,9 +6,9 @@
     <PackageId>SolSharp</PackageId>
     <IsPackable>true</IsPackable>
     <EnablePackageValidation>true</EnablePackageValidation>
-    <PackageValidationBaselineVersion>3.0.0</PackageValidationBaselineVersion>
+    <PackageValidationBaselineVersion>3.1.0</PackageValidationBaselineVersion>
     <Description>A contract-driven, Native AOT-ready .NET 10 SDK for Solana — independently implemented from pinned Anza Solana SDK, Agave, and SPL source contracts. Source-generated JSON with no reflection; typed RPC and multiplexed WebSocket streaming; Ed25519 and BLS12-381 keys/signatures; program instructions and bounded state decoding; and exact legacy/v0/V1 transaction wire formats verified against Rust-compatible vectors. Ships as one package bundling the Core, Wallet, Rpc, and Programs functional assemblies plus a minimal packaging facade.</Description>
-    <PackageReleaseNotes>3.1.0 — correctness, hardening, and performance. Fixes Token-2022 CreateNativeMint, which named the classic wSOL mint and could never succeed, and the SlotHashes/StakeHistory decoders, which rejected the canonical zero-padded sysvar account on any cluster whose 512-entry ring was not yet full. PublicKey.IsOnCurve is 39x faster (309us -> 7.8us), taking PDA/ATA derivation from 642us to 18us; 32-byte base58 encode and PublicKey/Hash parsing use a fixed-width codec (parse 1.18us -> 0.25us, allocation-free). Base58 parsing is length-bounded before decoding, so a hostile 200,000-character string is rejected immediately instead of costing ~24s. Adds Mints.Token2022NativeMint, MaxBase58Length constants, and length-bounded Base58 overloads. WebSocket subscriptions gained configurable wire-byte budgets. Wire output is unchanged and verified byte-for-byte against the pinned Rust sources. Full details: https://github.com/jecacs/SolSharp/blob/v3.1.0/CHANGELOG.md</PackageReleaseNotes>
+    <PackageReleaseNotes>3.2.0 — differential-audit remediation and RPC/WebSocket hardening. WebSocket PubSub now fans Agave-deduplicated subscriptions out to every matching local subscriber, unsubscribes only the final consumer, and safely handles late acknowledgements and closing-route races. Transfer-hook TLV decoding now validates the complete buffer and exact ListView storage contract. Alpenglow signer bitmaps accept the full 515-byte envelope; message compilation snapshots bounded instruction inputs; PDA bump search matches 255 through 1; malformed account/error responses consistently surface as JsonException; and RPC batches isolate attributable malformed entries while retaining batch-wide rejection for ambiguous ids. Adds pinned loader, curve, BIP-39, BLS, confidential-token, and PDA parity vectors, and documents intentional runtime/client decoder and pathological Ed25519-verifier differences. Full details: https://github.com/jecacs/SolSharp/blob/v3.2.0/CHANGELOG.md</PackageReleaseNotes>
     <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);BundleProjectReferences</TargetsForTfmSpecificBuildOutput>
   </PropertyGroup>
 
@@ -26,11 +26,6 @@
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.10" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.8.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <!-- Remove this exclusion after the first net10.0 release becomes the package-validation baseline. -->
-    <PackageValidationBaselineFrameworkToIgnore Include="net8.0" />
   </ItemGroup>
 
   <Target Name="BundleProjectReferences" DependsOnTargets="ResolveReferences">

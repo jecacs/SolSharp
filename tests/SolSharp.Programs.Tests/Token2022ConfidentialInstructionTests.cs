@@ -154,19 +154,37 @@ public static class Token2022ConfidentialInstructionTests
     public sealed class DepositConfidentialTokens
     {
         [Test]
-        public void UsesPinnedInnerTag()
-            => Token2022Program.DepositConfidentialTokens(Key(1), Key(2), 3, 4, Key(5)).Data.Take(2)
-                .Should().Equal(27, 5);
+        public void MatchesPinnedInterfaceDataAndAccountOrdering()
+        {
+            // Act
+            var instruction = Token2022Program.DepositConfidentialTokens(Key(1), Key(2), 3, 4, Key(5));
+
+            // Assert
+            Hex(instruction).Should().Be("1b05030000000000000004");
+            Metas(instruction).Should().Equal(
+                (Key(1), false, true),
+                (Key(2), false, false),
+                (Key(5), true, false));
+        }
     }
 
     [TestFixture]
     public sealed class ApplyConfidentialPendingBalance
     {
         [Test]
-        public void UsesPinnedInnerTag()
-            => Token2022Program.ApplyConfidentialPendingBalance(
-                    Key(1), 2, Pod(3, Token2022Program.DecryptableBalanceLength), Key(4)).Data.Take(2)
-                .Should().Equal(27, 8);
+        public void MatchesPinnedInterfaceDataAndAccountOrdering()
+        {
+            // Act
+            var instruction = Token2022Program.ApplyConfidentialPendingBalance(
+                Key(1), 2, Pod(3, Token2022Program.DecryptableBalanceLength), Key(4));
+
+            // Assert
+            Hex(instruction).Should().Be(
+                "1b080200000000000000" + RepeatedHex(3, Token2022Program.DecryptableBalanceLength));
+            Metas(instruction).Should().Equal(
+                (Key(1), false, true),
+                (Key(4), true, false));
+        }
     }
 
     [TestFixture]
@@ -330,19 +348,42 @@ public static class Token2022ConfidentialInstructionTests
     public sealed class RotateConfidentialSupplyElGamalPublicKey
     {
         [Test]
-        public void UsesPinnedInnerTag()
-            => Token2022Program.RotateConfidentialSupplyElGamalPublicKey(
-                    Key(1), Key(2), Pod(3, 32), ConfidentialProofLocation.AtInstructionOffset(1)).Data.Take(2)
-                .Should().Equal(42, 1);
+        public void MatchesPinnedInterfaceDataAndAccountOrdering()
+        {
+            // Act
+            var instruction = Token2022Program.RotateConfidentialSupplyElGamalPublicKey(
+                Key(1),
+                Key(2),
+                Pod(3, Token2022Program.ElGamalPublicKeyLength),
+                ConfidentialProofLocation.AtInstructionOffset(1));
+
+            // Assert
+            Hex(instruction).Should().Be(
+                "2a01" + RepeatedHex(3, Token2022Program.ElGamalPublicKeyLength) + "01");
+            Metas(instruction).Should().Equal(
+                (Key(1), false, true),
+                (PublicKey.Parse(Sysvars.Instructions), false, false),
+                (Key(2), true, false));
+        }
     }
 
     [TestFixture]
     public sealed class UpdateConfidentialDecryptableSupply
     {
         [Test]
-        public void UsesPinnedInnerTag()
-            => Token2022Program.UpdateConfidentialDecryptableSupply(Key(1), Key(2), Pod(3, 36)).Data.Take(2)
-                .Should().Equal(42, 2);
+        public void MatchesPinnedInterfaceDataAndAccountOrdering()
+        {
+            // Act
+            var instruction = Token2022Program.UpdateConfidentialDecryptableSupply(
+                Key(1), Key(2), Pod(3, Token2022Program.DecryptableBalanceLength));
+
+            // Assert
+            Hex(instruction).Should().Be(
+                "2a02" + RepeatedHex(3, Token2022Program.DecryptableBalanceLength));
+            Metas(instruction).Should().Equal(
+                (Key(1), false, true),
+                (Key(2), true, false));
+        }
     }
 
     [TestFixture]

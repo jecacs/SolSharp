@@ -264,6 +264,43 @@ public static class MessageTests
             message.Instructions[0].Data.Should().Equal(7);
         }
 
+        [Test]
+        public void TwoFacedAccountList_IsSnapshottedBeforeBothCompilationPasses()
+        {
+            // Arrange: enumeration and indexed access deliberately expose different accounts.
+            var enumerated = AccountMeta.Writable(Key(2));
+            var indexed = AccountMeta.Readonly(Key(3));
+            var instruction = new Instruction
+            {
+                ProgramId = Key(9),
+                Accounts = new TwoFacedAccountList(enumerated, indexed),
+                Data = [7]
+            };
+
+            // Act
+            var message = Message.Compile(Key(1), Key(8).ToString(), [instruction]);
+            var compiledAccount = message.AccountKeys[message.Instructions[0].AccountIndexes[0]];
+
+            // Assert
+            compiledAccount.Should().Be(indexed.PublicKey);
+            message.AccountKeys.Should().NotContain(enumerated.PublicKey);
+        }
+
+        [Test]
+        public void ThrowingInstructionEnumerator_UsesValidatedIndexedSnapshot()
+        {
+            // Arrange
+            var instruction = new Instruction { ProgramId = Key(9), Accounts = [], Data = [7] };
+            var instructions = new ThrowingInstructionEnumerable(instruction);
+
+            // Act
+            var message = Message.Compile(Key(1), Key(8).ToString(), instructions);
+
+            // Assert
+            message.Instructions.Should().ContainSingle();
+            message.Instructions[0].Data.Should().Equal(7);
+        }
+
         private static Instruction AllSigners(int count, out PublicKey payer)
         {
             var keys = Enumerable.Range(0, count).Select(UniqueKey).ToArray();
@@ -274,6 +311,36 @@ public static class MessageTests
                 Accounts = [.. keys.Skip(1).Select(AccountMeta.ReadonlySigner)],
                 Data = [7]
             };
+        }
+
+        private sealed class TwoFacedAccountList(AccountMeta enumerated, AccountMeta indexed)
+            : IReadOnlyList<AccountMeta>
+        {
+            public int Count => 1;
+
+            public AccountMeta this[int index]
+                => index == 0 ? indexed : throw new ArgumentOutOfRangeException(nameof(index));
+
+            public IEnumerator<AccountMeta> GetEnumerator()
+            {
+                yield return enumerated;
+            }
+
+            System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+        }
+
+        private sealed class ThrowingInstructionEnumerable(Instruction instruction)
+            : IReadOnlyList<Instruction>
+        {
+            public int Count => 1;
+
+            public Instruction this[int index]
+                => index == 0 ? instruction : throw new ArgumentOutOfRangeException(nameof(index));
+
+            public IEnumerator<Instruction> GetEnumerator()
+                => throw new InvalidOperationException("The compiler must use the bounded indexed view.");
+
+            System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
         }
     }
 

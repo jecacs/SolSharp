@@ -15,7 +15,7 @@ internal sealed class ParsedAccountInfoJsonConverter : JsonConverter<ParsedAccou
     {
         using var document = JsonDocument.ParseValue(ref reader);
         var root = document.RootElement;
-        var data = root.GetProperty("data");
+        var data = AccountInfoJsonConverter.ReadRequiredProperty(root, "data");
 
         string? program = null;
         ParsedInstructionInfo? parsed = null;
@@ -60,10 +60,10 @@ internal sealed class ParsedAccountInfoJsonConverter : JsonConverter<ParsedAccou
 
         return new()
         {
-            Lamports = root.GetProperty("lamports").GetUInt64(),
-            Owner = new(root.GetProperty("owner").GetString()!),
-            Executable = root.GetProperty("executable").GetBoolean(),
-            RentEpoch = root.GetProperty("rentEpoch").GetUInt64(),
+            Lamports = AccountInfoJsonConverter.ReadRequiredUInt64(root, "lamports"),
+            Owner = AccountInfoJsonConverter.ReadRequiredPublicKey(root, "owner"),
+            Executable = AccountInfoJsonConverter.ReadRequiredBoolean(root, "executable"),
+            RentEpoch = AccountInfoJsonConverter.ReadRequiredUInt64(root, "rentEpoch"),
             Space = space,
             Program = program,
             Parsed = parsed,

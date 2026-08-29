@@ -6,7 +6,7 @@ namespace SolSharp.Wallet;
 
 /// <summary>
 /// A 64-byte Ed25519 signature with Solana base58 parsing, formatting, and value equality.
-/// Signature verification uses the strict Solana-compatible rules implemented by Wallet.
+/// Signature verification uses the Bouncy Castle-based policy implemented by Wallet.
 /// </summary>
 public readonly struct Signature : IEquatable<Signature>
 {
@@ -121,7 +121,7 @@ public readonly struct Signature : IEquatable<Signature>
     /// <param name="publicKey">The signer's Ed25519 public key.</param>
     /// <param name="message">The exact message bytes that were signed.</param>
     /// <returns>
-    /// <c>true</c> when this is a valid strict Ed25519 signature of <paramref name="message"/> by
+    /// <c>true</c> when the Wallet verifier accepts this Ed25519 signature of <paramref name="message"/> by
     /// <paramref name="publicKey"/>; <c>false</c> otherwise.
     /// </returns>
     public bool Verify(PublicKey publicKey, ReadOnlySpan<byte> message) => publicKey.Verify(message, this);

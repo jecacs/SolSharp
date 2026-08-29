@@ -304,6 +304,95 @@ public static class UpgradeableBpfLoaderStateTests
         }
 
         [Test]
+        public void BufferWithoutAuthority_UsesFixedRuntimeMetadataOffset()
+        {
+            // Arrange: the runtime reserves the complete authority slot even when the option tag is None.
+            var data = new byte[UpgradeableBpfLoaderState.BufferMetadataLength + 2];
+            BinaryPrimitives.WriteUInt32LittleEndian(data, 1);
+            data[4] = 0;
+            data[^2] = 0xaa;
+            data[^1] = 0xbb;
+
+            // Act
+            var state = UpgradeableBpfLoaderState.Parse(data);
+
+            // Assert
+            state.Kind.Should().Be(UpgradeableBpfLoaderStateKind.Buffer);
+            state.Authority.Should().BeNull();
+            state.ProgramBytes.ToArray().Should().Equal(0xaa, 0xbb);
+        }
+
+        [Test]
+        public void ProgramDataWithoutAuthority_UsesFixedRuntimeMetadataOffset()
+        {
+            // Arrange: discriminator, slot, fixed authority slot, then program bytes.
+            var data = new byte[UpgradeableBpfLoaderState.ProgramDataMetadataLength + 2];
+            BinaryPrimitives.WriteUInt32LittleEndian(data, 3);
+            BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(4), 42);
+            data[12] = 0;
+            data[^2] = 0xaa;
+            data[^1] = 0xbb;
+
+            // Act
+            var state = UpgradeableBpfLoaderState.Parse(data);
+
+            // Assert
+            state.Kind.Should().Be(UpgradeableBpfLoaderStateKind.ProgramData);
+            state.Slot.Should().Be(42);
+            state.Authority.Should().BeNull();
+            state.ProgramBytes.ToArray().Should().Equal(0xaa, 0xbb);
+        }
+
+        [Test]
+        public void InvalidAuthorityTag_IsRejectedByParseAndTryParse()
+        {
+            // Arrange
+            var data = new byte[UpgradeableBpfLoaderState.BufferMetadataLength];
+            BinaryPrimitives.WriteUInt32LittleEndian(data, 1);
+            data[4] = 2;
+
+            // Act
+            var parsed = UpgradeableBpfLoaderState.TryParse(data, out var state);
+            Action parse = () => UpgradeableBpfLoaderState.Parse(data);
+
+            // Assert
+            parsed.Should().BeFalse();
+            state.Should().BeNull();
+            parse.Should().Throw<FormatException>();
+        }
+
+        [Test]
+        public void Uninitialized_DecodesWithoutUnrelatedFields()
+        {
+            // Arrange
+            var data = new byte[UpgradeableBpfLoaderState.UninitializedMetadataLength];
+
+            // Act
+            var state = UpgradeableBpfLoaderState.Parse(data);
+
+            // Assert
+            state.Kind.Should().Be(UpgradeableBpfLoaderStateKind.Uninitialized);
+            state.Authority.Should().BeNull();
+            state.ProgramDataAddress.Should().BeNull();
+            state.Slot.Should().BeNull();
+            state.ProgramBytes.ToArray().Should().BeEmpty();
+        }
+
+        [Test]
+        public void UnknownDiscriminator_IsRejected()
+        {
+            // Arrange
+            var data = new byte[sizeof(uint)];
+            BinaryPrimitives.WriteUInt32LittleEndian(data, 4);
+
+            // Act
+            Action act = () => UpgradeableBpfLoaderState.Parse(data);
+
+            // Assert
+            act.Should().Throw<FormatException>();
+        }
+
+        [Test]
         public void Program_DecodesProgramDataAddressWithoutUnrelatedFields()
         {
             // Arrange
@@ -320,6 +409,43 @@ public static class UpgradeableBpfLoaderStateTests
             state.Authority.Should().BeNull();
             state.Slot.Should().BeNull();
             state.ProgramBytes.ToArray().Should().BeEmpty();
+        }
+    }
+
+    [TestFixture]
+    public sealed class TryParse
+    {
+        [Test]
+        public void ValidUninitialized_ReturnsState()
+        {
+            // Arrange
+            var data = new byte[UpgradeableBpfLoaderState.UninitializedMetadataLength];
+
+            // Act
+            var parsed = UpgradeableBpfLoaderState.TryParse(data, out var state);
+
+            // Assert
+            parsed.Should().BeTrue();
+            state.Should().NotBeNull();
+            state!.Kind.Should().Be(UpgradeableBpfLoaderStateKind.Uninitialized);
+        }
+
+        [Test]
+        public void TruncatedAndUnknownStates_ReturnFalse()
+        {
+            // Arrange
+            var unknown = new byte[sizeof(uint)];
+            BinaryPrimitives.WriteUInt32LittleEndian(unknown, 4);
+
+            // Act
+            var truncatedParsed = UpgradeableBpfLoaderState.TryParse(new byte[sizeof(uint) - 1], out var truncated);
+            var unknownParsed = UpgradeableBpfLoaderState.TryParse(unknown, out var unknownState);
+
+            // Assert
+            truncatedParsed.Should().BeFalse();
+            truncated.Should().BeNull();
+            unknownParsed.Should().BeFalse();
+            unknownState.Should().BeNull();
         }
     }
 }
@@ -434,6 +560,69 @@ public static class LoaderV4StateTests
             state.AuthorityOrNextVersion.Should().Be(Pk(8));
             state.Status.Should().Be(LoaderV4Status.Deployed);
             state.ProgramBytes.ToArray().Should().Equal(0xaa, 0xbb);
+        }
+
+        [Test]
+        public void InvalidStatus_IsRejected()
+        {
+            // Arrange
+            var data = new byte[LoaderV4State.MetadataLength];
+            BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(40), 3);
+
+            // Act
+            Action act = () => LoaderV4State.Parse(data);
+
+            // Assert
+            act.Should().Throw<FormatException>();
+        }
+
+        [Test]
+        public void TruncatedHeader_IsRejected()
+        {
+            // Act
+            Action act = static () => LoaderV4State.Parse(new byte[LoaderV4State.MetadataLength - 1]);
+
+            // Assert
+            act.Should().Throw<ArgumentException>();
+        }
+    }
+
+    [TestFixture]
+    public sealed class TryParse
+    {
+        [Test]
+        public void ValidHeader_ReturnsState()
+        {
+            // Arrange
+            var data = new byte[LoaderV4State.MetadataLength];
+            BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(40), (ulong)LoaderV4Status.Finalized);
+
+            // Act
+            var parsed = LoaderV4State.TryParse(data, out var state);
+
+            // Assert
+            parsed.Should().BeTrue();
+            state.Should().NotBeNull();
+            state!.Status.Should().Be(LoaderV4Status.Finalized);
+        }
+
+        [Test]
+        public void TruncatedAndInvalidStatus_ReturnFalse()
+        {
+            // Arrange
+            var invalidStatus = new byte[LoaderV4State.MetadataLength];
+            BinaryPrimitives.WriteUInt64LittleEndian(invalidStatus.AsSpan(40), 3);
+
+            // Act
+            var truncatedParsed = LoaderV4State.TryParse(
+                new byte[LoaderV4State.MetadataLength - 1], out var truncated);
+            var invalidStatusParsed = LoaderV4State.TryParse(invalidStatus, out var invalidStatusState);
+
+            // Assert
+            truncatedParsed.Should().BeFalse();
+            truncated.Should().BeNull();
+            invalidStatusParsed.Should().BeFalse();
+            invalidStatusState.Should().BeNull();
         }
     }
 }

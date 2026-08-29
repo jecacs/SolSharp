@@ -7,6 +7,37 @@ version (on the earlier 0.x releases, minor versions could carry them).
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-08-29
+
+### Fixed
+
+- WebSocket PubSub now fans an Agave-deduplicated server subscription out to every matching local
+  subscriber and sends the server unsubscribe only after the final local subscriber ends. Duplicate
+  acknowledgements no longer tear down the physical connection or drop sibling notifications.
+- Transfer-hook validation-account decoding now validates the complete TLV buffer and rejects partial
+  trailing POD entries before a transaction is built, matching the on-chain resolver's accept/reject rules.
+- Alpenglow genesis certificates accept the full 515-byte Base2 signer-store envelope; malformed account
+  responses and transaction-error numeric overflows now consistently surface as `JsonException`.
+- Batched RPC responses now isolate a malformed, attributable entry to its own queued call while retaining
+  batch-wide rejection for unknown, duplicate, or uncorrelatable response identifiers.
+- Legacy message compilation snapshots each instruction's accounts and data before both compilation passes,
+  and PDA bump search now matches the runtime's inclusive 255-through-1 range.
+
+### Changed
+
+- Upgradeable-loader state decoding now explicitly follows the raw runtime's fixed Buffer and ProgramData
+  payload offsets (37/45), including immutable accounts; the compact bincode and `jsonParsed` client-decoder
+  offsets (5/13) remain documented as a deliberate contract difference.
+- The parity matrix and public verification documentation now record Wallet's pathological-point Ed25519
+  divergence from pinned `verify_dalek`, plus the safe-direction strictness of transaction and off-chain
+  message parsing. Contributor and release documentation now accurately describes the exact SDK and CI gates.
+
+### Tests
+
+- Added pinned known-answer and rejection vectors for upgradeable-loader states, Ed25519 curve boundaries,
+  Unicode BIP-39 seeds, signer-derived BLS keys, Token-2022 confidential instructions, transfer-hook PDAs,
+  malformed RPC models, batch isolation, and WebSocket subscription coalescing/lifecycle races.
+
 ## [3.1.0] - 2026-08-11
 
 ### Added
@@ -51,8 +82,10 @@ version (on the earlier 0.x releases, minor versions could carry them).
 - Locked restores broke whenever .NET shipped an SDK patch. `IsAotCompatible` and `PublishAot` inject
   `Microsoft.NET.ILLink.Tasks` and `Microsoft.DotNet.ILCompiler` at versions taken from the SDK's runtime,
   and both are recorded in `packages.lock.json`, so a floating SDK produced NU1004 with no source change.
-  `global.json` now pins one exact SDK (10.0.303) with `rollForward: disable`, every workflow installs it
-  through `global-json-file`, and each job asserts the resolved SDK equals that pin.
+  `global.json` now pins one exact SDK (10.0.303) with `rollForward: disable`; every workflow job that
+  restores or builds the checkout installs it through `global-json-file` and asserts the resolved SDK
+  equals that pin. The checkout-free publish job only verifies and pushes staged artifacts, so it pins its
+  independently installed 10.0.x SDK in an isolated temporary `global.json` instead.
 - `Token2022Program.CreateNativeMint` named the classic SPL Token wSOL mint as account 1 instead of the
   Token-2022 native mint, so the instruction was always rejected with `InvalidMint`. Verified against the
   address derived from the pinned interface's seeds.
@@ -632,7 +665,8 @@ bundles four layered assemblies.
   transaction building, signing and serialization, `Transaction.Deserialize`, and instruction
   decompilation — every wire format validated byte-for-byte against the Rust `solana-sdk`.
 
-[Unreleased]: https://github.com/jecacs/SolSharp/compare/v3.1.0...HEAD
+[Unreleased]: https://github.com/jecacs/SolSharp/compare/v3.2.0...HEAD
+[3.2.0]: https://github.com/jecacs/SolSharp/compare/v3.1.0...v3.2.0
 [3.1.0]: https://github.com/jecacs/SolSharp/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/jecacs/SolSharp/compare/v2.0.0...v3.0.0
 [2.0.0]: https://github.com/jecacs/SolSharp/compare/v1.3.0...v2.0.0

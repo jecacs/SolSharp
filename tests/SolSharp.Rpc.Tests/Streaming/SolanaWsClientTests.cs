@@ -398,6 +398,185 @@ public static class SolanaWsClientTests
             using var document = JsonDocument.Parse(unsubscribe);
             document.RootElement.GetProperty("params")[0].GetUInt64().Should().Be(ulong.MaxValue);
         }
+
+        [Test]
+        public async Task LastBoundCancelsWhileEquivalentSubscribePending_DoesNotKillNewRoute()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new("wss://localhost"));
+            var program = PublicKey.Parse(SolanaProgramIds.TokenProgram);
+            using var firstCancellation = new CancellationTokenSource();
+            using var secondCancellation = new CancellationTokenSource();
+
+            var firstSubscribe = client.SubscribeLogsAsync(program, cancellationToken: firstCancellation.Token);
+            await WaitUntil(() => fake.SentCount == 1);
+            var secondSubscribe = client.SubscribeLogsAsync(program, cancellationToken: secondCancellation.Token);
+            await WaitUntil(() => client.RetainedPendingSubscriptionReferenceCount == 2);
+            fake.SentCount.Should().Be(1, "equivalent local subscriptions must share one pending wire request");
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 61));
+            var readers = await Task.WhenAll(firstSubscribe, secondSubscribe);
+
+            // Act
+            fake.PushFromServer(LogNotification(subscription: 61, signature: "shared"));
+            var notifications = await Task.WhenAll(
+                readers[0].ReadAsync().AsTask(),
+                readers[1].ReadAsync().AsTask());
+
+            // Assert
+            notifications.Should().OnlyContain(static notification => notification.Value!.Signature == "shared");
+
+            await firstCancellation.CancelAsync();
+            fake.SentSnapshot().Should().NotContain(static message => message.Contains("logsUnsubscribe"));
+
+            fake.PushFromServer(LogNotification(subscription: 61, signature: "still-shared"));
+            (await readers[1].ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1)))
+                .Value!.Signature.Should().Be("still-shared");
+
+            await secondCancellation.CancelAsync();
+            await WaitUntil(() => fake.SentSnapshot().Count(static message => message.Contains("logsUnsubscribe")) == 1);
+            var unsubscribe = fake.SentSnapshot().Single(static message => message.Contains("logsUnsubscribe"));
+            using var document = JsonDocument.Parse(unsubscribe);
+            document.RootElement.GetProperty("params")[0].GetUInt64().Should().Be(61);
+        }
+
+        [Test]
+        public async Task LateAckForCancelledRequest_AdoptsEquivalentPendingSubscriber()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new("wss://localhost"));
+            var program = PublicKey.Parse(SolanaProgramIds.TokenProgram);
+            using var firstCancellation = new CancellationTokenSource();
+            using var secondCancellation = new CancellationTokenSource();
+
+            var firstSubscribe = client.SubscribeLogsAsync(program, cancellationToken: firstCancellation.Token);
+            await WaitUntil(() => fake.SentCount == 1);
+
+            // Act: the physical request loses its only sink before the ACK, then an equivalent sink arrives.
+            await firstCancellation.CancelAsync();
+            var firstCancelled = async () => await firstSubscribe;
+            await firstCancelled.Should().ThrowAsync<OperationCanceledException>();
+            client.RetainedAcknowledgementTombstoneCount.Should().Be(1);
+
+            var secondSendEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var releaseSecondSend = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            fake.SendBehavior = async (message, cancellationToken) =>
+            {
+                if (message.Contains("logsSubscribe", StringComparison.Ordinal))
+                {
+                    secondSendEntered.TrySetResult();
+                    await releaseSecondSend.Task.WaitAsync(cancellationToken);
+                }
+            };
+
+            var secondSubscribe = client.SubscribeLogsAsync(program, cancellationToken: secondCancellation.Token);
+            await secondSendEntered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+            // Assert: the first request's late ACK establishes the equivalent sink instead of scheduling
+            // an unsubscribe which would kill the server route shared by the blocked second request.
+            var firstRequest = fake.SentSnapshot().Single();
+            fake.PushFromServer(Acknowledgement(RequestId(firstRequest), subscriptionId: 63));
+            var reader = await secondSubscribe.WaitAsync(TimeSpan.FromSeconds(1));
+            try
+            {
+                fake.SentSnapshot().Should().NotContain(static message => message.Contains("logsUnsubscribe"));
+
+                releaseSecondSend.TrySetResult();
+                await WaitUntil(() => fake.SentCount == 2);
+                var secondRequest = fake.SentSnapshot()[1];
+                fake.PushFromServer(Acknowledgement(RequestId(secondRequest), subscriptionId: 63));
+                await WaitUntil(() => client.RetainedAcknowledgementTombstoneCount == 0);
+                fake.PushFromServer(LogNotification(subscription: 63, signature: "follower"));
+                (await reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1)))
+                    .Value!.Signature.Should().Be("follower");
+
+                await secondCancellation.CancelAsync();
+                await WaitUntil(() => fake.SentSnapshot().Count(static message =>
+                    message.Contains("logsUnsubscribe")) == 1);
+                var unsubscribe = fake.SentSnapshot().Single(static message => message.Contains("logsUnsubscribe"));
+                using var document = JsonDocument.Parse(unsubscribe);
+                document.RootElement.GetProperty("params")[0].GetUInt64().Should().Be(63);
+            }
+            finally
+            {
+                releaseSecondSend.TrySetResult();
+            }
+        }
+
+        [Test]
+        public async Task EquivalentSubscriberReactivatesClosingRouteBeforeQueuedUnsubscribe()
+        {
+            // Arrange: an unrelated unsubscribe occupies the physical send lock so cancellation can
+            // leave the target route Closing while an equivalent subscriber registers.
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new("wss://localhost"));
+            using var blockerCancellation = new CancellationTokenSource();
+            using var originalCancellation = new CancellationTokenSource();
+            using var replacementCancellation = new CancellationTokenSource();
+
+            var blockerSubscribe = client.SubscribeLogsAsync(
+                PublicKey.Parse(SolanaProgramIds.SystemProgram),
+                cancellationToken: blockerCancellation.Token);
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 60));
+            _ = await blockerSubscribe;
+
+            var program = PublicKey.Parse(SolanaProgramIds.TokenProgram);
+            var originalSubscribe = client.SubscribeLogsAsync(
+                program, cancellationToken: originalCancellation.Token);
+            await WaitUntil(() => fake.SentCount == 2);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[1]), subscriptionId: 61));
+            _ = await originalSubscribe;
+
+            var blockerUnsubscribeEntered = new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            var releaseBlockerUnsubscribe = new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            fake.SendBehavior = async (message, cancellationToken) =>
+            {
+                if (message.Contains("logsUnsubscribe", StringComparison.Ordinal) &&
+                    message.Contains("[60]", StringComparison.Ordinal))
+                {
+                    blockerUnsubscribeEntered.TrySetResult();
+                    await releaseBlockerUnsubscribe.Task.WaitAsync(cancellationToken);
+                }
+            };
+
+            await blockerCancellation.CancelAsync();
+            await blockerUnsubscribeEntered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+            try
+            {
+                // Act
+                await originalCancellation.CancelAsync();
+                var replacementSubscribe = client.SubscribeLogsAsync(
+                    program, cancellationToken: replacementCancellation.Token);
+                var replacement = await replacementSubscribe.WaitAsync(TimeSpan.FromSeconds(1));
+                fake.SentCount.Should().Be(2, "the closing route can be reactivated without another subscribe");
+
+                releaseBlockerUnsubscribe.TrySetResult();
+                await WaitUntil(() => client.RetainedSendOperationCount == 0);
+
+                // Assert: the stale cleanup rechecked the route after acquiring the send lock and skipped it.
+                fake.SentSnapshot().Should().NotContain(static message =>
+                    message.Contains("logsUnsubscribe") && message.Contains("[61]"));
+                fake.PushFromServer(LogNotification(subscription: 61, signature: "reactivated"));
+                (await replacement.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1)))
+                    .Value!.Signature.Should().Be("reactivated");
+
+                await replacementCancellation.CancelAsync();
+                await WaitUntil(() => fake.SentSnapshot().Count(static message =>
+                    message.Contains("logsUnsubscribe") && message.Contains("[61]")) == 1);
+            }
+            finally
+            {
+                releaseBlockerUnsubscribe.TrySetResult();
+            }
+        }
     }
 
     [TestFixture]
@@ -433,7 +612,8 @@ public static class SolanaWsClientTests
             };
 
             using var cancellation = new CancellationTokenSource();
-            var cancelledSubscribe = client.SubscribeLogsAsync(program, cancellationToken: cancellation.Token);
+            var cancelledSubscribe = client.SubscribeLogsAsync(
+                PublicKey.Parse(SolanaProgramIds.SystemProgram), cancellationToken: cancellation.Token);
             await physicalSendEntered.Task;
 
             try
@@ -465,6 +645,91 @@ public static class SolanaWsClientTests
                 """{"jsonrpc":"2.0","method":"logsNotification","params":{"subscription":10,"result":{"context":{"slot":5},"value":{"signature":"still-live","err":null,"logs":[]}}}}""");
             (await anchor.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1)))
                 .Value!.Signature.Should().Be("still-live");
+        }
+
+        [Test]
+        public async Task LateAcknowledgementForAbandonedEquivalentRequest_SharingLiveIdIsIgnored()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            var options = new SolanaWsClientOptions { SubscriptionAckTimeout = TimeSpan.FromSeconds(2) };
+            await using var client = new SolanaWsClient(() => fake, options);
+            await client.ConnectAsync(new("wss://localhost"));
+            var program = PublicKey.Parse(SolanaProgramIds.TokenProgram);
+
+            using var abandonedCancellation = new CancellationTokenSource();
+            var abandoned = client.SubscribeLogsAsync(
+                program, cancellationToken: abandonedCancellation.Token);
+            await WaitUntil(() => fake.SentCount == 1);
+            var abandonedRequest = fake.SentSnapshot()[0];
+            await abandonedCancellation.CancelAsync();
+            var cancelled = async () => await abandoned;
+            await cancelled.Should().ThrowAsync<OperationCanceledException>();
+
+            using var liveCancellation = new CancellationTokenSource();
+            var liveSubscribe = client.SubscribeLogsAsync(program, cancellationToken: liveCancellation.Token);
+            await WaitUntil(() => fake.SentCount == 2);
+            var liveRequest = fake.SentSnapshot()[1];
+            fake.PushFromServer(Acknowledgement(RequestId(liveRequest), subscriptionId: 10));
+            var live = await liveSubscribe;
+
+            // Act
+            fake.PushFromServer(Acknowledgement(RequestId(abandonedRequest), subscriptionId: 10));
+            await WaitUntil(() => client.RetainedAcknowledgementTombstoneCount == 0);
+            fake.PushFromServer(LogNotification(subscription: 10, signature: "still-live"));
+
+            // Assert
+            fake.SentSnapshot().Should().NotContain(static message =>
+                message.Contains("Unsubscribe") && message.Contains("[10]"));
+            (await live.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1)))
+                .Value!.Signature.Should().Be("still-live");
+            await liveCancellation.CancelAsync();
+        }
+
+        [Test]
+        public async Task LateAcknowledgementForAbandonedDifferentContract_FaultsGenerationAndReplaysLiveRoute()
+        {
+            // Arrange
+            var first = new FakeWebSocketConnection();
+            var second = new FakeWebSocketConnection();
+            var connections = new[] { first, second };
+            var index = -1;
+            var options = new SolanaWsClientOptions
+            {
+                SubscriptionAckTimeout = TimeSpan.FromSeconds(2),
+                ReconnectInitialDelay = TimeSpan.FromMilliseconds(1),
+                ReconnectMaxDelay = TimeSpan.FromMilliseconds(1)
+            };
+            await using var client = new SolanaWsClient(
+                () => connections[Interlocked.Increment(ref index)], options);
+            await client.ConnectAsync(new("wss://localhost"));
+
+            var liveSubscribe = client.SubscribeLogsAsync(PublicKey.Parse(SolanaProgramIds.TokenProgram));
+            await WaitUntil(() => first.SentCount == 1);
+            first.PushFromServer(Acknowledgement(RequestId(first.SentSnapshot()[0]), subscriptionId: 10));
+            var live = await liveSubscribe;
+
+            using var cancellation = new CancellationTokenSource();
+            var abandoned = client.SubscribeAccountAsync(
+                PublicKey.Parse(SolanaProgramIds.SystemProgram), cancellationToken: cancellation.Token);
+            await WaitUntil(() => first.SentCount == 2);
+            var abandonedRequest = first.SentSnapshot()[1];
+            await cancellation.CancelAsync();
+            var cancelled = async () => await abandoned;
+            await cancelled.Should().ThrowAsync<OperationCanceledException>();
+
+            // Act
+            first.PushFromServer(Acknowledgement(RequestId(abandonedRequest), subscriptionId: 10));
+
+            // Assert: no ambiguous unsubscribe is sent; the live route is replayed on a clean generation.
+            first.SentSnapshot().Should().NotContain(static message =>
+                message.Contains("Unsubscribe") && message.Contains("[10]"));
+            await WaitUntil(() => second.SentSnapshot().Any(static message => message.Contains("logsSubscribe")));
+            var replay = second.SentSnapshot().Single(static message => message.Contains("logsSubscribe"));
+            second.PushFromServer(Acknowledgement(RequestId(replay), subscriptionId: 11));
+            second.PushFromServer(LogNotification(subscription: 11, signature: "replayed"));
+            (await live.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1)))
+                .Value!.Signature.Should().Be("replayed");
         }
 
         [Test]
@@ -627,7 +892,7 @@ public static class SolanaWsClientTests
             var reader = await first;
 
             // Act: a second subscribe gets rejected.
-            var second = client.SubscribeLogsAsync(program);
+            var second = client.SubscribeLogsAsync(PublicKey.Parse(SolanaProgramIds.SystemProgram));
             await WaitUntil(() => fake.Sent.Count == 2);
             fake.PushFromServer("""{"jsonrpc":"2.0","error":{"code":-32000,"message":"nope"},"id":2}""");
 
@@ -904,7 +1169,7 @@ public static class SolanaWsClientTests
         }
 
         [Test]
-        public async Task DuplicateServerSubscriptionId_FaultsGenerationAndReplaysExistingRoute()
+        public async Task DifferentRequestsWithSameServerSubscriptionId_FaultGenerationAndReplayExistingRoute()
         {
             // Arrange
             var first = new FakeWebSocketConnection();
@@ -926,10 +1191,10 @@ public static class SolanaWsClientTests
             first.PushFromServer(Acknowledgement(RequestId(first.SentSnapshot()[0]), subscriptionId: 41));
             var reader = await firstSubscribe;
 
-            var collidingSubscribe = client.SubscribeLogsAsync(program);
+            var collidingSubscribe = client.SubscribeLogsAsync(PublicKey.Parse(SolanaProgramIds.SystemProgram));
             await WaitUntil(() => first.SentCount == 2);
 
-            // Act: assigning the live route's id to another request makes notification and
+            // Act: assigning the live route's id to a different request leaves notification and
             // unsubscribe routing ambiguous, so the entire physical generation is rejected.
             first.PushFromServer(Acknowledgement(RequestId(first.SentSnapshot()[1]), subscriptionId: 41));
 
@@ -1399,6 +1664,47 @@ public static class SolanaWsClientTests
             await WaitUntil(() => fake.Sent.Exists(static entry => entry.Contains("programUnsubscribe")));
             fake.Sent.Should().Contain(static entry => entry.Contains("\"method\":\"programUnsubscribe\""));
         }
+
+        [Test]
+        public async Task EquivalentMemcmpEncodings_CoalesceToOneServerRoute()
+        {
+            // Arrange: Agave optimizes base58/base64 memcmp filters to the same raw bytes before deduplication.
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new("wss://localhost"));
+            var program = PublicKey.Parse(SolanaProgramIds.TokenProgram);
+            using var base58Cancellation = new CancellationTokenSource();
+            using var base64Cancellation = new CancellationTokenSource();
+            using var rawCancellation = new CancellationTokenSource();
+
+            // Act
+            var base58 = client.SubscribeProgramAsync(
+                program,
+                filters: [AccountFilter.MemoryCompareBase58(offset: 4, bytesBase58: "1")],
+                cancellationToken: base58Cancellation.Token);
+            await WaitUntil(() => fake.SentCount == 1);
+            var base64 = client.SubscribeProgramAsync(
+                program,
+                filters: [AccountFilter.MemoryCompareBase64(offset: 4, bytesBase64: "AA==")],
+                cancellationToken: base64Cancellation.Token);
+            var raw = client.SubscribeProgramAsync(
+                program,
+                filters: [AccountFilter.MemoryCompareRaw(offset: 4, bytes: [0])],
+                cancellationToken: rawCancellation.Token);
+
+            // Assert
+            await WaitUntil(() => client.RetainedPendingSubscriptionReferenceCount == 3);
+            fake.SentCount.Should().Be(1);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 64));
+            _ = await Task.WhenAll(base58, base64, raw);
+
+            await base58Cancellation.CancelAsync();
+            await base64Cancellation.CancelAsync();
+            fake.SentSnapshot().Should().NotContain(static message => message.Contains("programUnsubscribe"));
+            await rawCancellation.CancelAsync();
+            await WaitUntil(() => fake.SentSnapshot().Count(static message =>
+                message.Contains("programUnsubscribe")) == 1);
+        }
     }
 
     [TestFixture]
@@ -1560,6 +1866,81 @@ public static class SolanaWsClientTests
             (await logsReader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1)))
                 .Value!.Signature.Should().Be("still-live");
         }
+
+        [Test]
+        public async Task FinalNotificationRetiresClosingOneShotBeforeEquivalentSubscriberStarts()
+        {
+            // Arrange: hold the send lock so the cancelled signature route remains Closing while its
+            // server-side one-shot notification arrives and automatically removes the upstream route.
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new("wss://localhost"));
+            using var blockerCancellation = new CancellationTokenSource();
+            using var signatureCancellation = new CancellationTokenSource();
+
+            var blockerSubscribe = client.SubscribeLogsAsync(
+                PublicKey.Parse(SolanaProgramIds.SystemProgram),
+                cancellationToken: blockerCancellation.Token);
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 70));
+            _ = await blockerSubscribe;
+
+            var signatureSubscribe = client.SubscribeSignatureAsync(
+                "Sig111", cancellationToken: signatureCancellation.Token);
+            await WaitUntil(() => fake.SentCount == 2);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[1]), subscriptionId: 71));
+            _ = await signatureSubscribe;
+
+            var blockerUnsubscribeEntered = new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            var releaseBlockerUnsubscribe = new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            fake.SendBehavior = async (message, cancellationToken) =>
+            {
+                if (message.Contains("logsUnsubscribe", StringComparison.Ordinal) &&
+                    message.Contains("[70]", StringComparison.Ordinal))
+                {
+                    blockerUnsubscribeEntered.TrySetResult();
+                    await releaseBlockerUnsubscribe.Task.WaitAsync(cancellationToken);
+                }
+            };
+
+            await blockerCancellation.CancelAsync();
+            await blockerUnsubscribeEntered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+            try
+            {
+                await signatureCancellation.CancelAsync();
+                fake.PushFromServer(
+                    """{"jsonrpc":"2.0","method":"signatureNotification","params":{"subscription":71,"result":{"context":{"slot":100},"value":{"err":null}}}}""");
+                await WaitUntil(() => client.RetainedServerRouteCount == 0);
+
+                // Act: the retired route cannot be reactivated; a fresh wire subscribe waits behind cleanup.
+                var replacementSubscribe = client.SubscribeSignatureAsync("Sig111");
+                await WaitUntil(() => client.RetainedPendingSubscriptionReferenceCount == 1);
+                replacementSubscribe.IsCompleted.Should().BeFalse();
+
+                releaseBlockerUnsubscribe.TrySetResult();
+                await WaitUntil(() => fake.SentSnapshot().Count(static message =>
+                    message.Contains("signatureSubscribe")) == 2);
+                var replacementRequest = fake.SentSnapshot().Last(static message =>
+                    message.Contains("signatureSubscribe"));
+                fake.PushFromServer(Acknowledgement(RequestId(replacementRequest), subscriptionId: 72));
+                var replacement = await replacementSubscribe.WaitAsync(TimeSpan.FromSeconds(1));
+
+                // Assert
+                fake.SentSnapshot().Should().NotContain(static message =>
+                    message.Contains("signatureUnsubscribe") && message.Contains("[71]"));
+                fake.PushFromServer(
+                    """{"jsonrpc":"2.0","method":"signatureNotification","params":{"subscription":72,"result":{"context":{"slot":101},"value":{"err":null}}}}""");
+                (await replacement.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1)))
+                    .Value!.IsFinal.Should().BeTrue();
+            }
+            finally
+            {
+                releaseBlockerUnsubscribe.TrySetResult();
+            }
+        }
     }
 
     [TestFixture]
@@ -1621,6 +2002,46 @@ public static class SolanaWsClientTests
             fake.Sent.Should().NotContain(
                 static entry => entry.Contains("signatureUnsubscribe"),
                 "the Solana node automatically removes signature subscriptions after their notification");
+        }
+
+        [Test]
+        public async Task OmittedAndExplicitFalseReceivedOption_CoalesceAndFinalNotificationCompletesEverySink()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new("wss://localhost"));
+            using var firstCancellation = new CancellationTokenSource();
+            using var secondCancellation = new CancellationTokenSource();
+
+            var firstSubscribe = client.SubscribeSignatureAsync(
+                "Sig111", cancellationToken: firstCancellation.Token);
+            await WaitUntil(() => fake.SentCount == 1);
+            var secondSubscribe = client.SubscribeSignatureWithOptionsAsync(
+                "Sig111",
+                new()
+                {
+                    Commitment = Commitment.Confirmed,
+                    EnableReceivedNotification = false
+                },
+                secondCancellation.Token);
+            await WaitUntil(() => client.RetainedPendingSubscriptionReferenceCount == 2);
+            fake.SentCount.Should().Be(1, "Agave normalizes an omitted received option to false");
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 62));
+            var readers = await Task.WhenAll(firstSubscribe, secondSubscribe);
+
+            // Act
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"signatureNotification","params":{"subscription":62,"result":{"context":{"slot":100},"value":{"err":null}}}}""");
+            var notifications = await Task.WhenAll(
+                readers[0].ReadAsync().AsTask(),
+                readers[1].ReadAsync().AsTask());
+
+            // Assert
+            notifications.Should().OnlyContain(static notification => notification.Value!.IsFinal);
+            await Task.WhenAll(readers[0].Completion, readers[1].Completion).WaitAsync(TimeSpan.FromSeconds(1));
+            client.RetainedCancellationRegistrationCount.Should().Be(0);
+            fake.SentSnapshot().Should().NotContain(static message => message.Contains("signatureUnsubscribe"));
         }
 
         [Test]
@@ -1886,6 +2307,56 @@ public static class SolanaWsClientTests
                 .Which.InnerException.Should().BeOfType<JsonException>();
             (await logsReader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1)))
                 .Value!.Signature.Should().Be("live");
+        }
+
+        [Test]
+        public async Task SharedRouteDecodeFailure_FaultsOnlyTypedSinkAndKeepsRawSinkLive()
+        {
+            // Arrange: these APIs have different sink types but the same effective Agave subscription params.
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new("wss://localhost"));
+            using var rawCancellation = new CancellationTokenSource();
+
+            var typedSubscribe = client.SubscribeBlocksAsync();
+            await WaitUntil(() => fake.SentCount == 1);
+            var rawSubscribe = client.SubscribeBlocksWithOptionsAsync(
+                BlockSubscriptionFilter.All,
+                new()
+                {
+                    Commitment = Commitment.Confirmed,
+                    Encoding = RpcTransactionEncoding.Json,
+                    TransactionDetails = RpcTransactionDetails.Signatures,
+                    ShowRewards = false,
+                    MaxSupportedTransactionVersion = 0
+                },
+                rawCancellation.Token);
+            await WaitUntil(() => client.RetainedPendingSubscriptionReferenceCount == 2);
+            fake.SentCount.Should().Be(1);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 49));
+            var typed = await typedSubscribe;
+            var raw = await rawSubscribe;
+
+            // Act: an opaque object is valid for RawBlockNotification but lacks typed Block's required fields.
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"blockNotification","params":{"subscription":49,"result":{"context":{"slot":21},"value":{"slot":21,"err":null,"block":{}}}}}""");
+
+            // Assert
+            var typedRead = async () => await typed.ReadAsync();
+            (await typedRead.Should().ThrowAsync<ChannelClosedException>())
+                .Which.InnerException.Should().BeOfType<JsonException>();
+            (await raw.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1)))
+                .Value!.Block!.Value.ValueKind.Should().Be(JsonValueKind.Object);
+            fake.SentSnapshot().Should().NotContain(static message => message.Contains("blockUnsubscribe"));
+
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"blockNotification","params":{"subscription":49,"result":{"context":{"slot":22},"value":{"slot":22,"err":null,"block":{"opaque":2}}}}}""");
+            (await raw.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1)))
+                .Value!.Block!.Value.GetProperty("opaque").GetInt32().Should().Be(2);
+
+            await rawCancellation.CancelAsync();
+            await WaitUntil(() => fake.SentSnapshot().Count(static message =>
+                message.Contains("blockUnsubscribe")) == 1);
         }
     }
 
@@ -2231,7 +2702,7 @@ public static class SolanaWsClientTests
             fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 11));
             var firstReader = await subscribeFirst;
 
-            var subscribeSecond = client.SubscribeAccountAsync(account);
+            var subscribeSecond = client.SubscribeAccountAsync(PublicKey.Parse(SolanaProgramIds.SystemProgram));
             await WaitUntil(() => fake.SentCount == 2);
             fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[1]), subscriptionId: 22));
             var secondReader = await subscribeSecond;

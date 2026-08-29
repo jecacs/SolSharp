@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Runs the same gates CI runs, before anything leaves the machine.
+# Runs the core local CI gates before anything leaves the machine.
 #
 # Enable once per clone:   git config core.hooksPath .githooks
 # Skip for one push:       git push --no-verify      (or SOLSHARP_SKIP_PREPUSH=1 git push)
 # Skip only the tests:     SOLSHARP_PREPUSH_SKIP_TESTS=1 git push
 #
-# The checks are ordered cheapest-first and mirror .github/workflows/ci.yml verbatim. Approximating them
-# with weaker local flags is what lets a green local run fail CI, so the flags here are deliberate:
+# The checks are ordered cheapest-first and use the same flags as their .github/workflows/ci.yml
+# counterparts. CI additionally enforces coverage, documentation consistency, package/API validation,
+# and the Native AOT consumer smoke. The local flags remain deliberate:
 #   --severity info   is the solution gate (CA1859 and friends are info-level and do fail CI)
 #   --severity warn   is the benchmarks gate, deliberately lower (see the note in ci.yml)
 #   --locked-mode     catches a packages.lock.json that drifted from the projects

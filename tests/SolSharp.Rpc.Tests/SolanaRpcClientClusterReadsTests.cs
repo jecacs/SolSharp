@@ -282,12 +282,34 @@ public static class SolanaRpcClientClusterReadsTests
         }
 
         [Test]
+        public async Task ValidatorBitmapAtPinnedMaximum_IsAccepted()
+        {
+            // Arrange
+            var blockId = string.Join(',', Enumerable.Repeat(0, 32));
+            var signature = string.Join(',', Enumerable.Repeat(0, 192));
+            var bitmap = string.Join(',', Enumerable.Repeat(0, 515));
+            var result =
+                """{"block":{"slot":1,"block_id":[__BLOCK__]},"signature":{"signature":[__SIGNATURE__],"bitmap":[__BITMAP__]}}"""
+                    .Replace("__BLOCK__", blockId, StringComparison.Ordinal)
+                    .Replace("__SIGNATURE__", signature, StringComparison.Ordinal)
+                    .Replace("__BITMAP__", bitmap, StringComparison.Ordinal);
+            var (client, _) = Make("""{"jsonrpc":"2.0","result":__RESULT__,"id":1}"""
+                .Replace("__RESULT__", result, StringComparison.Ordinal));
+
+            // Act
+            var certificate = await client.GetAgGenesisCertificateAsync();
+
+            // Assert
+            certificate!.Signature.Bitmap.Should().HaveCount(515);
+        }
+
+        [Test]
         public async Task ValidatorBitmapLongerThanPinnedMaximum_ThrowsJsonException()
         {
             // Arrange
             var blockId = string.Join(',', Enumerable.Repeat(0, 32));
             var signature = string.Join(',', Enumerable.Repeat(0, 192));
-            var bitmap = string.Join(',', Enumerable.Repeat(0, 513));
+            var bitmap = string.Join(',', Enumerable.Repeat(0, 516));
             var result =
                 """{"block":{"slot":1,"block_id":[__BLOCK__]},"signature":{"signature":[__SIGNATURE__],"bitmap":[__BITMAP__]}}"""
                     .Replace("__BLOCK__", blockId, StringComparison.Ordinal)
