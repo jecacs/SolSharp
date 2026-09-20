@@ -47,9 +47,13 @@ dotnet test --no-build --configuration Release --filter "TestCategory!=Integrati
 dotnet format --no-restore --verify-no-changes --severity info
 ```
 
-The offline test command excludes live mainnet/devnet probes. See [README.md](README.md#build--test) for
-the integration-test endpoints and filters. The benchmark project is intentionally outside the solution;
-changes to performance-sensitive code should also build and format it explicitly.
+CI and release use the offline test selection above, including deterministic fixtures in the integration
+test project. Release validation rejects skipped or inconclusive offline results. Live HTTP, WebSocket,
+and devnet write tests remain available for explicit manual runs; they are excluded from both pipelines,
+and release validation does not require private endpoint secrets. See [README.md](README.md#build--test)
+for manual endpoints, filters, and optional `SOLSHARP_INTEGRATION_STRICT=1` mode. The benchmark project is
+intentionally outside the solution; changes to performance-sensitive code should also build and format it
+explicitly.
 
 ## Change requirements
 

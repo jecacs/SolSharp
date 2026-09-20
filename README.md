@@ -354,22 +354,23 @@ Contributions are welcome; read the [contribution guide](CONTRIBUTING.md) before
 
 ```bash
 dotnet build
-dotnet test
+dotnet test --filter "TestCategory!=Integration"
 dotnet format   # apply the enforced code style
 ```
+
+CI and release run offline tests only, including the deterministic fixtures in `SolSharp.IntegrationTests`.
+Release validation rejects skipped or inconclusive offline results. Live HTTP, WebSocket, and devnet
+checks remain available for explicit manual runs; release validation does not require private endpoint secrets.
+An unfiltered `dotnet test` still includes the live tests.
 
 The suite includes a `SolSharp.IntegrationTests` project that exercises the read and streaming paths against a
 live cluster, plus a write suite (airdrop, transfer, durable nonce) that always targets **devnet**. Reads
 default to the public mainnet endpoint (`SOLSHARP_RPC_URL` / `SOLSHARP_WS_URL` override); the write suite uses
 the public devnet endpoint (`SOLSHARP_DEVNET_RPC_URL` override); no credentials are committed. These tests hit
-the network, so they tolerate rate limits by reporting inconclusive rather than failing, and are tagged
+the network, so ordinary manual runs report transient endpoint/faucet failures as inconclusive, and are tagged
 `Integration`. Live HTTP reads and devnet writes use two-request-per-second test-only limiters; WebSocket
 probes run serially with starts spaced by 500 ms. The shared faucet can still reject `requestAirdrop`
-independently of RPC traffic. For a fast, offline-only run, exclude them:
-
-```bash
-dotnet test --filter "TestCategory!=Integration"
-```
+independently of RPC traffic. Deterministic client failures always fail the test.
 
 Micro-benchmarks live in a standalone BenchmarkDotNet harness:
 
@@ -377,12 +378,23 @@ Micro-benchmarks live in a standalone BenchmarkDotNet harness:
 dotnet run -c Release --project benchmarks/SolSharp.Benchmarks
 ```
 
-To point the integration tests at your own node, set the endpoints (the key stays in your shell, never the repo):
+To run the live read and streaming tests manually against your own node, set the endpoints (the key stays
+in your shell, never the repo):
 
 ```bash
 SOLSHARP_RPC_URL=https://your-node SOLSHARP_WS_URL=wss://your-node \
-  dotnet test --filter "TestCategory=Integration"
+  dotnet test --filter "TestCategory=Integration&TestCategory!=DevnetWrite"
 ```
+
+Run the devnet write tests separately when needed:
+
+```bash
+SOLSHARP_DEVNET_RPC_URL=https://your-devnet-node \
+  dotnet test --filter "TestCategory=DevnetWrite"
+```
+
+Set `SOLSHARP_INTEGRATION_STRICT=1` for a manual run that fails on transient endpoint/faucet errors and
+missing V1 discovery data instead of reporting those conditions as inconclusive.
 
 The read-only V1 regression test finds a V1 transaction in at most three recent finalized blocks, then
 checks default raw/parsed reads, wire round-tripping, signatures, and execution configuration. Set
