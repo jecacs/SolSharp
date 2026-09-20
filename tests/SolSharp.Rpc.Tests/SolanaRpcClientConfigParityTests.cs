@@ -1,6 +1,7 @@
 using FluentAssertions;
 using NUnit.Framework;
 using SolSharp.Core.Primitives;
+using SolSharp.Rpc.Protocol;
 
 namespace SolSharp.Rpc.Tests;
 
@@ -600,6 +601,51 @@ public static class SolanaRpcClientConfigParityTests
     public sealed class GetBlockWithOptionsAsync
     {
         [Test]
+        public async Task DefaultOptions_AdvertiseVersionOne()
+        {
+            // Arrange
+            var (client, handler) = Make("null");
+
+            // Act
+            var block = await client.GetBlockWithOptionsAsync(5, new());
+
+            // Assert
+            block.Should().BeNull();
+            handler.CapturedRequestBody.Should().Be(
+                """{"jsonrpc":"2.0","id":1,"method":"getBlock","params":[5,{"maxSupportedTransactionVersion":1}]}""");
+        }
+
+        [TestCase(RpcTransactionEncoding.Base58, (byte)0, """{"maxSupportedTransactionVersion":0,"encoding":"base58"}""")]
+        [TestCase(RpcTransactionEncoding.Binary, null, """{"encoding":"binary"}""")]
+        public async Task ExplicitVersionAndEncoding_ArePreserved(
+            RpcTransactionEncoding encoding, byte? version, string expectedConfig)
+        {
+            // Arrange
+            var (client, handler) = Make("null");
+
+            // Act
+            await client.GetBlockWithOptionsAsync(5, new() { Encoding = encoding, MaxSupportedTransactionVersion = version });
+
+            // Assert
+            handler.CapturedRequestBody.Should().Be(
+                $$"""{"jsonrpc":"2.0","id":1,"method":"getBlock","params":[5,{{expectedConfig}}]}""");
+        }
+
+        [Test]
+        public async Task NullOptions_ThrowsBeforeTransport()
+        {
+            // Arrange
+            var (client, handler) = Make("null");
+
+            // Act
+            var act = () => client.GetBlockWithOptionsAsync(5, null!);
+
+            // Assert
+            await act.Should().ThrowAsync<ArgumentNullException>().WithParameterName("options");
+            handler.CapturedRequestBody.Should().BeNull();
+        }
+
+        [Test]
         public async Task ExactConfig_ReturnsUnprojectedResponseKat()
         {
             // Arrange
@@ -628,6 +674,83 @@ public static class SolanaRpcClientConfigParityTests
     public sealed class GetTransactionWithOptionsAsync
     {
         [Test]
+        public async Task DefaultOptions_AdvertiseVersionOneAndOmitFreshnessFields()
+        {
+            // Arrange
+            var (client, handler) = Make("null");
+
+            // Act
+            var transaction = await client.GetTransactionWithOptionsAsync("signature", new());
+
+            // Assert
+            transaction.Should().BeNull();
+            handler.CapturedRequestBody.Should().Be(
+                """{"jsonrpc":"2.0","id":1,"method":"getTransaction","params":["signature",{"maxSupportedTransactionVersion":1}]}""");
+        }
+
+        [TestCase(RpcTransactionEncoding.Base58, (byte)0, """{"maxSupportedTransactionVersion":0,"encoding":"base58"}""")]
+        [TestCase(RpcTransactionEncoding.Binary, null, """{"encoding":"binary"}""")]
+        public async Task ExplicitVersionAndEncoding_ArePreserved(
+            RpcTransactionEncoding encoding, byte? version, string expectedConfig)
+        {
+            // Arrange
+            var (client, handler) = Make("null");
+
+            // Act
+            await client.GetTransactionWithOptionsAsync("signature", new() { Encoding = encoding, MaxSupportedTransactionVersion = version });
+
+            // Assert
+            handler.CapturedRequestBody.Should().Be(
+                $$"""{"jsonrpc":"2.0","id":1,"method":"getTransaction","params":["signature",{{expectedConfig}}]}""");
+        }
+
+        [TestCase(Commitment.Confirmed, 0ul)]
+        [TestCase(Commitment.Finalized, ulong.MaxValue)]
+        public async Task MinContextSlot_IsSentWithoutTruncation(Commitment commitment, ulong minContextSlot)
+        {
+            // Arrange
+            var (client, handler) = Make("null");
+
+            // Act
+            await client.GetTransactionWithOptionsAsync("signature", new() { Commitment = commitment, MinContextSlot = minContextSlot });
+
+            // Assert
+            using var request = System.Text.Json.JsonDocument.Parse(handler.CapturedRequestBody!);
+            request.RootElement.GetProperty("params")[1].GetProperty("minContextSlot").GetUInt64().Should().Be(minContextSlot);
+        }
+
+        [Test]
+        public async Task MinContextSlotNotReached_PreservesNodeError()
+        {
+            // Arrange
+            var handler = new FakeHttpMessageHandler(
+                """{"jsonrpc":"2.0","error":{"code":-32016,"message":"Minimum context slot has not been reached","data":{"contextSlot":41}},"id":1}""");
+            var client = new SolanaRpcClient(new(handler) { BaseAddress = new("http://localhost") });
+
+            // Act
+            var act = () => client.GetTransactionWithOptionsAsync("signature", new() { MinContextSlot = 42 });
+
+            // Assert
+            var error = (await act.Should().ThrowAsync<RpcException>()).Which;
+            error.Code.Should().Be(-32016);
+            error.ErrorData!.Value.GetProperty("contextSlot").GetUInt64().Should().Be(41);
+        }
+
+        [Test]
+        public async Task NullOptions_ThrowsBeforeTransport()
+        {
+            // Arrange
+            var (client, handler) = Make("null");
+
+            // Act
+            var act = () => client.GetTransactionWithOptionsAsync("signature", null!);
+
+            // Assert
+            await act.Should().ThrowAsync<ArgumentNullException>().WithParameterName("options");
+            handler.CapturedRequestBody.Should().BeNull();
+        }
+
+        [Test]
         public async Task ExactEncoding_ReturnsUnprojectedResponseKat()
         {
             // Arrange
@@ -636,7 +759,8 @@ public static class SolanaRpcClientConfigParityTests
             {
                 Encoding = RpcTransactionEncoding.Json,
                 Commitment = Commitment.Confirmed,
-                MaxSupportedTransactionVersion = 1
+                MaxSupportedTransactionVersion = 1,
+                MinContextSlot = 42
             };
 
             // Act
@@ -645,7 +769,7 @@ public static class SolanaRpcClientConfigParityTests
             // Assert
             result!.Value.GetProperty("transaction").GetProperty("message").GetProperty("opaque").GetInt32().Should().Be(7);
             handler.CapturedRequestBody.Should().Be(
-                """{"jsonrpc":"2.0","id":1,"method":"getTransaction","params":["signature",{"commitment":"confirmed","maxSupportedTransactionVersion":1,"encoding":"json"}]}""");
+                """{"jsonrpc":"2.0","id":1,"method":"getTransaction","params":["signature",{"commitment":"confirmed","maxSupportedTransactionVersion":1,"encoding":"json","minContextSlot":42}]}""");
         }
 
         [Test]

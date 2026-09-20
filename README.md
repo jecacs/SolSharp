@@ -26,7 +26,7 @@ bounded codecs, and typed network responses. If you are
 writing wallets, bots, indexers, or backend services that talk to Solana from .NET and care
 about correctness, speed, and control, this is aimed at you.
 
-> **Status: 3.2.0.** SolSharp ships as a single NuGet package — `SolSharp` —
+> **Status: 4.0.0.** SolSharp ships as a single NuGet package — `SolSharp` —
 > bundling the Core (primitives + encodings), Wallet (Ed25519 and BLS12-381 keys, signing, verification,
 > key import/export, BIP-39/SLIP-0010 derivation, and signed off-chain messages), Rpc (the full applicable
 > non-admin JSON-RPC HTTP surface + WebSocket streaming + DI), and
@@ -37,6 +37,12 @@ about correctness, speed, and control, this is aimed at you.
 📖 **New here? Read the [usage guide](docs/USAGE.md)** — a task-oriented cookbook covering keys, reads,
 SPL token state, building/signing/sending transactions, v0 + address lookup tables, SIMD-0385 V1, decoding transactions,
 WebSocket subscriptions, confirmation, Native AOT publishing, and more.
+
+**Upgrading from 3.x:** transaction reads and block subscriptions now advertise V1 support by default,
+and full options default `MaxSupportedTransactionVersion` to `1`. Keep a legacy/v0 ceiling with an
+explicit `0`; existing base58/binary configurations need an explicit `0` or `null`, or a V1-compatible
+encoding. See the [4.0 migration guide](docs/USAGE.md#upgrading-from-3x) for exact examples and the
+difference between a version ceiling and filtering transactions.
 
 ## Motivation
 
@@ -79,17 +85,17 @@ valuable ecosystem-oriented program surface. SolSharp is independently written w
 application-side parity with immutable official Rust contracts, plus a verifiable .NET deployment story.
 The official Rust column below is the reference contract rather than another client implementation.
 
-Comparison basis: SolSharp is release `3.2.0`; Solnet means its
+Comparison basis: SolSharp is release `4.0.0`; Solnet means its
 [published `8.7.0` release](https://github.com/bmresearch/Solnet/commit/e8df87bdb2006376ba3eea9e1d3b857c84fc5685)
 (2025-11-26), with unreleased-head differences called out explicitly; the Rust reference is the
 [pinned Anza SDK/Agave/SPL matrix](docs/RUST_PARITY.md).
 
-| Dimension | Official Rust SDK / Agave reference | SolSharp 3.2.0 | Solnet official packages/source |
+| Dimension | Official Rust SDK / Agave reference | SolSharp 4.0.0 | Solnet official packages/source |
 | --- | --- | --- | --- |
 | **Transaction formats** | Legacy, V0, and feature-gated [SIMD-0385 V1](https://github.com/anza-xyz/solana-sdk/blob/ec7a0467e268774b724d55120ad952b518f27d64/message/src/versions/v1/message.rs), including inline V1 configuration and a message-first signature envelope | Legacy/V0/V1 build, sanitize, parse, sign, serialize, and decompile; exact V1 config/framing and envelope vectors | Published 8.7: Legacy/V0 and [rejects versions above 0](https://github.com/bmresearch/Solnet/blob/e8df87bdb2006376ba3eea9e1d3b857c84fc5685/src/Solnet.Rpc/Models/Message.cs#L275-L286). Unreleased head names V1, but its current body/envelope is not the pinned SIMD-0385 layout (details below) |
 | **Native and SPL clients** | Canonical native-program and SPL interface crates, split by contract | System, Stake, Vote, legacy/upgradeable/V4 loaders, Compute Budget, ALT, Memo, three signature precompiles; Token, Token-2022 extensions/interfaces, ATA, metadata/group/transfer-hook, and ElGamal proof/registry client contracts with typed decoders | Broader ecosystem-oriented set including Governance, Stake Pool, Token Swap, Account Compression, Name Service, and Shared Memory; repository head adds an initial Token-2022 surface |
 | **HTTP RPC** | [53 applicable non-admin, non-obsolete request variants](https://github.com/anza-xyz/agave/blob/ab6553293094e59dee7d3e7c928c7fa1023d0684/rpc-client-types/src/request.rs#L12-L75) in the pinned Agave client enum | 53/53 typed async methods, including current context-slot, filter, slice, encoding/detail/reward, raw/parsed V1, and context-wrapped response variants; batching, bounded responses, typed errors, and send/simulate/confirm | 50/53 pinned methods through sync/async `RequestResult<T>` APIs; no `getAgGenesisCert`, `getRecentPrioritizationFees`, or `getStakeMinimumDelegation` at the examined head |
-| **PubSub** | Nine families: account, program, logs, signature, slot, slots-updates, block, vote, and root | 9/9, including exact logs/block filter unions, parsed account/program forms, early signature-receipt events, bounded channels, cancellation isolation, reconnect/replay, and V1 block opt-ins | [Six families](https://github.com/bmresearch/Solnet/blob/ebec9e1a3b708dbe86d103dd8fcf869d0cd923b6/src/Solnet.Rpc/IStreamingRpcClient.cs): account, program, logs, signature, slot, and root |
+| **PubSub** | Nine families: account, program, logs, signature, slot, slots-updates, block, vote, and root | 9/9, including exact logs/block filter unions, parsed account/program forms, early signature-receipt events, bounded channels, cancellation isolation, reconnect/replay, and V1 block support by default | [Six families](https://github.com/bmresearch/Solnet/blob/ebec9e1a3b708dbe86d103dd8fcf869d0cd923b6/src/Solnet.Rpc/IStreamingRpcClient.cs): account, program, logs, signature, slot, and root |
 | **Offline / multisig signing** | Signer, presigner/null-signer, partial signing, fixed signature slots, and per-slot verification primitives | Exact message-byte export/hash, typed fixed slots, partial/all signing, verified external insertion, `Presigner`, `NullSigner`, and SPL multisig builders | Partial signing, externally supplied signatures, and program multisig builders/examples |
 | **AOT / trimming** | Native Rust output; not a .NET compatibility contract | Every assembly declares `IsAotCompatible`; generated JSON metadata, trim/AOT analyzers, and CI that publishes and runs a native package consumer | Targets .NET 8, but the examined projects publish no solution-wide AOT/trimming declaration or native-publish CI contract; reflection paths remain |
 | **Packaging** | Modular Cargo crates | One NuGet package containing four compiler-layered functional assemblies plus a minimal packaging facade | Five installable packages: `Solana.Rpc`, `Solana.Wallet`, `Solana.Programs`, `Solana.Extensions`, and `Solana.KeyStore` |
@@ -119,7 +125,7 @@ dotnet add package SolSharp
 ```
 
 ```xml
-<PackageReference Include="SolSharp" Version="3.2.0" />
+<PackageReference Include="SolSharp" Version="4.0.0" />
 ```
 
 | Assembly           | Purpose                                              |
@@ -140,10 +146,10 @@ After downloading all three assets, verify them before using the package outside
 flow (replace the version in the filenames):
 
 ```bash
-sha256sum --check SolSharp.3.2.0.nupkg.sha256
-gh attestation verify SolSharp.3.2.0.nupkg \
+sha256sum --check SolSharp.4.0.0.nupkg.sha256
+gh attestation verify SolSharp.4.0.0.nupkg \
   --repo jecacs/SolSharp \
-  --bundle SolSharp.3.2.0.nupkg.sigstore.json \
+  --bundle SolSharp.4.0.0.nupkg.sigstore.json \
   --signer-workflow jecacs/SolSharp/.github/workflows/release.yml \
   --deny-self-hosted-runners
 ```
@@ -205,15 +211,16 @@ bool ok = PublicKey.TryParse(input, out var key);
   metadata — transaction version/index, pre/post SOL and token balances, inner (CPI) instructions, loaded
   lookup-table addresses, logs, compute/cost units, program return data, and rewards. Failures decode to a
   typed `TransactionError` (including parameterized runtime errors and the program's `Custom` code) on
-  `TransactionMeta`, `SignatureStatus`, and `SimulateTransactionResult`. The compatibility-preserving default
-  read advertises legacy/v0; `GetTransactionWithMaxVersionAsync(..., 1)` opts into V1 bytes, which
-  `Transaction.Deserialize` understands locally.
+  `TransactionMeta`, `SignatureStatus`, and `SimulateTransactionResult`. Default transaction and block reads
+  advertise support through V1; `Transaction.Deserialize` understands legacy/v0/V1 locally. Explicit
+  `*WithMaxVersionAsync(..., 0)` calls retain a v0 ceiling. `GetTransactionWithOptionsAsync` exposes
+  `MinContextSlot`, and `GetSignatureStatusesWithOptionsAsync` adds commitment and minimum-context-slot
+  checks when supported by the RPC node.
 - `GetParsedTransactionAsync` / `GetParsedBlockAsync` / `GetParsedAccountInfoAsync` return the node's
   `jsonParsed` decoding — typed instructions, token balances, account state, and logs without local Borsh
   work. Recognized instructions carry the node's parsed action; unrecognized instructions retain their raw
-  program id, account list, and base58 data, matching the upstream tagged response union. Explicit
-  `*WithMaxVersionAsync` variants opt parsed transaction/block reads into V1 and preserve its inline
-  `transactionConfig`.
+  program id, account list, and base58 data, matching the upstream tagged response union. Parsed
+  transaction/block reads support V1 by default and preserve its inline `transactionConfig`.
 - WebSocket streaming multiplexed over one connection: `SubscribeSlotsAsync`, `SubscribeRootsAsync`,
   `SubscribeSlotsUpdatesAsync` (slot lifecycle with per-stage stats), and `SubscribeVotesAsync` (gossip
   votes) as `IAsyncEnumerable`; `SubscribeLogsAsync`, `SubscribeAccountAsync`, `SubscribeParsedAccountAsync`,
@@ -222,8 +229,8 @@ bool ok = PublicKey.TryParse(input, out var key);
   transport (message-size cap, per-subscription buffers, opt-in receive timeout). The source-safe
   `SubscribeAccountWithOptionsAsync` and `SubscribeProgramWithOptionsAsync` paths expose the effective
   encoding/commitment fields (plus program filters) and return the same exact `RpcAccountData` union as HTTP.
-  Agave-accepted subscription fields that its encoder ignores are deliberately not advertised. Block
-  subscriptions also provide explicit `*WithMaxVersionAsync` V1 opt-ins; full methods cover logs/block filter
+  Fields ignored by the pinned base Agave subscription encoder are deliberately not advertised. Block
+  subscriptions support V1 by default and retain explicit `*WithMaxVersionAsync` overrides; full methods cover logs/block filter
   unions, parsed program streams, and the optional early `receivedSignature` event before final processing.
 - DI registration with a built-in resilience pipeline (retry on transient errors and HTTP 429), plus
   `AddSolanaWs` for a container-managed streaming client.
@@ -335,7 +342,7 @@ var signature = await rpc.SendTransactionAsync(tx.Serialize());
 
 ## Requirements
 
-- .NET 10 SDK for consumers. Repository builds use the exact SDK 10.0.303 pinned by `global.json` with
+- .NET 10 SDK for consumers. Repository builds use the exact SDK 10.0.401 pinned by `global.json` with
   `rollForward: disable`; CI jobs that restore or build the checkout assert that exact selection.
 - Calling the BLS12-381 API requires one of the native RIDs shipped by `Nethermind.Crypto.Bls` 1.1.0:
   `linux-x64`, `linux-arm64`, `osx-x64`, `osx-arm64`, or `win-x64`. All non-BLS SolSharp APIs remain
@@ -375,6 +382,15 @@ To point the integration tests at your own node, set the endpoints (the key stay
 ```bash
 SOLSHARP_RPC_URL=https://your-node SOLSHARP_WS_URL=wss://your-node \
   dotnet test --filter "TestCategory=Integration"
+```
+
+The read-only V1 regression test finds a V1 transaction in at most three recent finalized blocks, then
+checks default raw/parsed reads, wire round-tripping, signatures, and execution configuration. Set
+`SOLSHARP_V1_TRANSACTION_SIGNATURE` to use a known V1 transaction on the configured cluster instead.
+Missing V1 data is inconclusive normally and fails with `SOLSHARP_INTEGRATION_STRICT=1`:
+
+```bash
+dotnet test --filter "FullyQualifiedName~DefaultReads_DecodeAndVerifyALiveV1Transaction"
 ```
 
 ## Layout

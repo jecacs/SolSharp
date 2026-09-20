@@ -525,8 +525,9 @@ public sealed class SolanaWsClient : IAsyncDisposable
     }
 
     /// <summary>
-    /// Subscribes to every new block, delivered through a channel. The node must be started with block
-    /// subscriptions enabled (<c>--rpc-pubsub-enable-block-subscription</c>); many providers disable them.
+    /// Subscribes to every new signatures-only block, advertising support through transaction version 1.
+    /// The node must have block subscriptions enabled (<c>--rpc-pubsub-enable-block-subscription</c>);
+    /// many providers disable them.
     /// Cancelling <paramref name="cancellationToken"/> unsubscribes and completes the channel. See
     /// <see href="https://solana.com/docs/rpc/websocket/blocksubscribe">blockSubscribe</see>.
     /// </summary>
@@ -538,12 +539,12 @@ public sealed class SolanaWsClient : IAsyncDisposable
     public Task<ChannelReader<RpcContextValue<BlockNotification>>> SubscribeBlocksAsync(
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
-        => SubscribeBlocksCoreAsync("all", commitment, 0, cancellationToken);
+        => SubscribeBlocksCoreAsync("all", commitment, 1, cancellationToken);
 
     /// <summary>
-    /// Subscribes to every new signatures-only block while explicitly opting into a newer numeric transaction
-    /// version. The node must have block subscriptions enabled. Cancelling
-    /// <paramref name="cancellationToken"/> unsubscribes and completes the channel.
+    /// Subscribes to every new signatures-only block with an explicit maximum transaction version.
+    /// Agave does not validate transaction versions for signatures-only responses. The node must have
+    /// block subscriptions enabled. Cancelling <paramref name="cancellationToken"/> unsubscribes and completes the channel.
     /// </summary>
     /// <param name="maxSupportedTransactionVersion">The highest numeric transaction version the caller accepts.</param>
     /// <param name="commitment">The commitment level to query at.</param>
@@ -558,8 +559,8 @@ public sealed class SolanaWsClient : IAsyncDisposable
         => SubscribeBlocksCoreAsync("all", commitment, maxSupportedTransactionVersion, cancellationToken);
 
     /// <summary>
-    /// Subscribes to new blocks that mention <paramref name="mentionsAccountOrProgram"/>, delivered through a
-    /// channel. The node must be started with block subscriptions enabled
+    /// Subscribes to signatures-only blocks that mention <paramref name="mentionsAccountOrProgram"/>,
+    /// advertising support through transaction version 1. The node must have block subscriptions enabled
     /// (<c>--rpc-pubsub-enable-block-subscription</c>). Cancelling <paramref name="cancellationToken"/>
     /// unsubscribes and completes the channel. See
     /// <see href="https://solana.com/docs/rpc/websocket/blocksubscribe">blockSubscribe</see>.
@@ -575,12 +576,12 @@ public sealed class SolanaWsClient : IAsyncDisposable
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
         => SubscribeBlocksCoreAsync(
-            new BlockSubscribeFilter { MentionsAccountOrProgram = mentionsAccountOrProgram }, commitment, 0, cancellationToken);
+            new BlockSubscribeFilter { MentionsAccountOrProgram = mentionsAccountOrProgram }, commitment, 1, cancellationToken);
 
     /// <summary>
-    /// Subscribes to signatures-only blocks that mention an account or program while explicitly opting into a
-    /// newer numeric transaction version. Cancelling <paramref name="cancellationToken"/> unsubscribes and
-    /// completes the channel.
+    /// Subscribes to signatures-only blocks that mention an account or program with an explicit maximum
+    /// transaction version. Agave does not validate versions for signatures-only responses.
+    /// Cancelling <paramref name="cancellationToken"/> unsubscribes and completes the channel.
     /// </summary>
     /// <param name="mentionsAccountOrProgram">The account or program a block must mention to be delivered.</param>
     /// <param name="maxSupportedTransactionVersion">The highest numeric transaction version the caller accepts.</param>
@@ -646,8 +647,8 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
     /// <summary>
     /// Subscribes to every new block with its transactions decoded into <c>jsonParsed</c> form, delivered
-    /// through a channel. The node must be started with block subscriptions enabled
-    /// (<c>--rpc-pubsub-enable-block-subscription</c>); many providers disable them. Cancelling
+    /// through a channel, accepting legacy, v0, and V1 transactions. The node must have block subscriptions
+    /// enabled (<c>--rpc-pubsub-enable-block-subscription</c>); many providers disable them. Cancelling
     /// <paramref name="cancellationToken"/> unsubscribes and completes the channel. See
     /// <see href="https://solana.com/docs/rpc/websocket/blocksubscribe">blockSubscribe</see>.
     /// </summary>
@@ -659,11 +660,11 @@ public sealed class SolanaWsClient : IAsyncDisposable
     public Task<ChannelReader<RpcContextValue<ParsedBlockNotification>>> SubscribeParsedBlocksAsync(
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
-        => SubscribeParsedBlocksCoreAsync("all", commitment, 0, cancellationToken);
+        => SubscribeParsedBlocksCoreAsync("all", commitment, 1, cancellationToken);
 
     /// <summary>
-    /// Subscribes to every new node-decoded block while explicitly opting into a newer numeric transaction
-    /// version. V1 messages expose their execution settings on
+    /// Subscribes to every new node-decoded block with an explicit maximum transaction version.
+    /// V1 messages expose their execution settings on
     /// <see cref="ParsedMessage.TransactionConfig"/>. Cancelling <paramref name="cancellationToken"/>
     /// unsubscribes and completes the channel.
     /// </summary>
@@ -681,8 +682,8 @@ public sealed class SolanaWsClient : IAsyncDisposable
 
     /// <summary>
     /// Subscribes to new blocks that mention <paramref name="mentionsAccountOrProgram"/>, with their
-    /// transactions decoded into <c>jsonParsed</c> form, delivered through a channel. The node must be started
-    /// with block subscriptions enabled (<c>--rpc-pubsub-enable-block-subscription</c>). Cancelling
+    /// legacy, v0, and V1 transactions decoded into <c>jsonParsed</c> form, delivered through a channel.
+    /// The node must have block subscriptions enabled (<c>--rpc-pubsub-enable-block-subscription</c>). Cancelling
     /// <paramref name="cancellationToken"/> unsubscribes and completes the channel. See
     /// <see href="https://solana.com/docs/rpc/websocket/blocksubscribe">blockSubscribe</see>.
     /// </summary>
@@ -697,11 +698,11 @@ public sealed class SolanaWsClient : IAsyncDisposable
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
         => SubscribeParsedBlocksCoreAsync(
-            new BlockSubscribeFilter { MentionsAccountOrProgram = mentionsAccountOrProgram }, commitment, 0, cancellationToken);
+            new BlockSubscribeFilter { MentionsAccountOrProgram = mentionsAccountOrProgram }, commitment, 1, cancellationToken);
 
     /// <summary>
-    /// Subscribes to node-decoded blocks that mention an account or program while explicitly opting into a
-    /// newer numeric transaction version. V1 messages expose their execution settings on
+    /// Subscribes to node-decoded blocks that mention an account or program with an explicit maximum
+    /// transaction version. V1 messages expose their execution settings on
     /// <see cref="ParsedMessage.TransactionConfig"/>.
     /// </summary>
     /// <param name="mentionsAccountOrProgram">The account or program a block must mention to be delivered.</param>
@@ -945,9 +946,8 @@ public sealed class SolanaWsClient : IAsyncDisposable
             _ => parameters
         };
 
-        return JsonSerializer.Serialize(
-            new RpcRequest { Id = 0, Method = method, Params = normalized },
-            RpcJson.TypeInfo<RpcRequest>());
+        return JsonSerializer
+            .Serialize(new() { Id = 0, Method = method, Params = normalized }, RpcJson.TypeInfo<RpcRequest>());
     }
 
     private static object NormalizeProgramFilter(object filter)
@@ -961,6 +961,7 @@ public sealed class SolanaWsClient : IAsyncDisposable
             "base64" => Convert.FromBase64String(memcmp.Bytes),
             _ => null
         };
+
         return bytes is null
             ? filter
             : new RawMemcmpFilter

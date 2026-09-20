@@ -1122,8 +1122,8 @@ public class SolanaRpcClient
 
     /// <summary>
     /// Returns a confirmed transaction by signature, or <c>null</c> if the cluster has not seen it. Supports
-    /// legacy and versioned-v0 transactions. Use <see cref="GetTransactionWithMaxVersionAsync"/> to opt into
-    /// a newer numeric version. See
+    /// legacy, v0, and V1 transactions. Use <see cref="GetTransactionWithMaxVersionAsync"/> to select a
+    /// different maximum numeric version. See
     /// <see href="https://solana.com/docs/rpc/http/gettransaction">getTransaction</see>.
     /// </summary>
     /// <param name="signature">The transaction signature (base58).</param>
@@ -1137,10 +1137,10 @@ public class SolanaRpcClient
         string signature,
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
-        => SendNullableAsync<TransactionResponse?>(RpcRequests.GetTransaction(signature, commitment, 0), cancellationToken);
+        => SendNullableAsync<TransactionResponse?>(RpcRequests.GetTransaction(signature, commitment, 1), cancellationToken);
 
     /// <summary>
-    /// Returns a confirmed transaction while explicitly opting into a newer transaction version. The
+    /// Returns a confirmed transaction with an explicit maximum transaction version. The
     /// transaction is returned as wire bytes on <see cref="TransactionResponse.Transaction"/>; callers must
     /// only advertise versions whose wire format they can handle.
     /// </summary>
@@ -1164,7 +1164,7 @@ public class SolanaRpcClient
             RpcRequests.GetTransaction(signature, commitment, maxSupportedTransactionVersion), cancellationToken);
 
     /// <summary>
-    /// Returns a transaction using the exact upstream encoding, commitment, and transaction-version
+    /// Returns a transaction using the exact upstream encoding, commitment, minimum-context-slot, and transaction-version
     /// configuration. Because the encoding changes the transaction field's JSON schema, the result is exposed
     /// without lossy projection as a <see cref="JsonElement"/>.
     /// </summary>
@@ -1187,13 +1187,14 @@ public class SolanaRpcClient
                 signature,
                 options.Commitment,
                 options.MaxSupportedTransactionVersion,
-                options.Encoding),
+                options.Encoding,
+                options.MinContextSlot),
             cancellationToken);
     }
 
     /// <summary>
     /// Returns the processing status of each signature, in order; an entry is <c>null</c> if the cluster has
-    /// no record of that signature. See
+    /// no record of that signature. The node uses its processed bank. See
     /// <see href="https://solana.com/docs/rpc/http/getsignaturestatuses">getSignatureStatuses</see>.
     /// </summary>
     /// <param name="signatures">The transaction signatures (base58) to look up.</param>
@@ -1213,6 +1214,35 @@ public class SolanaRpcClient
 
         var result = await SendAsync<RpcContextValue<SignatureStatus?[]>>(
             RpcRequests.GetSignatureStatuses(signatures, searchTransactionHistory), cancellationToken);
+
+        return RequireContextValue(result);
+    }
+
+    /// <summary>
+    /// Returns each signature's processing status using explicit history-search, commitment, and
+    /// minimum-context-slot options. Commitment and minimum context slot require node support.
+    /// An omitted commitment preserves the node's historical processed-bank behavior.
+    /// </summary>
+    /// <param name="signatures">The transaction signatures (base58) to look up.</param>
+    /// <param name="options">The signature-status configuration sent to the node.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>One status per requested signature, in order; an entry is <c>null</c> when the signature is unknown.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="signatures"/> or <paramref name="options"/> is <c>null</c>.</exception>
+    /// <exception cref="RpcException">The node returned a JSON-RPC error, including when the minimum context slot has not been reached.</exception>
+    /// <exception cref="HttpRequestException">The request failed at the transport level or returned a non-success status.</exception>
+    /// <exception cref="OperationCanceledException">The <paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<IReadOnlyList<SignatureStatus?>> GetSignatureStatusesWithOptionsAsync(
+        IReadOnlyList<string> signatures,
+        GetSignatureStatusesOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(signatures);
+        ArgumentNullException.ThrowIfNull(options);
+
+        var result = await SendAsync<RpcContextValue<SignatureStatus?[]>>(
+            RpcRequests.GetSignatureStatuses(
+                signatures, options.SearchTransactionHistory, options.Commitment, options.MinContextSlot),
+            cancellationToken);
 
         return RequireContextValue(result);
     }
@@ -1481,7 +1511,8 @@ public class SolanaRpcClient
 
     /// <summary>
     /// Returns a confirmed block by slot (with transaction signatures only), or <c>null</c> if the slot was
-    /// skipped. See <see href="https://solana.com/docs/rpc/http/getblock">getBlock</see>.
+    /// skipped. Advertises V1 support; the node does not enforce the version limit for signatures-only responses.
+    /// See <see href="https://solana.com/docs/rpc/http/getblock">getBlock</see>.
     /// </summary>
     /// <param name="slot">The slot to fetch the block for.</param>
     /// <param name="commitment">The commitment level to query at (<c>processed</c> is not supported by the node).</param>
@@ -1494,12 +1525,12 @@ public class SolanaRpcClient
         ulong slot,
         Commitment commitment = Commitment.Confirmed,
         CancellationToken cancellationToken = default)
-        => SendNullableAsync<Block?>(RpcRequests.GetBlock(slot, commitment, 0), cancellationToken);
+        => SendNullableAsync<Block?>(RpcRequests.GetBlock(slot, commitment, 1), cancellationToken);
 
     /// <summary>
-    /// Returns a confirmed signatures-only block while explicitly opting into a newer transaction version.
-    /// This is required when the block contains a version newer than v0, even though only signatures are
-    /// requested. See <see href="https://solana.com/docs/rpc/http/getblock">getBlock</see>.
+    /// Returns a confirmed signatures-only block with an explicit maximum transaction version.
+    /// The node does not enforce this limit for signatures-only responses.
+    /// See <see href="https://solana.com/docs/rpc/http/getblock">getBlock</see>.
     /// </summary>
     /// <param name="slot">The slot to fetch the block for.</param>
     /// <param name="maxSupportedTransactionVersion">The highest numeric transaction version the caller accepts.</param>
@@ -1550,6 +1581,7 @@ public class SolanaRpcClient
     /// <summary>
     /// Returns a confirmed transaction decoded by the node into <c>jsonParsed</c> form - recognized
     /// instructions, token balances and logs without local Borsh decoding - or <c>null</c> if not found.
+    /// Supports legacy, v0, and V1 transactions, including V1 execution configuration.
     /// See <see href="https://solana.com/docs/rpc/http/gettransaction">getTransaction</see>.
     /// </summary>
     /// <param name="signature">The transaction signature (base58) to fetch.</param>
@@ -1565,12 +1597,12 @@ public class SolanaRpcClient
         CancellationToken cancellationToken = default)
     {
         var transaction = await SendNullableAsync<ParsedTransaction?>(
-            RpcRequests.GetParsedTransaction(signature, commitment ?? Commitment.Confirmed, 0), cancellationToken);
+            RpcRequests.GetParsedTransaction(signature, commitment ?? Commitment.Confirmed, 1), cancellationToken);
         return RequireConfirmedParsedTransaction(transaction);
     }
 
     /// <summary>
-    /// Returns a node-decoded transaction while explicitly opting into a newer numeric transaction version.
+    /// Returns a node-decoded transaction with an explicit maximum numeric transaction version.
     /// For V1, <see cref="ParsedMessage.TransactionConfig"/> exposes the message's execution configuration.
     /// </summary>
     /// <param name="signature">The transaction signature (base58) to fetch.</param>
@@ -1600,6 +1632,7 @@ public class SolanaRpcClient
     /// Returns a confirmed block whose transactions are decoded by the node into <c>jsonParsed</c> form, or
     /// <c>null</c> if the slot was skipped. Each transaction's <see cref="ParsedTransaction.Slot"/> and
     /// <see cref="ParsedTransaction.BlockTime"/> are filled in from the block.
+    /// Supports legacy, v0, and V1 transactions, including V1 execution configuration.
     /// See <see href="https://solana.com/docs/rpc/http/getblock">getBlock</see>.
     /// </summary>
     /// <param name="slot">The slot to fetch the block for.</param>
@@ -1613,10 +1646,10 @@ public class SolanaRpcClient
         ulong slot,
         Commitment? commitment = null,
         CancellationToken cancellationToken = default)
-        => await GetParsedBlockCoreAsync(slot, 0, commitment, cancellationToken);
+        => await GetParsedBlockCoreAsync(slot, 1, commitment, cancellationToken);
 
     /// <summary>
-    /// Returns a node-decoded block while explicitly opting into a newer numeric transaction version.
+    /// Returns a node-decoded block with an explicit maximum numeric transaction version.
     /// For V1 messages, <see cref="ParsedMessage.TransactionConfig"/> exposes the embedded execution settings.
     /// </summary>
     /// <param name="slot">The slot to fetch the block for.</param>

@@ -116,6 +116,18 @@ internal static class IntegrationEnvironment
             ExceptionDispatchInfo.Capture(exception).Throw();
     }
 
+    /// <summary>Reports missing live test data as inconclusive, or fails the strict integration gate.</summary>
+    /// <param name="reason">Why the configured endpoint could not provide the required test data.</param>
+    /// <exception cref="InvalidOperationException">Strict integration mode requires the missing live test data.</exception>
+    /// <exception cref="InconclusiveException">The test data is unavailable in ordinary integration mode.</exception>
+    public static void ReportUnavailableData(string reason)
+    {
+        if (IsStrict)
+            throw new InvalidOperationException(reason);
+
+        Assert.Inconclusive(reason);
+    }
+
     private static string Resolve(string variable, string fallback)
         => Environment.GetEnvironmentVariable(variable) is { Length: > 0 } value ? value : fallback;
 

@@ -7,6 +7,7 @@ using FluentAssertions;
 using NUnit.Framework;
 using SolSharp.Core.Constants;
 using SolSharp.Core.Primitives;
+using SolSharp.Rpc.Models;
 using SolSharp.Rpc.Protocol;
 using SolSharp.Rpc.Streaming;
 
@@ -2218,6 +2219,108 @@ public static class SolanaWsClientTests
     [TestFixture]
     public sealed class SubscribeBlocksWithOptionsAsync
     {
+        [TestCase((byte)0)]
+        [TestCase(null)]
+        public async Task ExplicitVersionOverride_PreservesZeroOrOmission(byte? version)
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new("wss://localhost"));
+
+            // Act
+            var subscribe = client.SubscribeBlocksWithOptionsAsync(
+                BlockSubscriptionFilter.All,
+                new() { MaxSupportedTransactionVersion = version });
+            await WaitUntil(() => fake.SentCount == 1);
+            var request = fake.SentSnapshot()[0];
+            fake.PushFromServer(Acknowledgement(RequestId(request), subscriptionId: 45));
+            _ = await subscribe;
+
+            // Assert
+            using var document = JsonDocument.Parse(request);
+            var config = document.RootElement.GetProperty("params")[1];
+            if (version.HasValue)
+                config.GetProperty("maxSupportedTransactionVersion").GetByte().Should().Be(version.Value);
+            else
+                config.TryGetProperty("maxSupportedTransactionVersion", out _).Should().BeFalse();
+        }
+
+        [Test]
+        public async Task DefaultAndExplicitOptions_CoalesceWhileVersionOverridesRemainSeparateAfterReconnect()
+        {
+            // Arrange
+            var first = new FakeWebSocketConnection();
+            var second = new FakeWebSocketConnection();
+            var connections = new[] { first, second };
+            var index = -1;
+            var reconnect = new SolanaWsClientOptions
+            {
+                ReconnectInitialDelay = TimeSpan.FromMilliseconds(1),
+                ReconnectMaxDelay = TimeSpan.FromMilliseconds(1)
+            };
+            await using var client = new SolanaWsClient(
+                () => connections[Interlocked.Increment(ref index)], reconnect);
+            await client.ConnectAsync(new("wss://localhost"));
+            var defaults = client.SubscribeBlocksWithOptionsAsync(BlockSubscriptionFilter.All, new());
+            await WaitUntil(() => first.SentCount == 1);
+            var explicitDefaults = client.SubscribeBlocksWithOptionsAsync(
+                BlockSubscriptionFilter.All,
+                new()
+                {
+                    Commitment = Commitment.Finalized,
+                    Encoding = RpcTransactionEncoding.Base64,
+                    TransactionDetails = RpcTransactionDetails.Full,
+                    ShowRewards = false,
+                    MaxSupportedTransactionVersion = 1
+                });
+            await WaitUntil(() => client.RetainedPendingSubscriptionReferenceCount == 2);
+            first.SentCount.Should().Be(1);
+            first.PushFromServer(Acknowledgement(RequestId(first.SentSnapshot()[0]), subscriptionId: 41));
+            var readers = new[] { await defaults, await explicitDefaults };
+
+            foreach (var version in new byte?[] { 0, null })
+            {
+                var expectedCount = first.SentCount + 1;
+                var subscribe = client.SubscribeBlocksWithOptionsAsync(
+                    BlockSubscriptionFilter.All,
+                    new() { MaxSupportedTransactionVersion = version });
+                await WaitUntil(() => first.SentCount == expectedCount);
+                first.PushFromServer(Acknowledgement(RequestId(first.SentSnapshot()[^1]), (ulong)(40 + expectedCount)));
+                _ = await subscribe;
+            }
+
+            // Act
+            first.Drop();
+            for (var count = 1; count <= 3; count++)
+            {
+                var expectedCount = count;
+                await WaitUntil(() => second.SentCount == expectedCount);
+                var request = second.SentSnapshot()[^1];
+                second.PushFromServer(Acknowledgement(RequestId(request), (ulong)(50 + count)));
+            }
+
+            // Assert
+            var replayVersions = second.SentSnapshot().Select(static request =>
+            {
+                using var document = JsonDocument.Parse(request);
+                return document.RootElement.GetProperty("params")[1]
+                    .TryGetProperty("maxSupportedTransactionVersion", out var version)
+                    ? version.GetInt32()
+                    : (int?)null;
+            });
+            replayVersions.Should().BeEquivalentTo(new int?[] { 1, 0, null });
+            var defaultReplay = second.SentSnapshot().Single(static request =>
+                request.Contains("\"maxSupportedTransactionVersion\":1", StringComparison.Ordinal));
+            var defaultReplayIndex = Array.IndexOf(second.SentSnapshot(), defaultReplay);
+            second.PushFromServer(
+                """{"jsonrpc":"2.0","method":"blockNotification","params":{"subscription":__SUB__,"result":{"context":{"slot":22},"value":{"slot":22,"err":null,"block":{"opaque":2}}}}}"""
+                    .Replace("__SUB__", (51 + defaultReplayIndex).ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal));
+            foreach (var reader in readers)
+                (await reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1)))
+                    .Value!.Block!.Value.GetProperty("opaque").GetInt32().Should().Be(2);
+        }
+
         [Test]
         public async Task AllFilter_SendsExactPinnedUnionBranch()
         {
@@ -2236,7 +2339,7 @@ public static class SolanaWsClientTests
             // Assert
             await WaitUntil(() => fake.SentCount == 1);
             fake.SentSnapshot()[0].Should().Be(
-                """{"jsonrpc":"2.0","id":1,"method":"blockSubscribe","params":["all",{}]}""");
+                """{"jsonrpc":"2.0","id":1,"method":"blockSubscribe","params":["all",{"maxSupportedTransactionVersion":1}]}""");
             await cancellation.CancelAsync();
         }
 
@@ -2327,8 +2430,7 @@ public static class SolanaWsClientTests
                     Commitment = Commitment.Confirmed,
                     Encoding = RpcTransactionEncoding.Json,
                     TransactionDetails = RpcTransactionDetails.Signatures,
-                    ShowRewards = false,
-                    MaxSupportedTransactionVersion = 0
+                    ShowRewards = false
                 },
                 rawCancellation.Token);
             await WaitUntil(() => client.RetainedPendingSubscriptionReferenceCount == 2);
@@ -2363,8 +2465,9 @@ public static class SolanaWsClientTests
     [TestFixture]
     public sealed class SubscribeBlocksWithMaxVersionAsync
     {
-        [Test]
-        public async Task ExplicitVersionOptIn_SendsVersionOne()
+        [TestCase((byte)0)]
+        [TestCase((byte)1)]
+        public async Task ExplicitVersion_SendsRequestedVersion(byte version)
         {
             // Arrange
             var fake = new FakeWebSocketConnection();
@@ -2375,12 +2478,12 @@ public static class SolanaWsClientTests
 
             // Act
             _ = client.SubscribeBlocksWithMaxVersionAsync(
-                maxSupportedTransactionVersion: 1, cancellationToken: cts.Token);
+                maxSupportedTransactionVersion: version, cancellationToken: cts.Token);
 
             // Assert
             await WaitUntil(() => fake.Sent.Count > 0);
             fake.Sent[0].Should().Contain("\"transactionDetails\":\"signatures\"");
-            fake.Sent[0].Should().Contain("\"maxSupportedTransactionVersion\":1");
+            fake.Sent[0].Should().Contain($"\"maxSupportedTransactionVersion\":{version}");
 
             await cts.CancelAsync();
         }
@@ -2406,6 +2509,7 @@ public static class SolanaWsClientTests
             fake.Sent[0].Should().Contain("\"method\":\"blockSubscribe\"");
             fake.Sent[0].Should().Contain("\"all\"");
             fake.Sent[0].Should().Contain("\"transactionDetails\":\"signatures\"");
+            fake.Sent[0].Should().Contain("\"maxSupportedTransactionVersion\":1");
 
             fake.PushFromServer("""{"jsonrpc":"2.0","result":8,"id":1}""");
             var reader = await subscribe;
@@ -2441,6 +2545,7 @@ public static class SolanaWsClientTests
             fake.Sent[0].Should().Contain("\"method\":\"blockSubscribe\"");
             fake.Sent[0].Should().Contain("\"mentionsAccountOrProgram\"");
             fake.Sent[0].Should().Contain(SolanaProgramIds.TokenProgram);
+            fake.Sent[0].Should().Contain("\"maxSupportedTransactionVersion\":1");
 
             await cts.CancelAsync();
         }
@@ -2449,8 +2554,9 @@ public static class SolanaWsClientTests
     [TestFixture]
     public sealed class SubscribeParsedBlocksWithMaxVersionAsync
     {
-        [Test]
-        public async Task ExplicitVersionOptIn_SendsVersionOne()
+        [TestCase((byte)0)]
+        [TestCase((byte)1)]
+        public async Task ExplicitVersion_SendsRequestedVersion(byte version)
         {
             // Arrange
             var fake = new FakeWebSocketConnection();
@@ -2461,12 +2567,12 @@ public static class SolanaWsClientTests
 
             // Act
             _ = client.SubscribeParsedBlocksWithMaxVersionAsync(
-                maxSupportedTransactionVersion: 1, cancellationToken: cts.Token);
+                maxSupportedTransactionVersion: version, cancellationToken: cts.Token);
 
             // Assert
             await WaitUntil(() => fake.Sent.Count > 0);
             fake.Sent[0].Should().Contain("\"encoding\":\"jsonParsed\"");
-            fake.Sent[0].Should().Contain("\"maxSupportedTransactionVersion\":1");
+            fake.Sent[0].Should().Contain($"\"maxSupportedTransactionVersion\":{version}");
 
             await cts.CancelAsync();
         }
@@ -2475,8 +2581,88 @@ public static class SolanaWsClientTests
     [TestFixture]
     public sealed class SubscribeParsedBlocks
     {
+        private const string MixedVersionsNotificationJson =
+            """
+            {"jsonrpc":"2.0","method":"blockNotification","params":{"subscription":9,"result":{"context":{"slot":120},"value":{"slot":120,"err":null,"block":{
+                "blockhash":"11111111111111111111111111111111","previousBlockhash":"11111111111111111111111111111111",
+                "parentSlot":119,"blockHeight":100,"blockTime":1700000010,"transactions":[
+                    {"transaction":{"signatures":["legacy"],"message":{"accountKeys":[],"instructions":[],"recentBlockhash":"11111111111111111111111111111111"}},"meta":null,"version":"legacy"},
+                    {"transaction":{"signatures":["v0"],"message":{"accountKeys":[],"instructions":[],"recentBlockhash":"11111111111111111111111111111111","addressTableLookups":[]}},"meta":null,"version":0},
+                    {"transaction":{"signatures":["v1"],"message":{"accountKeys":[],"instructions":[],"recentBlockhash":"11111111111111111111111111111111","transactionConfig":{"priorityFee":5000,"computeUnitLimit":200000,"loadedAccountsDataSizeLimit":65536,"heapSize":null}}},"meta":null,"version":1}
+                ]
+            }}}}}
+            """;
+
         private const string NotificationJson =
             """{"jsonrpc":"2.0","method":"blockNotification","params":{"subscription":9,"result":{"context":{"slot":120},"value":{"slot":120,"err":null,"block":{"blockhash":"Pblk1111111111111111111111111111111111111111","previousBlockhash":"Pprev111111111111111111111111111111111111111","parentSlot":119,"blockHeight":100,"blockTime":1700000010,"transactions":[{"transaction":{"signatures":["psig1"],"message":{"accountKeys":[{"pubkey":"3x9az88Dkbxa6tkKByxqEn7jBTJCJCD4dVvou49L24ET","signer":true,"writable":true,"source":"transaction"},{"pubkey":"11111111111111111111111111111111","signer":false,"writable":false,"source":"transaction"}],"instructions":[{"program":"system","programId":"11111111111111111111111111111111","parsed":{"type":"transfer","info":{"lamports":7}},"stackHeight":null}],"recentBlockhash":"Prbh1111111111111111111111111111111111111111"}},"meta":null,"version":"legacy"}]}}}}}""";
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public async Task DefaultVersion_DeliversMixedVersionsAndV1ConfigAlongsideEquivalentRawOptions(bool mentions)
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new("wss://localhost"));
+            var account = PublicKey.Parse(SolanaProgramIds.TokenProgram);
+            var typedSubscribe = mentions
+                ? client.SubscribeParsedBlocksAsync(account)
+                : client.SubscribeParsedBlocksAsync();
+            await WaitUntil(() => fake.SentCount == 1);
+            var rawSubscribe = client.SubscribeBlocksWithOptionsAsync(
+                mentions ? BlockSubscriptionFilter.Mentions(account) : BlockSubscriptionFilter.All,
+                new() { Commitment = Commitment.Confirmed, Encoding = RpcTransactionEncoding.JsonParsed });
+            await WaitUntil(() => client.RetainedPendingSubscriptionReferenceCount == 2);
+            fake.SentCount.Should().Be(1);
+            fake.SentSnapshot()[0].Should().Contain("\"maxSupportedTransactionVersion\":1");
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 9));
+            var typed = await typedSubscribe;
+            var raw = await rawSubscribe;
+
+            // Act
+            fake.PushFromServer(MixedVersionsNotificationJson);
+            var notification = await typed.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1));
+            var rawNotification = await raw.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1));
+
+            // Assert
+            notification.Value!.IsError.Should().BeFalse();
+            var transactions = notification.Value.Block!.Transactions;
+            transactions.Select(static transaction => transaction.Version).Should().Equal(
+                RpcTransactionVersion.Legacy, RpcTransactionVersion.FromNumber(0), RpcTransactionVersion.FromNumber(1));
+            transactions[0].Message.TransactionConfig.Should().BeNull();
+            transactions[1].Message.TransactionConfig.Should().BeNull();
+            var config = transactions[2].Message.TransactionConfig!;
+            config.PriorityFee.Should().Be(5_000);
+            config.ComputeUnitLimit.Should().Be(200_000);
+            config.LoadedAccountsDataSizeLimit.Should().Be(65_536);
+            config.HeapSize.Should().BeNull();
+            rawNotification.Value!.Block!.Value.GetProperty("transactions")[2]
+                .GetProperty("transaction").GetProperty("message").GetProperty("transactionConfig")
+                .GetProperty("priorityFee").GetUInt64().Should().Be(5_000);
+        }
+
+        [Test]
+        public async Task UnsupportedVersionNotification_PreservesErrorAndNullBlock()
+        {
+            // Arrange
+            var fake = new FakeWebSocketConnection();
+            await using var client = new SolanaWsClient(fake);
+            await client.ConnectAsync(new("wss://localhost"));
+            var subscribe = client.SubscribeParsedBlocksWithMaxVersionAsync(0);
+            await WaitUntil(() => fake.SentCount == 1);
+            fake.PushFromServer(Acknowledgement(RequestId(fake.SentSnapshot()[0]), subscriptionId: 9));
+            var reader = await subscribe;
+
+            // Act
+            fake.PushFromServer(
+                """{"jsonrpc":"2.0","method":"blockNotification","params":{"subscription":9,"result":{"context":{"slot":120},"value":{"slot":120,"err":{"UnsupportedTransactionVersion":1},"block":null}}}}""");
+            var notification = await reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1));
+
+            // Assert
+            notification.Value!.IsError.Should().BeTrue();
+            notification.Value.Block.Should().BeNull();
+            notification.Value.Err!.Value.GetProperty("UnsupportedTransactionVersion").GetInt32().Should().Be(1);
+        }
 
         [Test]
         public async Task DeliversParsedBlock_WithDecodedInstructions()
@@ -2495,6 +2681,7 @@ public static class SolanaWsClientTests
             fake.Sent[0].Should().Contain("\"method\":\"blockSubscribe\"");
             fake.Sent[0].Should().Contain("\"encoding\":\"jsonParsed\"");
             fake.Sent[0].Should().Contain("\"transactionDetails\":\"full\"");
+            fake.Sent[0].Should().Contain("\"maxSupportedTransactionVersion\":1");
 
             fake.PushFromServer("""{"jsonrpc":"2.0","result":9,"id":1}""");
             var reader = await subscribe;

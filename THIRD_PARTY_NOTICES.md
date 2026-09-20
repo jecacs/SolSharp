@@ -18,6 +18,11 @@ The following repositories are licensed under the
 | [Address Lookup Table](https://github.com/solana-program/address-lookup-table) | Solana Program Library contributors | `8ebd5f4964454bc6b86d86ff191702d33c52490b` |
 | [System Program](https://github.com/solana-program/system) | Solana Program Library contributors | `8c47b48e8e129ab195db3e3d2a8334dd8bbd94aa` |
 
+The optional transaction freshness configuration additionally follows Agave commit
+[`f46e7976fd37d2fc5eea919d5b28bb5ff7fd17e9`](https://github.com/anza-xyz/agave/commit/f46e7976fd37d2fc5eea919d5b28bb5ff7fd17e9):
+`getTransaction.minContextSlot` and `getSignatureStatuses.commitment/minContextSlot`. Other Agave
+compatibility claims retain the base revision above.
+
 The Token-2022 pin resolves the following interface contracts. Versions below come from
 that checkout's `Cargo.lock` (rather than from a floating documentation page):
 

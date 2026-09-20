@@ -27,6 +27,20 @@ All repositories above are Apache-2.0 licensed. SolSharp remains MIT licensed; a
 and the exact source pins shipped with the package are recorded in
 `THIRD_PARTY_NOTICES.md`.
 
+The transaction freshness extension is additionally checked against Agave commit
+[`f46e7976fd37d2fc5eea919d5b28bb5ff7fd17e9`](https://github.com/anza-xyz/agave/commit/f46e7976fd37d2fc5eea919d5b28bb5ff7fd17e9):
+`getTransaction.minContextSlot` and `getSignatureStatuses.commitment/minContextSlot`. These optional
+fields require a node implementing that extension. The latter retains the upstream `processed`
+commitment default when omitted; a context below the requested minimum returns RPC error `-32016`.
+Older nodes may ignore the new configuration fields, so their presence in a request alone does not
+establish a freshness guarantee.
+This additional contract does not replace the base pins or claim parity with all later Agave changes.
+
+HTTP transaction/block reads and WebSocket block subscriptions advertise a maximum transaction version
+of `1` by default; explicit numeric overrides and explicit `null` in the full options retain their wire
+meaning. V1's mainnet feature activated at epoch 1035 on September 15, 2026; private and older clusters
+may differ. Wire-format verification remains pinned to the SDK revision above.
+
 ## Status legend
 
 - **Compatible** — the current public API covers the applicable pinned client contract and
@@ -67,8 +81,8 @@ and the exact source pins shipped with the package are recorded in
 | Token group and transfer-hook client helpers | Compatible | group/member instructions and state; validation PDA; extra-account-meta/seed codecs; bounded TLV decoding; async off-chain account resolution and de-escalation | None in the pinned client contract |
 | Confidential Token-2022 client contracts | Compatible | confidential transfer/fee/mint-burn and permissioned confidential-burn instructions, raw POD proof locations, native proof-program and ElGamal-registry clients/state | ZK proof generation and ciphertext arithmetic are explicit cryptographic exclusions |
 | Token/Token-2022 account decoding | Compatible | canonical base Mint/TokenAccount/multisig state, typed Token-2022 TLV/extensions, metadata/group/hook/registry state, and instruction decoders | None in the pinned client contract |
-| HTTP JSON-RPC | Compatible | Every non-admin, non-obsolete method in the pinned `RpcRequest` surface; exact account-data encoding union and effective context/filter/slice/detail config variants; bounded responses, batching, typed errors, explicit V1 raw/parsed opt-ins and parsed V1 configuration | None in the pinned client contract |
-| WebSocket PubSub | Compatible | Full pinned subscription families; `SubscribeAccountWithOptionsAsync` / `SubscribeProgramWithOptionsAsync` expose effective configs and the exact legacy binary/base58/base64/jsonParsed-fallback/base64+zstd union; bounded multiplexing with 1:N fan-out for Agave-deduplicated subscription IDs, cancellation isolation, reconnect/replay, parsed program state, early signature receipt, and explicit V1 block opt-ins | None in the pinned client contract |
+| HTTP JSON-RPC | Compatible | Every non-admin, non-obsolete method in the pinned `RpcRequest` surface; exact account-data encoding union and effective context/filter/slice/detail config variants; bounded responses, batching, typed errors, V1 raw/parsed reads by default, explicit version overrides, parsed V1 configuration, and the additional transaction freshness contract above | None in the pinned client contract |
+| WebSocket PubSub | Compatible | Full pinned subscription families; `SubscribeAccountWithOptionsAsync` / `SubscribeProgramWithOptionsAsync` expose effective configs and the exact legacy binary/base58/base64/jsonParsed-fallback/base64+zstd union; bounded multiplexing with 1:N fan-out for Agave-deduplicated subscription IDs, cancellation isolation, reconnect/replay, parsed program state, early signature receipt, and V1 block reads by default with explicit version overrides | None in the pinned client contract |
 | Native AOT/trimming | Compatible | source-generated JSON, AOT annotations, package-consumer smoke app | None for managed paths; BLS native-RID execution is tracked separately above |
 
 For `accountSubscribe`, pinned Agave applies only encoding and commitment to notifications;

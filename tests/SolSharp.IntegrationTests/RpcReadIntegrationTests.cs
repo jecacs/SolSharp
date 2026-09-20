@@ -1,8 +1,10 @@
+using System.Text.Json;
 using System.Threading.RateLimiting;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using SolSharp.Core.Primitives;
+using SolSharp.Programs;
 using SolSharp.Rpc;
 using SolSharp.Rpc.Models;
 using SolSharp.Rpc.Models.Token2022;
@@ -77,6 +79,92 @@ public static class RpcReadIntegrationTests
 
             // Assert
             version.SolanaCore.Should().NotBeNullOrEmpty();
+        }
+    }
+
+    [TestFixture]
+    [Category("Integration")]
+    public sealed class GetTransactionAsync
+    {
+        [Test]
+        public async Task DefaultReads_DecodeAndVerifyALiveV1Transaction()
+        {
+            // Arrange
+            using var provider = CreateProvider();
+            var client = provider.GetRequiredService<SolanaRpcClient>();
+            var signature = await FindV1SignatureAsync(client);
+
+            // Act
+            var raw = await IntegrationEnvironment.CallAsync(
+                () => client.GetTransactionAsync(signature, Commitment.Finalized));
+            var parsed = await IntegrationEnvironment.CallAsync(
+                () => client.GetParsedTransactionAsync(signature, Commitment.Finalized));
+
+            // Assert
+            raw.Should().NotBeNull("the selected V1 transaction must remain available during the test");
+            parsed.Should().NotBeNull();
+            raw.Version.Should().Be(RpcTransactionVersion.FromNumber(1));
+            parsed.Version.Should().Be(raw.Version);
+            parsed.Slot.Should().Be(raw.Slot);
+            raw.Transaction[0].Should().Be(MessageV1.VersionPrefix);
+
+            var transaction = Transaction.Deserialize(raw.Transaction);
+            transaction.Version.Should().Be(TransactionVersion.V1);
+            transaction.Signatures[0].ToString().Should().Be(signature);
+            transaction.Serialize().Should().Equal(raw.Transaction);
+            transaction.VerifySignatures().Should().BeTrue();
+
+            var message = transaction.Message.Should().BeOfType<MessageV1>().Subject;
+            parsed.Signatures.Should().Equal(transaction.Signatures.Select(static value => value.ToString()));
+            parsed.Message.AccountKeys.Select(static account => account.Pubkey).Should().Equal(message.AccountKeys);
+            parsed.Message.RecentBlockhash.Should().Be(message.LifetimeSpecifier.ToString());
+            parsed.Message.AddressTableLookups.Should().BeNull();
+            parsed.Message.Instructions.Should().HaveCount(message.Instructions.Count);
+            parsed.Message.TransactionConfig.Should().NotBeNull();
+            var config = parsed.Message.TransactionConfig!;
+            config.PriorityFee.Should().Be(message.Config.PriorityFee);
+            config.ComputeUnitLimit.Should().Be(message.Config.ComputeUnitLimit);
+            config.LoadedAccountsDataSizeLimit.Should().Be(message.Config.LoadedAccountsDataSizeLimit);
+            config.HeapSize.Should().Be(message.Config.HeapSize);
+        }
+
+        private static async Task<string> FindV1SignatureAsync(SolanaRpcClient client)
+        {
+            if (Environment.GetEnvironmentVariable("SOLSHARP_V1_TRANSACTION_SIGNATURE") is { Length: > 0 } configured)
+                return configured;
+
+            var slot = await IntegrationEnvironment.CallAsync(() => client.GetSlotAsync(Commitment.Finalized));
+            var startSlot = slot > 32 ? slot - 32 : 0;
+            var blocks = await IntegrationEnvironment.CallAsync(
+                () => client.GetBlocksWithLimitAsync(startSlot, 3, Commitment.Finalized));
+
+            // Bound discovery to three blocks and omit instructions; no cluster-specific address is needed.
+            foreach (var blockSlot in blocks.Take(3))
+            {
+                var block = await IntegrationEnvironment.CallAsync(() => client.GetBlockWithOptionsAsync(blockSlot, new()
+                {
+                    Commitment = Commitment.Finalized,
+                    Encoding = RpcTransactionEncoding.Json,
+                    TransactionDetails = RpcTransactionDetails.Accounts,
+                    Rewards = false,
+                    MaxSupportedTransactionVersion = 1,
+                }));
+
+                if (block is not { } value)
+                    continue;
+
+                foreach (var transaction in value.GetProperty("transactions").EnumerateArray())
+                {
+                    var version = transaction.GetProperty("version");
+                    if (version.ValueKind == JsonValueKind.Number && version.GetByte() == 1)
+                        return transaction.GetProperty("transaction").GetProperty("signatures")[0].GetString()!;
+                }
+            }
+
+            IntegrationEnvironment.ReportUnavailableData(
+                "No V1 transaction was found in at most three recent finalized blocks. "
+                + "Set SOLSHARP_V1_TRANSACTION_SIGNATURE to a V1 signature available on the configured cluster.");
+            throw new InvalidOperationException("The missing-data handler must end the test.");
         }
     }
 

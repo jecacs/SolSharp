@@ -182,6 +182,9 @@ internal sealed record TransactionConfig
 
     [JsonPropertyName("encoding")]
     public string? Encoding { get; init; }
+
+    [JsonPropertyName("minContextSlot")]
+    public ulong? MinContextSlot { get; init; }
 }
 
 /// <summary>The <c>getBlock</c> configuration object (<see cref="Encoding"/> is unset for the signatures-only read).</summary>
@@ -218,6 +221,12 @@ internal sealed record SignatureStatusesConfig
 {
     [JsonPropertyName("searchTransactionHistory")]
     public required bool SearchTransactionHistory { get; init; }
+
+    [JsonPropertyName("commitment")]
+    public Commitment? Commitment { get; init; }
+
+    [JsonPropertyName("minContextSlot")]
+    public ulong? MinContextSlot { get; init; }
 }
 
 /// <summary>The <c>getInflationReward</c> configuration object.</summary>

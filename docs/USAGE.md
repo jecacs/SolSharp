@@ -25,6 +25,7 @@ using SolSharp.Wallet;
 
 - [Installation](#installation)
 - [Creating a client](#creating-a-client)
+- [Upgrading from 3.x](#upgrading-from-3x)
 - [Keys and wallets](#keys-and-wallets)
 - [Signed off-chain messages](#signed-off-chain-messages)
 - [SOL and lamports](#sol-and-lamports)
@@ -121,6 +122,53 @@ await ws.ConnectAsync(new Uri("wss://api.mainnet-beta.solana.com"));
 
 > The examples below assume an injected/resolved `SolanaRpcClient rpc` and, where relevant, a connected
 > `SolanaWsClient ws`.
+
+## Upgrading from 3.x
+
+SolSharp 4.0 changes the transaction versions accepted by default:
+
+| API | 3.x default | 4.0 default |
+| --- | --- | --- |
+| Ordinary raw/parsed transaction reads and block reads/subscriptions | `maxSupportedTransactionVersion: 0` | `maxSupportedTransactionVersion: 1` |
+| `GetTransactionOptions`, `GetBlockOptions`, `BlockSubscriptionOptions` | `MaxSupportedTransactionVersion = null` (field omitted) | `MaxSupportedTransactionVersion = 1` |
+
+Ordinary reads can now return V1 transactions. `Transaction.Deserialize` handles their bytes, and parsed
+messages expose resource limits and the total priority fee through `Message.TransactionConfig`.
+Applications with their own transaction decoders must support V1 or explicitly keep a legacy/v0 ceiling:
+
+```csharp
+var transaction = await rpc.GetTransactionWithMaxVersionAsync(signature, 0);
+var parsedTransaction = await rpc.GetParsedTransactionWithMaxVersionAsync(signature, 0);
+var parsedBlock = await rpc.GetParsedBlockWithMaxVersionAsync(slot, 0);
+var blocks = await ws.SubscribeParsedBlocksWithMaxVersionAsync(0);
+```
+
+The version ceiling is not a filter: a transaction-bearing response that includes an unsupported version
+fails rather than removing that transaction. Agave does not check transaction versions for signatures-only
+responses, including `GetBlockAsync` and `SubscribeBlocksAsync`; those methods do not exclude V1 signatures.
+
+For the full options, `0` accepts legacy/v0. Explicit `null` omits the field, retaining the node's
+legacy-only default when transaction data is returned. Base58 and binary cannot be combined with a V1
+ceiling, even when the requested transaction itself is legacy. Preserve a base58 configuration explicitly:
+
+```csharp
+var base58Transaction = await rpc.GetTransactionWithOptionsAsync(
+    signature,
+    new GetTransactionOptions
+    {
+        Encoding = RpcTransactionEncoding.Base58,
+        MaxSupportedTransactionVersion = 0
+    });
+```
+
+Use `RpcTransactionEncoding.Base64`, `Json`, or `JsonParsed` when accepting V1. The same encoding/version
+rules apply to `GetBlockOptions` and `BlockSubscriptionOptions`.
+
+The new transaction/status freshness options are optional and require node support. Existing
+`GetSignatureStatusesAsync` calls retain their processed-bank behavior. See
+[transaction history and block reads](#walking-an-addresss-history-or-a-whole-block) for `MinContextSlot`
+and `GetSignatureStatusesWithOptionsAsync` examples. Building and sending V1 remains explicit through
+`BuildV1`; the [V1 guide](#simd-0385-v1-transactions) explains its resource limits and cluster support.
 
 ## Keys and wallets
 
@@ -1173,7 +1221,9 @@ then call `GetStatus`, `IsActive`, `GetActiveAddresses`, or `Lookup` with the cu
 
 ## SIMD-0385 V1 transactions
 
-V1 is the current feature-gated transaction format in the pinned Solana SDK. It stores all account addresses
+V1 is supported by the pinned Solana SDK and was
+[activated on mainnet on September 15, 2026, at epoch 1035](https://solana.com/upgrades/larger-transaction-sizes).
+It stores all account addresses
 inline (there are no address lookup tables), carries compute and fee settings in the message itself, begins
 with `0x81`, and places its fixed number of signatures **after** the message. Build it explicitly with
 `SetV1Config` and `BuildV1`:
@@ -1203,9 +1253,9 @@ limits mean zero, so it is normally unusable at runtime; only the omitted heap s
 admission limit. The codec deliberately round-trips larger wire payloads like the pinned Rust SDK; the node
 enforces admission.
 
-V1 is controlled by the cluster feature `enable_tx_v1`
-(`SolanaFeatureIds.EnableTransactionV1`). Check activation on the target cluster before sending; library
-support does not imply that a particular validator or RPC endpoint has enabled the feature:
+The pinned runtime controls V1 through the cluster feature `enable_tx_v1`
+(`SolanaFeatureIds.EnableTransactionV1`). Mainnet activation does not establish support on a private or
+older cluster; the feature account can be checked before sending there:
 
 ```csharp
 using SolSharp.Core.Constants;
@@ -1319,22 +1369,27 @@ static async Task<IReadOnlyList<AddressLookupTableAccount>> FetchTablesAsync(Sol
 `MessageV0.GetAccountKeys(tables)` gives the full resolved account list (static + lookup-loaded), so you can
 map a balance entry's `accountIndex` back to a public key.
 
-The compatibility-preserving default raw read advertises legacy/v0. To fetch V1, opt into numeric version 1;
-the returned bytes can be parsed locally:
+Default raw and parsed transaction reads, block reads, and block subscriptions advertise
+`maxSupportedTransactionVersion: 1`, so they can read legacy, v0, and V1 transactions. The returned wire
+bytes can be parsed locally:
 
 ```csharp
-var v1 = await rpc.GetTransactionWithMaxVersionAsync(
+var fetchedTransaction = await rpc.GetTransactionAsync(
     signature,
-    maxSupportedTransactionVersion: 1,
     commitment: Commitment.Confirmed)
     ?? throw new InvalidOperationException("transaction not found");
-var decodedV1 = Transaction.Deserialize(v1.Transaction);
+var decodedTransaction = Transaction.Deserialize(fetchedTransaction.Transaction);
 ```
 
-The existing method names keep their v0 maximum for source and behavior compatibility. Use the explicitly named
-`GetParsedTransactionWithMaxVersionAsync`, `GetParsedBlockWithMaxVersionAsync`,
-`SubscribeBlocksWithMaxVersionAsync`, and `SubscribeParsedBlocksWithMaxVersionAsync` methods when opting into
-V1. A parsed V1 message exposes its nullable settings through `tx.Message.TransactionConfig`.
+This changes the default version ceiling from v0 to V1. An application that only handles legacy/v0 can
+retain the previous behavior with `GetTransactionWithMaxVersionAsync(signature, 0)`,
+`GetParsedTransactionWithMaxVersionAsync(signature, 0)`, `GetParsedBlockWithMaxVersionAsync(slot, 0)`,
+or the corresponding `Subscribe*BlocksWithMaxVersionAsync` methods. The full transaction/block options
+also default `MaxSupportedTransactionVersion` to `1`; explicitly set it to `0` for a v0 ceiling or `null`
+to omit the field and use the node's legacy-only default for transaction bodies. Base58 and binary
+transaction encodings do not support V1 on newer nodes; use base64, JSON, or jsonParsed when accepting V1.
+A parsed V1 message exposes its nullable settings through `tx.Message.TransactionConfig`. Read its
+resource limits and total priority fee there, rather than scanning ComputeBudget instructions.
 
 ### Walking an address's history, or a whole block
 
@@ -1391,9 +1446,28 @@ var configuredTransaction = await rpc.GetTransactionWithOptionsAsync(
     {
         Encoding = RpcTransactionEncoding.Json,
         Commitment = Commitment.Confirmed,
-        MaxSupportedTransactionVersion = 1
+        MinContextSlot = lastObservedSlot
     });
+
+var statuses = await rpc.GetSignatureStatusesWithOptionsAsync(
+    [signature],
+    new GetSignatureStatusesOptions
+    {
+        SearchTransactionHistory = true,
+        Commitment = Commitment.Finalized,
+        MinContextSlot = lastObservedSlot
+    });
+foreach (var status in statuses)
+    Console.WriteLine(status?.ConfirmationStatus ?? "not found");
 ```
+
+`GetTransactionOptions.MinContextSlot` and the commitment/minimum-slot signature-status configuration
+require a node implementing [Agave's transaction freshness extension](https://github.com/anza-xyz/agave/commit/f46e7976fd37d2fc5eea919d5b28bb5ff7fd17e9).
+Older nodes may ignore these fields; confirm provider support before relying on a freshness guarantee.
+The node checks its context slot at the requested commitment, not the transaction's historical slot.
+An insufficient context returns `RpcException` with code `-32016` (`MinContextSlotNotReached`), rather
+than an ordinary missing-transaction result. Omitted freshness fields preserve upstream defaults;
+in particular, `GetSignatureStatusesAsync` and an unset status-options commitment still use `processed`.
 
 ## Reading parsed transactions
 
@@ -1646,6 +1720,9 @@ Also available: `SubscribeRootsAsync` (rooted slots, like `SubscribeSlotsAsync`)
 (with base58/base64/raw memcmp, unsigned data-size, and token-account-state filters),
 `SubscribeSignatureAsync`, `SubscribeBlocksAsync`, and the `jsonParsed`
 streams `SubscribeParsedBlocksAsync` / `SubscribeParsedAccountAsync` / `SubscribeParsedProgramAsync`.
+Block subscriptions accept V1 by default. Use `SubscribeParsedBlocksWithMaxVersionAsync(0)` for a legacy/v0
+consumer, or set `BlockSubscriptionOptions.MaxSupportedTransactionVersion` explicitly to `0` or `null`.
+For parsed V1 notifications, the execution settings are in each transaction's `Message.TransactionConfig`.
 Cancel any channel subscription by
 cancelling the `CancellationToken` you pass in. A returned `ChannelReader` supports multiple concurrent
 consumers; each notification is delivered to one reader.

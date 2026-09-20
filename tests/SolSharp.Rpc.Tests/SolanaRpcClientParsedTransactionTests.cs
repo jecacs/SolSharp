@@ -58,6 +58,29 @@ public static class SolanaRpcClientParsedTransactionTests
     public sealed class GetParsedTransactionAsync
     {
         [Test]
+        public async Task DefaultVersionOne_PreservesV1TransactionConfig()
+        {
+            // Arrange
+            var (client, handler) = Make(
+                """{"jsonrpc":"2.0","result":{"slot":10,"blockTime":null,"transaction":{"signatures":["sig-v1"],"message":{"accountKeys":[],"instructions":[],"recentBlockhash":"CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8","transactionConfig":{"priorityFee":9000,"computeUnitLimit":200000,"loadedAccountsDataSizeLimit":65536,"heapSize":32768}}},"meta":null,"version":1},"id":1}""");
+
+            // Act
+            var transaction = await client.GetParsedTransactionAsync("sig-v1");
+
+            // Assert
+            transaction!.Version.Should().Be(RpcTransactionVersion.FromNumber(1));
+            transaction.Message.AddressTableLookups.Should().BeNull();
+            transaction.Message.TransactionConfig.Should().NotBeNull();
+            var config = transaction.Message.TransactionConfig!;
+            config.PriorityFee.Should().Be(9000);
+            config.ComputeUnitLimit.Should().Be(200000);
+            config.LoadedAccountsDataSizeLimit.Should().Be(65536);
+            config.HeapSize.Should().Be(32768);
+            handler.CapturedRequestBody.Should().Contain("\"encoding\":\"jsonParsed\"");
+            handler.CapturedRequestBody.Should().Contain("\"maxSupportedTransactionVersion\":1");
+        }
+
+        [Test]
         public async Task ParsesSystemTransfer()
         {
             // Arrange
@@ -275,34 +298,55 @@ public static class SolanaRpcClientParsedTransactionTests
     [TestFixture]
     public sealed class GetParsedTransactionWithMaxVersionAsync
     {
-        [Test]
-        public async Task ParsesV1TransactionConfigAndSendsExplicitOptIn()
+        [TestCase((byte)0)]
+        [TestCase((byte)1)]
+        [TestCase(byte.MaxValue)]
+        public async Task ExplicitVersion_IsSentUnchanged(byte version)
         {
             // Arrange
-            var (client, handler) = Make(
-                """{"jsonrpc":"2.0","result":{"slot":10,"blockTime":null,"transaction":{"signatures":["sig-v1"],"message":{"accountKeys":[],"instructions":[],"recentBlockhash":"CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8","transactionConfig":{"priorityFee":9000,"computeUnitLimit":200000,"loadedAccountsDataSizeLimit":65536,"heapSize":32768}}},"meta":null,"version":1},"id":1}""");
+            var (client, handler) = Make(Transfer);
 
             // Act
-            var transaction = await client.GetParsedTransactionWithMaxVersionAsync(
-                "sig-v1", maxSupportedTransactionVersion: 1);
+            var transaction = await client.GetParsedTransactionWithMaxVersionAsync("sig1aaaa", version);
 
             // Assert
-            transaction!.Version.Should().Be(RpcTransactionVersion.FromNumber(1));
-            transaction.Message.AddressTableLookups.Should().BeNull();
-            transaction.Message.TransactionConfig.Should().NotBeNull();
-            var config = transaction.Message.TransactionConfig!;
-            config.PriorityFee.Should().Be(9000);
-            config.ComputeUnitLimit.Should().Be(200000);
-            config.LoadedAccountsDataSizeLimit.Should().Be(65536);
-            config.HeapSize.Should().Be(32768);
-            handler.CapturedRequestBody.Should().Contain("\"encoding\":\"jsonParsed\"");
-            handler.CapturedRequestBody.Should().Contain("\"maxSupportedTransactionVersion\":1");
+            transaction.Should().NotBeNull();
+            using var request = System.Text.Json.JsonDocument.Parse(handler.CapturedRequestBody!);
+            request.RootElement.GetProperty("params")[1].GetProperty("maxSupportedTransactionVersion").GetByte().Should().Be(version);
         }
     }
 
     [TestFixture]
     public sealed class GetParsedBlockAsync
     {
+        [Test]
+        public async Task DefaultVersionOne_PreservesMixedBlockAndV1TransactionConfig()
+        {
+            // Arrange
+            var blockJson = BlockJson.Replace(
+                    "\"recentBlockhash\":\"RBh8blktx211111111111111111111111111111111\"",
+                    "\"recentBlockhash\":\"RBh8blktx211111111111111111111111111111111\",\"transactionConfig\":{\"priorityFee\":9000,\"computeUnitLimit\":200000,\"loadedAccountsDataSizeLimit\":65536,\"heapSize\":32768}",
+                    StringComparison.Ordinal)
+                .Replace("\"meta\":null,\"version\":0", "\"meta\":null,\"version\":1", StringComparison.Ordinal);
+            var (client, handler) = Make(blockJson);
+
+            // Act
+            var block = await client.GetParsedBlockAsync(250000000);
+
+            // Assert
+            block!.Transactions[0].Version.Should().Be(RpcTransactionVersion.Legacy);
+            var transaction = block.Transactions[1];
+            transaction.Version.Should().Be(RpcTransactionVersion.FromNumber(1));
+            transaction.Slot.Should().Be(250000000);
+            transaction.BlockTime.Should().Be(1700000005);
+            var config = transaction.Message.TransactionConfig!;
+            config.PriorityFee.Should().Be(9000);
+            config.ComputeUnitLimit.Should().Be(200000);
+            config.LoadedAccountsDataSizeLimit.Should().Be(65536);
+            config.HeapSize.Should().Be(32768);
+            handler.CapturedRequestBody.Should().Contain("\"maxSupportedTransactionVersion\":1");
+        }
+
         [Test]
         public async Task ParsesTransactionsAndFillsSlotAndBlockTime()
         {
@@ -333,26 +377,30 @@ public static class SolanaRpcClientParsedTransactionTests
             handler.CapturedRequestBody.Should().Contain("getBlock");
             handler.CapturedRequestBody.Should().Contain("jsonParsed");
             handler.CapturedRequestBody.Should().Contain("full");
+            handler.CapturedRequestBody.Should().Contain("\"maxSupportedTransactionVersion\":1");
         }
     }
 
     [TestFixture]
     public sealed class GetParsedBlockWithMaxVersionAsync
     {
-        [Test]
-        public async Task ExplicitVersionOptIn_SendsVersionOne()
+        [TestCase((byte)0)]
+        [TestCase((byte)1)]
+        [TestCase(byte.MaxValue)]
+        public async Task ExplicitVersion_IsSentUnchanged(byte version)
         {
             // Arrange
             var (client, handler) = Make(BlockJson);
 
             // Act
             var block = await client.GetParsedBlockWithMaxVersionAsync(
-                250000000, maxSupportedTransactionVersion: 1);
+                250000000, version);
 
             // Assert
             block.Should().NotBeNull();
             handler.CapturedRequestBody.Should().Contain("\"encoding\":\"jsonParsed\"");
-            handler.CapturedRequestBody.Should().Contain("\"maxSupportedTransactionVersion\":1");
+            using var request = System.Text.Json.JsonDocument.Parse(handler.CapturedRequestBody!);
+            request.RootElement.GetProperty("params")[1].GetProperty("maxSupportedTransactionVersion").GetByte().Should().Be(version);
         }
     }
 }

@@ -13,6 +13,7 @@ internal static class IntegrationEnvironmentTests
         [TestCase(-32602)] // Invalid params.
         [TestCase(-32002)] // Transaction simulation failed.
         [TestCase(-32003)] // Signature verification failure.
+        [TestCase(-32015)] // Unsupported transaction version.
         public void DeterministicRpcFailure_ReturnsFalse(int code)
         {
             // Act
@@ -50,6 +51,40 @@ internal static class IntegrationEnvironmentTests
 
             // Assert
             result.Should().Be(expected);
+        }
+    }
+
+    [TestFixture]
+    [NonParallelizable]
+    public sealed class ReportUnavailableData
+    {
+        [TestCase(null, false)]
+        [TestCase("false", false)]
+        [TestCase("1", true)]
+        [TestCase("TRUE", true)]
+        public void MissingData_RespectsStrictMode(string? strictMode, bool shouldFail)
+        {
+            // Arrange
+            const string variable = "SOLSHARP_INTEGRATION_STRICT";
+            const string reason = "No V1 transaction was available in the bounded block sample.";
+            var previous = Environment.GetEnvironmentVariable(variable);
+            Environment.SetEnvironmentVariable(variable, strictMode);
+
+            try
+            {
+                // Act
+                var act = () => IntegrationEnvironment.ReportUnavailableData(reason);
+
+                // Assert
+                if (shouldFail)
+                    act.Should().Throw<InvalidOperationException>().WithMessage(reason);
+                else
+                    act.Should().Throw<InconclusiveException>().WithMessage(reason);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable(variable, previous);
+            }
         }
     }
 
