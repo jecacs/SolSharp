@@ -121,7 +121,10 @@ public sealed record GetInflationRewardOptions
 /// </summary>
 public sealed record GetBlockOptions
 {
-    /// <summary>The transaction encoding; use the node default when <c>null</c>.</summary>
+    /// <summary>
+    /// The transaction encoding; use the node default when <c>null</c>. For V1, use Base64, Json, or JsonParsed.
+    /// Base58 and Binary require <see cref="MaxSupportedTransactionVersion"/> to be <c>0</c> or <c>null</c>.
+    /// </summary>
     public RpcTransactionEncoding? Encoding { get; init; }
 
     /// <summary>The transaction detail level; use the node default when <c>null</c>.</summary>
@@ -133,8 +136,8 @@ public sealed record GetBlockOptions
     /// <summary>The commitment level to query at.</summary>
     public Commitment? Commitment { get; init; }
 
-    /// <summary>The highest numeric transaction version the caller accepts.</summary>
-    public byte? MaxSupportedTransactionVersion { get; init; }
+    /// <summary>The highest numeric transaction version the caller accepts; defaults to V1. Set to <c>null</c> to omit the field and request legacy transactions only when transaction data is returned.</summary>
+    public byte? MaxSupportedTransactionVersion { get; init; } = 1;
 }
 
 /// <summary>
@@ -143,14 +146,33 @@ public sealed record GetBlockOptions
 /// </summary>
 public sealed record GetTransactionOptions
 {
-    /// <summary>The transaction encoding; use the node default when <c>null</c>.</summary>
+    /// <summary>
+    /// The transaction encoding; use the node default when <c>null</c>. For V1, use Base64, Json, or JsonParsed.
+    /// Base58 and Binary require <see cref="MaxSupportedTransactionVersion"/> to be <c>0</c> or <c>null</c>.
+    /// </summary>
     public RpcTransactionEncoding? Encoding { get; init; }
 
     /// <summary>The commitment level to query at.</summary>
     public Commitment? Commitment { get; init; }
 
-    /// <summary>The highest numeric transaction version the caller accepts.</summary>
-    public byte? MaxSupportedTransactionVersion { get; init; }
+    /// <summary>The highest numeric transaction version the caller accepts; defaults to V1. Set to <c>null</c> to omit the field and request legacy transactions only.</summary>
+    public byte? MaxSupportedTransactionVersion { get; init; } = 1;
+
+    /// <summary>The minimum slot the node must have reached at the requested commitment before looking up the transaction; requires node support.</summary>
+    public ulong? MinContextSlot { get; init; }
+}
+
+/// <summary>Options for <see cref="SolanaRpcClient.GetSignatureStatusesWithOptionsAsync(IReadOnlyList{string}, GetSignatureStatusesOptions, CancellationToken)"/>.</summary>
+public sealed record GetSignatureStatusesOptions
+{
+    /// <summary>Whether to search the node's long-term transaction history in addition to its recent status cache; defaults to <c>false</c>.</summary>
+    public bool SearchTransactionHistory { get; init; }
+
+    /// <summary>The commitment level used to select the status bank; the node defaults to <see cref="Core.Primitives.Commitment.Processed"/> when <c>null</c>. Requires node support.</summary>
+    public Commitment? Commitment { get; init; }
+
+    /// <summary>The minimum slot the node's status bank must have reached before looking up signatures; requires node support.</summary>
+    public ulong? MinContextSlot { get; init; }
 }
 
 internal static class RpcWireNames

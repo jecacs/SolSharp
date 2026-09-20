@@ -427,7 +427,7 @@ public static class UpgradeableBpfLoaderStateTests
             // Assert
             parsed.Should().BeTrue();
             state.Should().NotBeNull();
-            state!.Kind.Should().Be(UpgradeableBpfLoaderStateKind.Uninitialized);
+            state.Kind.Should().Be(UpgradeableBpfLoaderStateKind.Uninitialized);
         }
 
         [Test]
@@ -603,7 +603,7 @@ public static class LoaderV4StateTests
             // Assert
             parsed.Should().BeTrue();
             state.Should().NotBeNull();
-            state!.Status.Should().Be(LoaderV4Status.Finalized);
+            state.Status.Should().Be(LoaderV4Status.Finalized);
         }
 
         [Test]

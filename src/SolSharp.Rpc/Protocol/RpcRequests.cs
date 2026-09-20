@@ -281,7 +281,8 @@ internal static class RpcRequests
         string signature,
         Commitment? commitment,
         byte? maxSupportedTransactionVersion,
-        RpcTransactionEncoding? encoding = RpcTransactionEncoding.Base64) =>
+        RpcTransactionEncoding? encoding = RpcTransactionEncoding.Base64,
+        ulong? minContextSlot = null) =>
         new()
         {
             Method = RpcMethods.GetTransaction,
@@ -292,16 +293,30 @@ internal static class RpcRequests
                 {
                     Commitment = commitment,
                     MaxSupportedTransactionVersion = maxSupportedTransactionVersion,
-                    Encoding = encoding is { } value ? value.WireName : null
+                    Encoding = encoding is { } value ? value.WireName : null,
+                    MinContextSlot = minContextSlot
                 }
             ]
         };
 
-    public static RpcRequest GetSignatureStatuses(IReadOnlyList<string> signatures, bool searchTransactionHistory) =>
+    public static RpcRequest GetSignatureStatuses(
+        IReadOnlyList<string> signatures,
+        bool searchTransactionHistory,
+        Commitment? commitment = null,
+        ulong? minContextSlot = null) =>
         new()
         {
             Method = RpcMethods.GetSignatureStatuses,
-            Params = [signatures.ToArray(), new SignatureStatusesConfig { SearchTransactionHistory = searchTransactionHistory }]
+            Params =
+            [
+                signatures.ToArray(),
+                new SignatureStatusesConfig
+                {
+                    SearchTransactionHistory = searchTransactionHistory,
+                    Commitment = commitment,
+                    MinContextSlot = minContextSlot
+                }
+            ]
         };
 
     public static RpcRequest GetSlotLeaders(ulong startSlot, ulong limit) =>

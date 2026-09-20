@@ -163,7 +163,7 @@ public static class TransferHookProgramTests
 
             // Assert
             decoded.Should().ContainSingle();
-            decoded![0].Encode().Should().Equal(meta.Encode());
+            decoded[0].Encode().Should().Equal(meta.Encode());
         }
     }
 

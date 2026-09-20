@@ -7,6 +7,7 @@ taken seriously and are appreciated.
 
 | Version | Supported |
 | ------- | --------- |
+| 4.x     | ✅        |
 | 3.x     | ✅        |
 | 2.x     | ✅        |
 | 1.x     | ✅        |

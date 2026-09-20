@@ -50,7 +50,8 @@ public static class SolanaRpcClientConfirmTests
             statuses[0]!.ConfirmationStatus.Should().Be("confirmed");
             statuses[0]!.IsError.Should().BeFalse();
             statuses[1].Should().BeNull();
-            handler.CapturedRequestBody.Should().Contain("\"getSignatureStatuses\"");
+            handler.CapturedRequestBody.Should().Be(
+                """{"jsonrpc":"2.0","id":1,"method":"getSignatureStatuses","params":[["Sig111","Sig222"],{"searchTransactionHistory":false}]}""");
         }
 
         [TestCase("{}")]
@@ -72,6 +73,123 @@ public static class SolanaRpcClientConfirmTests
 
             // Assert
             await act.Should().ThrowAsync<JsonException>();
+        }
+    }
+
+    [TestFixture]
+    public sealed class GetSignatureStatusesWithOptionsAsync
+    {
+        [Test]
+        public async Task DefaultOptions_PreserveProcessedBankRequestAndNullStatuses()
+        {
+            // Arrange
+            var (client, handler) = Make(
+                """{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":[null]},"id":1}""");
+
+            // Act
+            var statuses = await client.GetSignatureStatusesWithOptionsAsync(["signature"], new());
+
+            // Assert
+            statuses.Should().ContainSingle().Which.Should().BeNull();
+            handler.CapturedRequestBody.Should().Be(
+                """{"jsonrpc":"2.0","id":1,"method":"getSignatureStatuses","params":[["signature"],{"searchTransactionHistory":false}]}""");
+        }
+
+        [TestCase(Commitment.Processed, "processed")]
+        [TestCase(Commitment.Confirmed, "confirmed")]
+        [TestCase(Commitment.Finalized, "finalized")]
+        public async Task ExplicitOptions_SendExactConfigAndParseStatuses(Commitment commitment, string wireCommitment)
+        {
+            // Arrange
+            var (client, handler) = Make(ConfirmedStatus);
+            var options = new GetSignatureStatusesOptions
+            {
+                SearchTransactionHistory = true,
+                Commitment = commitment,
+                MinContextSlot = 42
+            };
+
+            // Act
+            var statuses = await client.GetSignatureStatusesWithOptionsAsync(["signature"], options);
+
+            // Assert
+            statuses.Should().ContainSingle().Which!.ConfirmationStatus.Should().Be("confirmed");
+            handler.CapturedRequestBody.Should().Be(
+                $$"""{"jsonrpc":"2.0","id":1,"method":"getSignatureStatuses","params":[["signature"],{"searchTransactionHistory":true,"commitment":"{{wireCommitment}}","minContextSlot":42}]}""");
+        }
+
+        [TestCase(0ul)]
+        [TestCase(ulong.MaxValue)]
+        public async Task MinContextSlot_IsSentWithoutTruncationOrImplicitCommitment(ulong minContextSlot)
+        {
+            // Arrange
+            var (client, handler) = Make(ConfirmedStatus);
+
+            // Act
+            await client.GetSignatureStatusesWithOptionsAsync(["signature"], new() { MinContextSlot = minContextSlot });
+
+            // Assert
+            using var request = JsonDocument.Parse(handler.CapturedRequestBody!);
+            var config = request.RootElement.GetProperty("params")[1];
+            config.GetProperty("minContextSlot").GetUInt64().Should().Be(minContextSlot);
+            config.TryGetProperty("commitment", out _).Should().BeFalse();
+        }
+
+        [Test]
+        public async Task MinContextSlotNotReached_PreservesNodeError()
+        {
+            // Arrange
+            var (client, _) = Make(
+                """{"jsonrpc":"2.0","error":{"code":-32016,"message":"Minimum context slot has not been reached","data":{"contextSlot":41}},"id":1}""");
+
+            // Act
+            var act = () => client.GetSignatureStatusesWithOptionsAsync(["signature"], new() { MinContextSlot = 42 });
+
+            // Assert
+            var error = (await act.Should().ThrowAsync<RpcException>()).Which;
+            error.Code.Should().Be(-32016);
+            error.ErrorData!.Value.GetProperty("contextSlot").GetUInt64().Should().Be(41);
+        }
+
+        [Test]
+        public async Task MissingContextValue_ThrowsJsonException()
+        {
+            // Arrange
+            var (client, _) = Make("""{"jsonrpc":"2.0","result":{"context":{"slot":1}},"id":1}""");
+
+            // Act
+            var act = () => client.GetSignatureStatusesWithOptionsAsync(["signature"], new());
+
+            // Assert
+            await act.Should().ThrowAsync<JsonException>();
+        }
+
+        [Test]
+        public async Task NullSignatures_ThrowsBeforeTransport()
+        {
+            // Arrange
+            var (client, handler) = Make(ConfirmedStatus);
+
+            // Act
+            var act = () => client.GetSignatureStatusesWithOptionsAsync(null!, new());
+
+            // Assert
+            await act.Should().ThrowAsync<ArgumentNullException>().WithParameterName("signatures");
+            handler.CapturedRequestBody.Should().BeNull();
+        }
+
+        [Test]
+        public async Task NullOptions_ThrowsBeforeTransport()
+        {
+            // Arrange
+            var (client, handler) = Make(ConfirmedStatus);
+
+            // Act
+            var act = () => client.GetSignatureStatusesWithOptionsAsync(["signature"], null!);
+
+            // Assert
+            await act.Should().ThrowAsync<ArgumentNullException>().WithParameterName("options");
+            handler.CapturedRequestBody.Should().BeNull();
         }
     }
 

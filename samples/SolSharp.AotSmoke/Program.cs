@@ -6,6 +6,7 @@
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using SolSharp.Core.Primitives;
 using SolSharp.Programs;
 using SolSharp.Rpc;
@@ -110,7 +111,8 @@ var instructionSysvar = InstructionsSysvar.Serialize([transferInstruction]);
 var introspected = InstructionsSysvar.ReadInstruction(instructionSysvar, 0);
 Check(introspected.ProgramId == SystemProgram.ProgramId, "Instructions sysvar round-trip");
 
-using var http = new HttpClient(new CannedRpcHandler());
+var handler = new CannedRpcHandler();
+using var http = new HttpClient(handler);
 http.BaseAddress = new("http://localhost");
 var client = new SolanaRpcClient(http);
 
@@ -148,12 +150,18 @@ Check(
 var agGenesis = await client.GetAgGenesisCertificateAsync();
 Check(agGenesis is null, "getAgGenesisCert nullable result");
 
-var rawV1 = await client.GetTransactionWithMaxVersionAsync(signatureBase58, 1);
+var rawV1 = await client.GetTransactionAsync(signatureBase58);
 Check(
     rawV1 is { Transaction: [0x81, 1, 2, 3] } && rawV1.Version?.Number == 1,
-    "raw transaction V1 opt-in");
+    "default raw transaction V1 read");
+using (var request = JsonDocument.Parse(handler.LastRequestBody!))
+{
+    Check(
+        request.RootElement.GetProperty("params")[1].GetProperty("maxSupportedTransactionVersion").GetInt32() == 1,
+        "default raw transaction V1 request");
+}
 
-var parsedRpcV1 = await client.GetParsedTransactionWithMaxVersionAsync(signatureBase58, 1);
+var parsedRpcV1 = await client.GetParsedTransactionAsync(signatureBase58);
 Check(
     parsedRpcV1?.Message.TransactionConfig is
     {
@@ -163,6 +171,50 @@ Check(
         HeapSize: 32_768
     },
     "parsed transaction V1 config");
+using (var request = JsonDocument.Parse(handler.LastRequestBody!))
+{
+    Check(
+        request.RootElement.GetProperty("params")[1].GetProperty("maxSupportedTransactionVersion").GetInt32() == 1,
+        "default parsed transaction V1 request");
+}
+
+var freshTransaction = await client.GetTransactionWithOptionsAsync(
+    signatureBase58,
+    new()
+    {
+        Encoding = RpcTransactionEncoding.Base64,
+        Commitment = Commitment.Finalized,
+        MinContextSlot = 3
+    });
+Check(freshTransaction?.GetProperty("version").GetInt32() == 1, "configured transaction V1 read");
+using (var request = JsonDocument.Parse(handler.LastRequestBody!))
+{
+    var config = request.RootElement.GetProperty("params")[1];
+    Check(
+        config.GetProperty("minContextSlot").GetUInt64() == 3 &&
+        config.GetProperty("commitment").GetString() == "finalized" &&
+        config.GetProperty("maxSupportedTransactionVersion").GetInt32() == 1,
+        "transaction freshness request");
+}
+
+var statuses = await client.GetSignatureStatusesWithOptionsAsync(
+    [signatureBase58],
+    new()
+    {
+        SearchTransactionHistory = true,
+        Commitment = Commitment.Finalized,
+        MinContextSlot = 3
+    });
+Check(statuses is [{ Slot: 3, ConfirmationStatus: "finalized", IsError: false }], "signature status response");
+using (var request = JsonDocument.Parse(handler.LastRequestBody!))
+{
+    var config = request.RootElement.GetProperty("params")[1];
+    Check(
+        config.GetProperty("searchTransactionHistory").GetBoolean() &&
+        config.GetProperty("commitment").GetString() == "finalized" &&
+        config.GetProperty("minContextSlot").GetUInt64() == 3,
+        "signature status freshness request");
+}
 
 var sent = await client.SendTransactionAsync(wire);
 Check(sent == signatureBase58, "sendTransaction");
@@ -207,9 +259,15 @@ internal sealed class CannedRpcHandler : HttpMessageHandler
     private const string SendTransactionJson =
         """{"jsonrpc":"2.0","result":"5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW","id":1}""";
 
+    private const string SignatureStatusesJson =
+        """{"jsonrpc":"2.0","result":{"context":{"slot":3},"value":[{"slot":3,"confirmations":null,"err":null,"status":{"Ok":null},"confirmationStatus":"finalized"}]},"id":1}""";
+
+    internal string? LastRequestBody { get; private set; }
+
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         var body = request.Content is null ? string.Empty : await request.Content.ReadAsStringAsync(cancellationToken);
+        LastRequestBody = body;
         var json = body switch
         {
             _ when body.Contains("getLatestBlockhash") => LatestBlockhashJson,
@@ -219,6 +277,7 @@ internal sealed class CannedRpcHandler : HttpMessageHandler
             _ when body.Contains("getAgGenesisCert") => AgGenesisCertificateJson,
             _ when body.Contains("getTransaction") && body.Contains("jsonParsed") => ParsedVersionedTransactionJson,
             _ when body.Contains("getTransaction") => VersionedTransactionJson,
+            _ when body.Contains("getSignatureStatuses") => SignatureStatusesJson,
             _ when body.Contains("sendTransaction") => SendTransactionJson,
             _ => throw new InvalidOperationException($"Unexpected RPC request: {body}")
         };

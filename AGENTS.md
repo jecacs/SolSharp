@@ -4,7 +4,7 @@ A modern, contract-driven .NET SDK for Solana: keys and signing, program instruc
 transaction wire formats, RPC, and WebSocket streaming. It is optimized for low latency,
 bounded hostile-input handling, focused dependencies with a dependency-light Core, and Native AOT.
 
-Status: 3.2.0. SolSharp is independently implemented
+Status: 4.0.0. SolSharp is independently implemented
 against immutable Anza Solana SDK, Agave, and SPL source revisions; exact pins, client-side
 coverage, verification criteria, and deliberate node/runtime exclusions live in
 `docs/RUST_PARITY.md`. All JSON used by the library is source-generated and all four functional
@@ -70,7 +70,7 @@ Three traps worth knowing:
   **`global.json` pins one exact SDK with `rollForward: disable`; every CI/release job that restores or
   builds the checkout installs it via `global-json-file: global.json`.** The pin is not stylistic: `IsAotCompatible` injects
   `Microsoft.NET.ILLink.Tasks` and `PublishAot` injects `Microsoft.DotNet.ILCompiler`, both versioned by
-  the SDK's *runtime* (10.0.303 carries runtime 10.0.11), and both are recorded in every
+  the SDK's *runtime* (10.0.401 carries runtime 10.0.12), and both are recorded in every
   `packages.lock.json` as direct references. A floating SDK therefore breaks
   `dotnet restore --locked-mode` with NU1004 the moment .NET ships a patch, with no source change at all.
   Every checkout job that restores or builds asserts `dotnet --version` equals the pinned value; do not
@@ -158,6 +158,7 @@ SolSharp/
   Bouncy Castle-based Ed25519 signer/verification path. The pathological-encoding verifier divergence is
   recorded in `docs/RUST_PARITY.md`. They are not transactions and examples must not imply on-chain authority.
 - Transactions support **legacy**, **v0**, and feature-gated **SIMD-0385 V1** messages behind `ITransactionMessage`. Account ordering matches the pinned Solana SDK (fee payer first, then public-key byte order within writable-signer / readonly-signer / writable / readonly classes). v0 drains eligible accounts into lookup tables and prefixes `0x80`; V1 prefixes `0x81`, keeps all addresses inline, carries an inline execution config, and writes the message before its fixed number of signatures. V1's omitted compute/data limits mean zero and cluster activation is external, so examples must set deliberate limits and never imply universal availability. All formats use exact pinned Rust vectors.
+- **Transaction/block reads and block subscriptions accept V1 by default.** Preserve explicit numeric version overrides and explicit `null` in full options. The latter omits the field; it does not mean unlimited version support. Signatures-only block responses are not version-filtered by Agave.
 - `PublicKey.IsOnCurve` is field arithmetic over BouncyCastle's `X25519Field`, **not** BouncyCastle's public-key validation: BC's validation rejects non-canonical encodings (y ≥ p) that Solana's `curve25519-dalek` accepts after reducing mod p, so the check is written directly as `SqrtRatioVar((y²−1)/(dy²+1))` with the top bit masked and no canonicality test. Solders-derived edge KATs and a deterministic corpus checked against an independent BigInteger/Legendre-symbol oracle pin the network semantics. Using `X25519Field` rather than `BigInteger.ModPow` is what makes it ~39× faster; keep the reduction semantics if that code is ever touched.
 - **SPL Token account state uses the fixed-size `Pack` layout, not Borsh.** `Mint` (82 bytes) and `TokenAccount` (165 bytes) read a `COption` as a 4-byte little-endian tag followed by an *always-present* value (the slot is reserved even when `None`) — unlike Borsh's 1-byte tag with the value present only when `Some`. So `BorshReader` / `BorshWriter` are for Anchor/Borsh data; the SPL decoders are hand-written against the Pack layout and KAT'd against `solders.token.state`. (The Token *instruction* data is different again: a minimal `COption` of a 1-byte tag plus the value only when `Some`.)
 - Money-critical encodings (message/transaction serialization, instruction data, PDA/ATA, on-curve) are checked byte-for-byte against `solana-sdk` (solders) and `solana-py`, not just round-trips.

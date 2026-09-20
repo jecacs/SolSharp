@@ -133,6 +133,7 @@ public static class SolanaRpcClientChainTests
             block.Signatures.Should().Equal("sig1", "sig2");
             handler.CapturedRequestBody.Should().Contain("\"getBlock\"");
             handler.CapturedRequestBody.Should().Contain("\"transactionDetails\":\"signatures\"");
+            handler.CapturedRequestBody.Should().Contain("\"maxSupportedTransactionVersion\":1");
         }
 
         [Test]
@@ -165,20 +166,23 @@ public static class SolanaRpcClientChainTests
     [TestFixture]
     public sealed class GetBlockWithMaxVersionAsync
     {
-        [Test]
-        public async Task ExplicitVersionOptIn_SendsVersionOne()
+        [TestCase((byte)0)]
+        [TestCase((byte)1)]
+        [TestCase(byte.MaxValue)]
+        public async Task ExplicitVersion_IsSentUnchanged(byte version)
         {
             // Arrange
             var (client, handler) = Make(
                 """{"jsonrpc":"2.0","result":{"blockhash":"Ckt","previousBlockhash":"Prev","parentSlot":99,"blockHeight":null,"blockTime":null,"signatures":[]},"id":1}""");
 
             // Act
-            var block = await client.GetBlockWithMaxVersionAsync(100, maxSupportedTransactionVersion: 1);
+            var block = await client.GetBlockWithMaxVersionAsync(100, version);
 
             // Assert
             block.Should().NotBeNull();
             handler.CapturedRequestBody.Should().Contain("\"transactionDetails\":\"signatures\"");
-            handler.CapturedRequestBody.Should().Contain("\"maxSupportedTransactionVersion\":1");
+            using var request = System.Text.Json.JsonDocument.Parse(handler.CapturedRequestBody!);
+            request.RootElement.GetProperty("params")[1].GetProperty("maxSupportedTransactionVersion").GetByte().Should().Be(version);
         }
     }
 }

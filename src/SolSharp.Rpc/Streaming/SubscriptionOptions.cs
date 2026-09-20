@@ -106,7 +106,10 @@ public sealed record BlockSubscriptionOptions
     /// <summary>The commitment level at which blocks are delivered.</summary>
     public Commitment? Commitment { get; init; }
 
-    /// <summary>The transaction encoding; use the node default when <c>null</c>.</summary>
+    /// <summary>
+    /// The transaction encoding; use the node default when <c>null</c>. Use base64, JSON, or jsonParsed
+    /// for V1; binary/base58 requires <see cref="MaxSupportedTransactionVersion"/> to be 0 or <c>null</c>.
+    /// </summary>
     public RpcTransactionEncoding? Encoding { get; init; }
 
     /// <summary>The transaction detail level; use the node default when <c>null</c>.</summary>
@@ -115,6 +118,10 @@ public sealed record BlockSubscriptionOptions
     /// <summary>Whether block-level rewards are included; use the node default when <c>null</c>.</summary>
     public bool? ShowRewards { get; init; }
 
-    /// <summary>The highest numeric transaction version the caller accepts.</summary>
-    public byte? MaxSupportedTransactionVersion { get; init; }
+    /// <summary>
+    /// The highest numeric transaction version the caller accepts. Defaults to 1, accepting legacy, v0,
+    /// and V1. Set to 0 for legacy/v0, or <c>null</c> to omit the field and use the node's legacy-only default
+    /// for transaction-bearing responses. Agave does not validate versions for signatures-only responses.
+    /// </summary>
+    public byte? MaxSupportedTransactionVersion { get; init; } = 1;
 }

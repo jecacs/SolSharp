@@ -47,7 +47,7 @@ public static class SolanaRpcClientGetTransactionTests
 
             handler.CapturedRequestBody.Should().Contain("\"getTransaction\"");
             handler.CapturedRequestBody.Should().Contain("Sig1111");
-            handler.CapturedRequestBody.Should().Contain("\"maxSupportedTransactionVersion\":0");
+            handler.CapturedRequestBody.Should().Contain("\"maxSupportedTransactionVersion\":1");
         }
 
         [Test]
@@ -64,15 +64,14 @@ public static class SolanaRpcClientGetTransactionTests
         }
 
         [Test]
-        public async Task ExplicitVersionOptIn_SendsVersionOneAndPreservesOpaqueBytes()
+        public async Task DefaultVersionOne_PreservesOpaqueBytes()
         {
             // Arrange
             var (client, handler) = Make(
                 """{"jsonrpc":"2.0","result":{"slot":101,"blockTime":null,"transaction":["gQECAw==","base64"],"meta":null,"version":1},"id":1}""");
 
             // Act
-            var transaction = await client.GetTransactionWithMaxVersionAsync(
-                "SigV1", maxSupportedTransactionVersion: 1);
+            var transaction = await client.GetTransactionAsync("SigV1");
 
             // Assert
             transaction!.Version.Should().Be(RpcTransactionVersion.FromNumber(1));
@@ -185,6 +184,27 @@ public static class SolanaRpcClientGetTransactionTests
             reward.RewardType.Should().Be("Fee");
             reward.Commission.Should().Be(7);
             reward.CommissionBps.Should().Be(725);
+        }
+    }
+
+    [TestFixture]
+    public sealed class GetTransactionWithMaxVersionAsync
+    {
+        [TestCase((byte)0)]
+        [TestCase((byte)1)]
+        [TestCase(byte.MaxValue)]
+        public async Task ExplicitVersion_IsSentUnchanged(byte version)
+        {
+            // Arrange
+            var (client, handler) = Make("""{"jsonrpc":"2.0","result":null,"id":1}""");
+
+            // Act
+            var transaction = await client.GetTransactionWithMaxVersionAsync("signature", version);
+
+            // Assert
+            transaction.Should().BeNull();
+            using var request = JsonDocument.Parse(handler.CapturedRequestBody!);
+            request.RootElement.GetProperty("params")[1].GetProperty("maxSupportedTransactionVersion").GetByte().Should().Be(version);
         }
     }
 }

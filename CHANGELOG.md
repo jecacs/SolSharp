@@ -7,6 +7,45 @@ version (on the earlier 0.x releases, minor versions could carry them).
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-09-20
+
+### Breaking changes
+
+- Default HTTP transaction/block reads and WebSocket block subscriptions now advertise support through
+  transaction version 1. Existing callers can receive V1 transactions; use the explicit
+  `*WithMaxVersionAsync(..., 0)` methods to retain a legacy/v0 ceiling.
+- Full transaction/block configuration objects now default `MaxSupportedTransactionVersion` to `1`
+  instead of `null`. Explicit `null` still omits the field. Base58/binary users must explicitly select
+  `0` or `null`; accepting V1 requires base64, JSON, or jsonParsed. Parsed V1 resource limits and total
+  priority fees remain available in `transactionConfig`.
+
+See [Upgrading from 3.x](docs/USAGE.md#upgrading-from-3x) for migration examples and signatures-only behavior.
+
+### Added
+
+- Added `GetTransactionOptions.MinContextSlot` and `GetSignatureStatusesWithOptionsAsync` with
+  `GetSignatureStatusesOptions` for history lookup, commitment, and minimum-context-slot checks.
+
+### Fixed
+
+- Updated SourceLink and its `Microsoft.Build.Tasks.Git` dependency to 10.0.401 to address
+  GHSA-23fw-v26w-5fgq, which caused the scheduled security dependency audit to fail. Solution,
+  benchmark, and packed Native AOT dependency locks are synchronized with the updated references.
+
+### Changed
+
+- Updated Microsoft.Extensions runtime dependencies, test tooling, BenchmarkDotNet, and banned-API
+  analyzers to their latest stable releases. FluentAssertions remains on the latest 7.x release (7.2.2)
+  with its existing license, and the existing StyleCop prerelease remains unchanged.
+- Pinned repository builds to .NET SDK 10.0.401 and updated the Native AOT toolchain packages to 10.0.12.
+
+### Tests
+
+- Added default V1 HTTP/WebSocket regressions, explicit v0 and omitted-version checks, transaction
+  freshness request/error coverage, and packed Native AOT checks for the new request configuration.
+- Added a bounded, read-only live V1 test that compares raw and parsed responses and verifies the
+  transaction's wire bytes, signatures, and inline configuration.
+
 ## [3.2.0] - 2026-08-29
 
 ### Fixed
@@ -665,7 +704,8 @@ bundles four layered assemblies.
   transaction building, signing and serialization, `Transaction.Deserialize`, and instruction
   decompilation — every wire format validated byte-for-byte against the Rust `solana-sdk`.
 
-[Unreleased]: https://github.com/jecacs/SolSharp/compare/v3.2.0...HEAD
+[Unreleased]: https://github.com/jecacs/SolSharp/compare/v4.0.0...HEAD
+[4.0.0]: https://github.com/jecacs/SolSharp/compare/v3.2.0...v4.0.0
 [3.2.0]: https://github.com/jecacs/SolSharp/compare/v3.1.0...v3.2.0
 [3.1.0]: https://github.com/jecacs/SolSharp/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/jecacs/SolSharp/compare/v2.0.0...v3.0.0
