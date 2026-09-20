@@ -7,6 +7,13 @@ version (on the earlier 0.x releases, minor versions could carry them).
 
 ## [Unreleased]
 
+### Changed
+
+- Release validation now runs offline tests only, matching CI, and no longer requires private RPC/WebSocket
+  endpoint secrets or runs a devnet write probe. Live HTTP, WebSocket, and devnet tests remain available for
+  explicit manual runs, including optional strict mode. Offline test validation, dependency/security checks,
+  package/API validation, packed Native AOT smoke checks, and release provenance remain in place.
+
 ## [4.0.0] - 2026-09-20
 
 ### Breaking changes

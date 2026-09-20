@@ -9,14 +9,14 @@ against immutable Anza Solana SDK, Agave, and SPL source revisions; exact pins, 
 coverage, verification criteria, and deliberate node/runtime exclusions live in
 `docs/RUST_PARITY.md`. All JSON used by the library is source-generated and all four functional
 assemblies are Native AOT compatible; the package also contains a minimal facade. The live integration suite exercises read, streaming,
-and devnet write paths against real nodes.
+and devnet write paths against real nodes when run manually; CI and release test gates run offline only.
 
 ## Commands
 
 Run from the repo root (where `SolSharp.sln` lives):
 
 - `dotnet build` — Roslyn and StyleCop code style is enforced on build (`EnforceCodeStyleInBuild`), so actionable style violations surface as warnings. Repository-specific StyleCop severities live in `.editorconfig`; the member-order precedence is explicit in `stylecop.json`.
-- `dotnet test` — NUnit suite. Add `--filter "TestCategory!=Integration"` for a fast offline run.
+- `dotnet test --filter "TestCategory!=Integration"` — offline NUnit suite used by CI and release. An unfiltered `dotnet test` also runs the optional live integration tests.
 - `dotnet format` — applies supported style fixes. It cannot reorder members (SA1201/SA1202/SA1203/SA1204/SA1214) or fix naming (IDE1006); move or rename those by hand.
 
 **Before pushing, run the core developer gates with the same flags CI uses.** `.githooks/pre-push` runs
@@ -136,7 +136,7 @@ SolSharp/
 - `IDE1006` is disabled for `tests/**` so `Method_Scenario_Expectation` names are allowed.
 - For constructor-throws-only tests use an explicit discard: `Action act = () => _ = new T(...);`.
 - **Arrange / Act / Assert comments.** Mark the three phases with `// Arrange`, `// Act`, `// Assert`. When the call under test and its check are a single fluent statement (exception delegates, `(await …).Should()…`), use one `// Act & Assert`. Skip the labels on expression-bodied or single-statement `[TestCase]` tests where there is nothing to separate — never restructure a test body just to fit them.
-- **Integration tests** live in `SolSharp.IntegrationTests`, hit a real cluster, and run as part of `dotnet test`. They are tagged `[Category("Integration")]`; read/streaming tests default to public mainnet (`SOLSHARP_RPC_URL` / `SOLSHARP_WS_URL` override), and the write suite (airdrop, transfer, durable nonce) always targets devnet (`SOLSHARP_DEVNET_RPC_URL` override) — never mainnet. HTTP read and write harnesses use shared two-request-per-second token buckets; WebSocket probes are serialized and their starts are paced at 500 ms. Write fixtures additionally carry `[Category("DevnetWrite")]` and are non-parallel. No key is ever committed. Ordinary runs report transient endpoint/faucet failures as inconclusive. The release gate is strict for unit/read/streaming tests, while it attempts the faucet-dependent write probe separately so a shared-faucet 429 cannot block publication; deterministic write-path failures still fail. Skip all live tests for a fast offline run with `dotnet test --filter "TestCategory!=Integration"`.
+- **Integration tests** live in `SolSharp.IntegrationTests` and remain available for explicit manual runs. CI and release exclude all `[Category("Integration")]` tests with `TestCategory!=Integration`; deterministic fixtures in the same project still run, and the release gate rejects skipped or inconclusive offline results. An unfiltered `dotnet test` also includes live tests. Read/streaming tests default to public mainnet (`SOLSHARP_RPC_URL` / `SOLSHARP_WS_URL` override), and the write suite (airdrop, transfer, durable nonce) always targets devnet (`SOLSHARP_DEVNET_RPC_URL` override) — never mainnet. HTTP read and write harnesses use shared two-request-per-second token buckets; WebSocket probes are serialized and their starts are paced at 500 ms. Write fixtures additionally carry `[Category("DevnetWrite")]` and are non-parallel. No key is ever committed. Ordinary manual runs report transient endpoint/faucet failures as inconclusive; `SOLSHARP_INTEGRATION_STRICT=1` makes those failures and missing V1 discovery data fail a manual run. Deterministic client failures always fail. Release validation does not require private endpoint secrets or run a devnet write probe.
 
 ## Security (money-critical)
 

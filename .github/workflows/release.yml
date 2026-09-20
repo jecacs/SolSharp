@@ -77,101 +77,34 @@ jobs:
       - name: Verify formatting and analyzer style
         run: dotnet format --no-restore --verify-no-changes --severity info
 
-      - name: Require private integration endpoints
-        shell: bash
-        env:
-          SOLSHARP_RPC_URL: ${{ secrets.SOLSHARP_RPC_URL }}
-          SOLSHARP_WS_URL: ${{ secrets.SOLSHARP_WS_URL }}
-          SOLSHARP_DEVNET_RPC_URL: ${{ secrets.SOLSHARP_DEVNET_RPC_URL }}
-        run: |
-          for variable in SOLSHARP_RPC_URL SOLSHARP_WS_URL SOLSHARP_DEVNET_RPC_URL; do
-            value="${!variable:-}"
-            if [[ -z "${value}" ]]; then
-              echo "Required release integration secret ${variable} is not configured."
-              exit 1
-            fi
-
-            parsed_endpoint="$(python3 -c '
-          import sys
-          from urllib.parse import urlsplit
-
-          try:
-              endpoint = urlsplit(sys.argv[1])
-              _ = endpoint.port
-          except ValueError as error:
-              raise SystemExit(f"Invalid endpoint URI: {error}") from error
-
-          if not endpoint.scheme or not endpoint.hostname:
-              raise SystemExit("Endpoint URI must include a scheme and hostname.")
-
-          print(endpoint.scheme.lower(), endpoint.hostname.rstrip(".").lower())
-          ' "${value}")" || exit 1
-            read -r endpoint_scheme endpoint_host <<< "${parsed_endpoint}"
-            case "${variable}:${endpoint_scheme}" in
-              SOLSHARP_RPC_URL:http|SOLSHARP_RPC_URL:https|SOLSHARP_DEVNET_RPC_URL:http|SOLSHARP_DEVNET_RPC_URL:https|SOLSHARP_WS_URL:ws|SOLSHARP_WS_URL:wss)
-                ;;
-              *)
-                echo "Release integration secret ${variable} has an unsupported URI scheme."
-                exit 1
-                ;;
-            esac
-            case "${endpoint_host}" in
-              api.mainnet-beta.solana.com|api.devnet.solana.com|api.testnet.solana.com)
-                echo "Release integration secret ${variable} must use a private endpoint, not a public fallback."
-                exit 1
-                ;;
-            esac
-          done
-
-      # Unit tests plus live read/streaming integration form the blocking release gate. Unlike ordinary local
-      # runs, this pass is strict: transport failures and every inconclusive/skipped result fail the job.
-      - name: Test (strict suite and live reads)
+      # Release validation must not depend on external RPC providers or devnet faucets.
+      - name: Test (offline)
         run: >-
           dotnet test
           --no-build
+          --no-restore
           --configuration Release
-          --filter "TestCategory!=DevnetWrite"
+          --filter "TestCategory!=Integration"
           --logger "console;verbosity=normal"
           --logger trx
-          --results-directory "${{ runner.temp }}/solsharp-strict-test-results"
-        env:
-          SOLSHARP_RPC_URL: ${{ secrets.SOLSHARP_RPC_URL }}
-          SOLSHARP_WS_URL: ${{ secrets.SOLSHARP_WS_URL }}
-          SOLSHARP_INTEGRATION_STRICT: 'true'
+          --results-directory "${{ runner.temp }}/solsharp-offline-test-results"
 
-      - name: Reject inconclusive or skipped strict tests
+      - name: Reject inconclusive or skipped offline tests
         shell: bash
         env:
-          STRICT_RESULTS_DIR: ${{ runner.temp }}/solsharp-strict-test-results
+          OFFLINE_RESULTS_DIR: ${{ runner.temp }}/solsharp-offline-test-results
         run: |
-          mapfile -t result_files < <(find "${STRICT_RESULTS_DIR}" -type f -name '*.trx')
+          mapfile -t result_files < <(find "${OFFLINE_RESULTS_DIR}" -type f -name '*.trx')
           if (( ${#result_files[@]} == 0 )); then
-            echo "No strict-suite TRX test results were produced."
+            echo "No offline-suite TRX test results were produced."
             exit 1
           fi
 
           if grep --with-filename --extended-regexp \
             'outcome="(NotExecuted|Skipped|Inconclusive|NotRunnable|Warning)"' "${result_files[@]}"; then
-            echo "Strict release tests contained an inconclusive or skipped result."
+            echo "Offline release tests contained an inconclusive or skipped result."
             exit 1
           fi
-
-      # requestAirdrop is deliberately not retried because it is not idempotent, and the shared devnet faucet
-      # can return 429/-32603 even through a healthy private RPC provider. Attempt the real write paths on every
-      # release, but let only classified faucet/transport failures become inconclusive; deterministic client,
-      # wire, assertion, or cluster-safety failures still fail this step.
-      - name: Probe devnet writes (faucet-limited)
-        run: >-
-          dotnet test tests/SolSharp.IntegrationTests/SolSharp.IntegrationTests.csproj
-          --no-build
-          --configuration Release
-          --filter "TestCategory=DevnetWrite"
-          --logger "console;verbosity=normal"
-          --logger trx
-          --results-directory "${{ runner.temp }}/solsharp-devnet-write-results"
-        env:
-          SOLSHARP_DEVNET_RPC_URL: ${{ secrets.SOLSHARP_DEVNET_RPC_URL }}
-          SOLSHARP_INTEGRATION_STRICT: 'false'
 
       # No --no-build: packing rebuilds so the facade's bundling target (which folds the four
       # assemblies into the single SolSharp package) runs against fully resolved references.
