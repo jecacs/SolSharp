@@ -186,7 +186,7 @@ jobs:
           echo "sha256=${package_sha256}" >> "${GITHUB_OUTPUT}"
 
       - name: Transfer verified release artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-package
           path: |
@@ -265,7 +265,7 @@ jobs:
             --deny-self-hosted-runners
 
       - name: Transfer attested release candidate
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: attested-release-candidate
           path: |
@@ -772,7 +772,7 @@ jobs:
           emit_canonical_release "${created_state}" "${staged_assets}"
 
       - name: Transfer canonical release assets
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: canonical-release-assets
           path: |
