@@ -19,12 +19,12 @@
       },
       "FsCheck.NUnit": {
         "type": "Direct",
-        "requested": "[3.4.0, )",
-        "resolved": "3.4.0",
-        "contentHash": "EZ1Lh2LA5Qv2GE7kh0YZcT7QJTI4lrRpEj9tfvZyEa+zGB9R23oKQEI6TM8wQfPXiVKNtjq1qyIuIkiAPN++aQ==",
+        "requested": "[3.5.0, )",
+        "resolved": "3.5.0",
+        "contentHash": "59uEKIV3fQV00CoOSmI/PrtW8Xm/Q1x5K5dSXxnyRFxUJTFZbuPJAcwRpfE81GGkuq66Xk4dknWp/JsXFWppMw==",
         "dependencies": {
-          "FsCheck": "[3.4.0]",
-          "NUnit": "[4.0.0, 5.0.0)"
+          "FsCheck": "[3.5.0]",
+          "NUnit": "[4.0.0, 6.0.0)"
         }
       },
       "Microsoft.CodeAnalysis.BannedApiAnalyzers": {
@@ -93,8 +93,8 @@
       },
       "FsCheck": {
         "type": "Transitive",
-        "resolved": "3.4.0",
-        "contentHash": "wkWR1DORrKd46W6MEhmS4muo/0kgrtUV/AGW1ohMWemy7WukcRH8T3JjkDpn/daOHk0yVqf0CBvScU17Ab//PA==",
+        "resolved": "3.5.0",
+        "contentHash": "olekPbZ9M09t1qRK6yXfzvyA/eiLFXK2obJ0BAkk7reEoohbO/6ac8ISbCD3murRnQbwT04TUZKT3boFDUe4kw==",
         "dependencies": {
           "FSharp.Core": "5.0.2"
         }
