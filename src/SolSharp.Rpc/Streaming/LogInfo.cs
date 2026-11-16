@@ -26,7 +26,8 @@ public sealed record LogInfo
     [JsonRequired]
     public IReadOnlyList<string> Logs
     {
-        get => field ?? throw new InvalidOperationException("The log lines have not been initialized.");
+        get =>
+            field ?? throw new InvalidOperationException("The log lines have not been initialized.");
         init
         {
             if (value is null || value.Any(static entry => entry is null))

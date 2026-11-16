@@ -7,12 +7,47 @@ version (on the earlier 0.x releases, minor versions could carry them).
 
 ## [Unreleased]
 
+## [4.0.1] - 2026-11-16
+
+Maintenance release; no public API or wire-format changes.
+
+### Fixed
+
+- Pinned repository builds to .NET SDK 10.0.404 and updated the Native AOT toolchain packages to 10.0.15
+  to address GHSA-p3jp-9v83-76w9 in `Microsoft.DotNet.ILCompiler` 10.0.12, which caused the locked
+  dependency audit to fail in CI, CodeQL, and the scheduled security workflow. The advisory concerns the
+  .NET Native AOT toolchain and runtime packs, which are not part of the SolSharp package. SourceLink and
+  its `Microsoft.Build.Tasks.Git` dependency move to 10.0.404 with the SDK. Solution, benchmark, and
+  packed Native AOT dependency locks are synchronized with the updated references.
+
 ### Changed
 
+- Updated the package's Microsoft.Extensions dependencies to the current .NET 10 servicing releases:
+  `Microsoft.Extensions.Http` and `Microsoft.Extensions.Logging.Abstractions` 10.0.15 and
+  `Microsoft.Extensions.Http.Resilience` 10.11.0. They stay on the 10.x line that matches the `net10.0`
+  target instead of moving to the 11.0 packages.
+- Updated test tooling to NUnit 5.0.0, NUnit3TestAdapter 6.3.1, Microsoft.NET.Test.Sdk 18.12.0,
+  FsCheck.NUnit 3.6.0, coverlet.collector 10.1.0, and the test-only
+  `Microsoft.Extensions.DependencyInjection` reference to 10.0.15; CI coverage reporting uses
+  ReportGenerator 5.6.0. FluentAssertions remains on the latest 7.x release (7.2.2) with its existing
+  license.
+- Updated StyleCop.Analyzers from 1.2.0-beta.556 to 1.3.180, its first stable release since 1.1.118.
+  Diagnostics from its new and extended rules (SA1143, SA1408, SA1504) are resolved with
+  behavior-neutral source changes.
+- Updated the SHA-pinned GitHub Actions to setup-dotnet 6.1.0, upload-artifact 7.0.2, download-artifact
+  8.0.2, Scorecard 2.5.0, and CodeQL 4.39.3, with CodeQL `init`, `analyze`, and `upload-sarif` on one
+  revision.
+- The README now documents the release cadence: maintenance releases roll up security changes every two
+  weeks, and critical vulnerabilities are fixed out of band as quickly as possible.
 - Release validation now runs offline tests only, matching CI, and no longer requires private RPC/WebSocket
   endpoint secrets or runs a devnet write probe. Live HTTP, WebSocket, and devnet tests remain available for
   explicit manual runs, including optional strict mode. Offline test validation, dependency/security checks,
   package/API validation, packed Native AOT smoke checks, and release provenance remain in place.
+
+### Tests
+
+- Added pinned account-list checks for the Vote `Authorize`, `AuthorizeChecked`, `AuthorizeWithSeed`, and
+  `AuthorizeCheckedWithSeed` instruction builders.
 
 ## [4.0.0] - 2026-09-20
 
@@ -711,7 +746,8 @@ bundles four layered assemblies.
   transaction building, signing and serialization, `Transaction.Deserialize`, and instruction
   decompilation — every wire format validated byte-for-byte against the Rust `solana-sdk`.
 
-[Unreleased]: https://github.com/jecacs/SolSharp/compare/v4.0.0...HEAD
+[Unreleased]: https://github.com/jecacs/SolSharp/compare/v4.0.1...HEAD
+[4.0.1]: https://github.com/jecacs/SolSharp/compare/v4.0.0...v4.0.1
 [4.0.0]: https://github.com/jecacs/SolSharp/compare/v3.2.0...v4.0.0
 [3.2.0]: https://github.com/jecacs/SolSharp/compare/v3.1.0...v3.2.0
 [3.1.0]: https://github.com/jecacs/SolSharp/compare/v3.0.0...v3.1.0

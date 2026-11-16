@@ -135,6 +135,14 @@ public static class VoteProgramParityTests
             Hex(instruction).Should().Be(
                 "01000000" + Repeat(3, 32) + "02000000" + Repeat(4, 48) + Repeat(5, 96));
         }
+
+        [Test]
+        public void MatchesPinnedAccounts()
+            => Metas(VoteProgram.Authorize(Pk(1), Pk(2), Pk(3), VoteAuthorization.Withdrawer))
+                .Should().Equal(
+                    (Pk(1), false, true),
+                    (PublicKey.Parse(Sysvars.Clock), false, false),
+                    (Pk(2), true, false));
     }
 
     [TestFixture]
@@ -146,6 +154,14 @@ public static class VoteProgramParityTests
                 .Should().Be(
                     "0a00000001000000" + Repeat(4, 32) +
                     "02000000000000006162" + Repeat(3, 32));
+
+        [Test]
+        public void MatchesPinnedAccounts()
+            => Metas(VoteProgram.AuthorizeWithSeed(Pk(1), Pk(2), Pk(4), "ab", Pk(3), VoteAuthorization.Withdrawer))
+                .Should().Equal(
+                    (Pk(1), false, true),
+                    (PublicKey.Parse(Sysvars.Clock), false, false),
+                    (Pk(2), true, false));
     }
 
     [TestFixture]
@@ -326,6 +342,15 @@ public static class VoteProgramParityTests
         public void UsesPinnedDiscriminator()
             => Hex(VoteProgram.AuthorizeChecked(Pk(1), Pk(2), Pk(3), VoteAuthorization.Voter))
                 .Should().Be("0700000000000000");
+
+        [Test]
+        public void MatchesPinnedAccounts()
+            => Metas(VoteProgram.AuthorizeChecked(Pk(1), Pk(2), Pk(3), VoteAuthorization.Voter))
+                .Should().Equal(
+                    (Pk(1), false, true),
+                    (PublicKey.Parse(Sysvars.Clock), false, false),
+                    (Pk(2), true, false),
+                    (Pk(3), true, false));
     }
 
     [TestFixture]
@@ -354,6 +379,21 @@ public static class VoteProgramParityTests
                     Pk(3),
                     VoteAuthorization.Voter))
                 .Should().StartWith("0b000000");
+
+        [Test]
+        public void MatchesPinnedAccounts()
+            => Metas(VoteProgram.AuthorizeCheckedWithSeed(
+                    Pk(1),
+                    Pk(2),
+                    Pk(4),
+                    "ab",
+                    Pk(3),
+                    VoteAuthorization.Voter))
+                .Should().Equal(
+                    (Pk(1), false, true),
+                    (PublicKey.Parse(Sysvars.Clock), false, false),
+                    (Pk(2), true, false),
+                    (Pk(3), true, false));
     }
 }
 

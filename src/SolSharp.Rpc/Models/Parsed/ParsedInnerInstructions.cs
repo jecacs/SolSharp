@@ -17,7 +17,8 @@ public sealed record ParsedInnerInstructions
     [JsonRequired]
     public IReadOnlyList<ParsedInstruction> Instructions
     {
-        get => field!;
+        get =>
+            field!;
         init
         {
             if (value is null || value.Any(static instruction => instruction is null))

@@ -10,11 +10,13 @@ public static partial class Token2022Program
         if (data.Length < 8)
             return null;
         var discriminator = data[..8];
-        var name = discriminator.SequenceEqual(InitializeMetadataDiscriminator) ? "Initialize" :
+        var name =
+            discriminator.SequenceEqual(InitializeMetadataDiscriminator) ? "Initialize" :
             discriminator.SequenceEqual(UpdateMetadataFieldDiscriminator) ? "UpdateField" :
             discriminator.SequenceEqual(RemoveMetadataKeyDiscriminator) ? "RemoveKey" :
             discriminator.SequenceEqual(UpdateMetadataAuthorityDiscriminator) ? "UpdateAuthority" :
-            discriminator.SequenceEqual(EmitMetadataDiscriminator) ? "Emit" : null;
+            discriminator.SequenceEqual(EmitMetadataDiscriminator) ? "Emit" :
+            null;
         return name is null ? null : new DecodedSplInterfaceInstruction(name, data[8..]);
     }
 
@@ -26,10 +28,12 @@ public static partial class Token2022Program
         if (data.Length < 8)
             return null;
         var discriminator = data[..8];
-        var name = discriminator.SequenceEqual(InitializeTokenGroupDiscriminator) ? "InitializeGroup" :
+        var name =
+            discriminator.SequenceEqual(InitializeTokenGroupDiscriminator) ? "InitializeGroup" :
             discriminator.SequenceEqual(UpdateTokenGroupMaxSizeDiscriminator) ? "UpdateGroupMaxSize" :
             discriminator.SequenceEqual(UpdateTokenGroupAuthorityDiscriminator) ? "UpdateGroupAuthority" :
-            discriminator.SequenceEqual(InitializeTokenGroupMemberDiscriminator) ? "InitializeMember" : null;
+            discriminator.SequenceEqual(InitializeTokenGroupMemberDiscriminator) ? "InitializeMember" :
+            null;
         return name is null ? null : new DecodedSplInterfaceInstruction(name, data[8..]);
     }
 }
@@ -44,9 +48,11 @@ public static partial class TransferHookProgram
         if (data.Length < 8)
             return null;
         var discriminator = data[..8];
-        var name = discriminator.SequenceEqual(ExecuteDiscriminator) ? "Execute" :
+        var name =
+            discriminator.SequenceEqual(ExecuteDiscriminator) ? "Execute" :
             discriminator.SequenceEqual(InitializeExtraAccountMetasDiscriminator) ? "InitializeExtraAccountMetaList" :
-            discriminator.SequenceEqual(UpdateExtraAccountMetasDiscriminator) ? "UpdateExtraAccountMetaList" : null;
+            discriminator.SequenceEqual(UpdateExtraAccountMetasDiscriminator) ? "UpdateExtraAccountMetaList" :
+            null;
         return name is null ? null : new DecodedSplInterfaceInstruction(name, data[8..]);
     }
 }

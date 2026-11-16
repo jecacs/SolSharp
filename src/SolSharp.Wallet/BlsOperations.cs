@@ -344,8 +344,8 @@ internal static class BlsOperations
     }
 
     private static bool IsBase64Alphabet(char value) =>
-        value is >= 'A' and <= 'Z' or
-            >= 'a' and <= 'z' or
-            >= '0' and <= '9' or
+        value is (>= 'A' and <= 'Z') or
+            (>= 'a' and <= 'z') or
+            (>= '0' and <= '9') or
             '+' or '/';
 }

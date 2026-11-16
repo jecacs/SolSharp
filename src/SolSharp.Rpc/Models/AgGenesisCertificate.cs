@@ -37,7 +37,8 @@ public sealed record AgGenesisBlock
     [JsonPropertyName("block_id")]
     public required IReadOnlyList<byte> BlockId
     {
-        get => field ?? throw new InvalidOperationException("The Alpenglow block identifier has not been initialized.");
+        get =>
+            field ?? throw new InvalidOperationException("The Alpenglow block identifier has not been initialized.");
         init
         {
             if (value is null)
@@ -57,7 +58,8 @@ public sealed record AgGenesisCertificateSignature
     [JsonPropertyName("signature")]
     public required IReadOnlyList<byte> Signature
     {
-        get => field ?? throw new InvalidOperationException("The Alpenglow aggregate signature has not been initialized.");
+        get =>
+            field ?? throw new InvalidOperationException("The Alpenglow aggregate signature has not been initialized.");
         init
         {
             if (value is null)
@@ -77,7 +79,8 @@ public sealed record AgGenesisCertificateSignature
     [JsonPropertyName("bitmap")]
     public required IReadOnlyList<byte> Bitmap
     {
-        get => field ?? throw new InvalidOperationException("The Alpenglow validator bitmap has not been initialized.");
+        get =>
+            field ?? throw new InvalidOperationException("The Alpenglow validator bitmap has not been initialized.");
         init
         {
             if (value is null)
