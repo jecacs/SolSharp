@@ -6,9 +6,9 @@
     <PackageId>SolSharp</PackageId>
     <IsPackable>true</IsPackable>
     <EnablePackageValidation>true</EnablePackageValidation>
-    <PackageValidationBaselineVersion>3.2.0</PackageValidationBaselineVersion>
+    <PackageValidationBaselineVersion>4.0.0</PackageValidationBaselineVersion>
     <Description>A contract-driven, Native AOT-ready .NET 10 SDK for Solana — independently implemented from pinned Anza Solana SDK, Agave, and SPL source contracts. Source-generated JSON with no reflection; typed RPC and multiplexed WebSocket streaming; Ed25519 and BLS12-381 keys/signatures; program instructions and bounded state decoding; and exact legacy/v0/V1 transaction wire formats verified against Rust-compatible vectors. Ships as one package bundling the Core, Wallet, Rpc, and Programs functional assemblies plus a minimal packaging facade.</Description>
-    <PackageReleaseNotes>4.0.0 — V1 transactions by default. Breaking change: HTTP transaction/block reads and WebSocket block subscriptions now advertise transaction version 1; full configuration objects also default MaxSupportedTransactionVersion to 1. Use explicit version 0 to retain legacy/v0-only reads, or null in full options to omit the version field. Base58/binary encodings require an explicit version 0 or null; use base64, JSON, or jsonParsed for V1. Adds GetTransactionOptions.MinContextSlot and GetSignatureStatusesWithOptionsAsync with history, commitment, and minimum-context-slot options. Updates NuGet dependencies and the pinned .NET 10 toolchain, fixes the SourceLink security-audit failure, and synchronizes solution, benchmark, and packed AOT locks. Verified with default V1 HTTP/WebSocket tests, a read-only mainnet V1 regression, and packed Native AOT smoke checks. Full details: https://github.com/jecacs/SolSharp/blob/v4.0.0/CHANGELOG.md</PackageReleaseNotes>
+    <PackageReleaseNotes>4.0.1 — maintenance release with no public API or wire-format changes. Updates the package dependencies Microsoft.Extensions.Http and Microsoft.Extensions.Logging.Abstractions to 10.0.15 and Microsoft.Extensions.Http.Resilience to 10.11.0, staying on the 10.x line that matches the net10.0 target. Repository builds move to .NET SDK 10.0.404, which brings the Native AOT toolchain packages to 10.0.15 and resolves the GHSA-p3jp-9v83-76w9 dependency-audit failure; that advisory concerns the .NET Native AOT toolchain and runtime packs, which are not part of the SolSharp package. Test tooling, analyzers, pinned CI actions, and the solution, benchmark, and packed AOT locks are synchronized. Verified with the offline test suite, package API validation against 4.0.0, and packed Native AOT smoke checks. 4.0.0 recap — V1 transactions by default: HTTP transaction/block reads and WebSocket block subscriptions advertise transaction version 1, and full configuration objects default MaxSupportedTransactionVersion to 1. Use explicit version 0 to retain legacy/v0-only reads, or null in full options to omit the version field; base58/binary encodings require an explicit version 0 or null. Full details: https://github.com/jecacs/SolSharp/blob/v4.0.1/CHANGELOG.md</PackageReleaseNotes>
     <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);BundleProjectReferences</TargetsForTfmSpecificBuildOutput>
   </PropertyGroup>
 
@@ -23,9 +23,9 @@
     <PackageReference Include="SimpleBase" Version="5.6.4"/>
     <PackageReference Include="BouncyCastle.Cryptography" Version="2.7.0"/>
     <PackageReference Include="Nethermind.Crypto.Bls" Version="1.1.0" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.12" />
-    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.10.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.15" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.11.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.15" />
   </ItemGroup>
 
   <Target Name="BundleProjectReferences" DependsOnTargets="ResolveReferences">

@@ -653,20 +653,25 @@ public static class VoteProgram
         PublicKey voteAccount,
         PublicKey currentAuthority,
         PublicKey? newAuthority)
-        => newAuthority is { } replacement
-            ?
+    {
+        if (newAuthority is { } replacement)
+        {
+            return
             [
                 AccountMeta.Writable(voteAccount),
                 AccountMeta.Readonly(ClockSysvar),
                 AccountMeta.ReadonlySigner(currentAuthority),
                 AccountMeta.ReadonlySigner(replacement)
-            ]
-            :
-            [
-                AccountMeta.Writable(voteAccount),
-                AccountMeta.Readonly(ClockSysvar),
-                AccountMeta.ReadonlySigner(currentAuthority)
             ];
+        }
+
+        return
+        [
+            AccountMeta.Writable(voteAccount),
+            AccountMeta.Readonly(ClockSysvar),
+            AccountMeta.ReadonlySigner(currentAuthority)
+        ];
+    }
 
     private static IReadOnlyList<AccountMeta> VoteAccounts(PublicKey voteAccount, PublicKey voteAuthority)
         =>

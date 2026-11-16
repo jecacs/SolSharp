@@ -29,7 +29,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up .NET 10
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           # Read the exact SDK from global.json. The AOT toolchain packages (ILLink/ILCompiler) are
           # versioned by the SDK's runtime and land in packages.lock.json, so a floating SDK breaks
@@ -186,7 +186,7 @@ jobs:
           echo "sha256=${package_sha256}" >> "${GITHUB_OUTPUT}"
 
       - name: Transfer verified release artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-package
           path: |
@@ -207,7 +207,7 @@ jobs:
     steps:
       # download-artifact validates the workflow artifact digest recorded by upload-artifact.
       - name: Download verified release artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: release-package
           path: ./artifacts
@@ -265,7 +265,7 @@ jobs:
             --deny-self-hosted-runners
 
       - name: Transfer attested release candidate
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: attested-release-candidate
           path: |
@@ -287,7 +287,7 @@ jobs:
       package_sha256: ${{ steps.stage.outputs.package_sha256 }}
     steps:
       - name: Download attested release candidate
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: attested-release-candidate
           path: ./candidate
@@ -772,7 +772,7 @@ jobs:
           emit_canonical_release "${created_state}" "${staged_assets}"
 
       - name: Transfer canonical release assets
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: canonical-release-assets
           path: |
@@ -793,7 +793,7 @@ jobs:
     steps:
       - name: Set up .NET 10
         id: setup_dotnet
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           # This job has no checkout, so global.json is unreadable here; it also never restores or builds,
           # so the SDK version cannot affect any lock file. The step below pins whatever is installed into
@@ -831,7 +831,7 @@ jobs:
           fi
 
       - name: Download canonical release assets
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: canonical-release-assets
           path: ./artifacts
@@ -1022,7 +1022,7 @@ jobs:
       contents: write       # required only for completing the staged GitHub Release
     steps:
       - name: Download canonical release assets
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: canonical-release-assets
           path: ./artifacts

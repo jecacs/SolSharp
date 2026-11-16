@@ -4,7 +4,7 @@ A modern, contract-driven .NET SDK for Solana: keys and signing, program instruc
 transaction wire formats, RPC, and WebSocket streaming. It is optimized for low latency,
 bounded hostile-input handling, focused dependencies with a dependency-light Core, and Native AOT.
 
-Status: 4.0.0. SolSharp is independently implemented
+Status: 4.0.1. SolSharp is independently implemented
 against immutable Anza Solana SDK, Agave, and SPL source revisions; exact pins, client-side
 coverage, verification criteria, and deliberate node/runtime exclusions live in
 `docs/RUST_PARITY.md`. All JSON used by the library is source-generated and all four functional
@@ -17,7 +17,7 @@ Run from the repo root (where `SolSharp.sln` lives):
 
 - `dotnet build` — Roslyn and StyleCop code style is enforced on build (`EnforceCodeStyleInBuild`), so actionable style violations surface as warnings. Repository-specific StyleCop severities live in `.editorconfig`; the member-order precedence is explicit in `stylecop.json`.
 - `dotnet test --filter "TestCategory!=Integration"` — offline NUnit suite used by CI and release. An unfiltered `dotnet test` also runs the optional live integration tests.
-- `dotnet format` — applies supported style fixes. It cannot reorder members (SA1201/SA1202/SA1203/SA1204/SA1214) or fix naming (IDE1006); move or rename those by hand.
+- `dotnet format` — applies supported style fixes, including member order (SA1201/SA1202/SA1203/SA1204/SA1214). It cannot fix naming (IDE1006); rename those by hand.
 
 **Before pushing, run the core developer gates with the same flags CI uses.** `.githooks/pre-push` runs
 locked restores, Release builds, and analyzer-format checks for the solution and benchmark project, plus
@@ -70,7 +70,7 @@ Three traps worth knowing:
   **`global.json` pins one exact SDK with `rollForward: disable`; every CI/release job that restores or
   builds the checkout installs it via `global-json-file: global.json`.** The pin is not stylistic: `IsAotCompatible` injects
   `Microsoft.NET.ILLink.Tasks` and `PublishAot` injects `Microsoft.DotNet.ILCompiler`, both versioned by
-  the SDK's *runtime* (10.0.401 carries runtime 10.0.12), and both are recorded in every
+  the SDK's *runtime* (10.0.404 carries runtime 10.0.15), and both are recorded in every
   `packages.lock.json` as direct references. A floating SDK therefore breaks
   `dotnet restore --locked-mode` with NU1004 the moment .NET ships a patch, with no source change at all.
   Every checkout job that restores or builds asserts `dotnet --version` equals the pinned value; do not
@@ -84,7 +84,7 @@ Three traps worth knowing:
   `samples/SolSharp.AotSmoke/packages.packed.lock.template.json`. The same four steps apply to adding any
   `PackageReference` in `Directory.Build.props`.
 - **Modern C# 14 only.** `LangVersion=latest` means the latest stable language supported by the pinned .NET 10 SDK line; preview syntax is not enabled. File-scoped namespaces, `var`, collection expressions `[]`, primary constructors, switch expressions, pattern matching, `is null` / `is not null`. The full rule set lives in `.editorconfig`, `stylecop.json`, and `Directory.Build.props` — follow the analyzers, don't fight them.
-- **A feature is not done until it is documented.** Every user-facing addition or change lands in the same commit with all four documentation layers: (1) XML docs on the public API (CS1591 enforces presence on production members; full `<param>`, `<returns>`, and `<exception>` content remains a review policy); (2) `docs/USAGE.md` — a runnable example in the matching section (or a new section + `Contents` entry), with every snippet checked against the real signatures and model properties, not written from memory; (3) `README.md` — the wire-method list, feature bullets, and Layout if the shape of the repo changed (`README.nuget.md` only if the pitch/quick-start changes — it carries no method lists by design); (4) `CHANGELOG.md` under the release being prepared. Release-only extras: bump `Version` in `Directory.Build.props`, refresh `PackageReleaseNotes` in `src/SolSharp/SolSharp.csproj` (nuget.org shows only the current version's notes), and update the `Status:` line here.
+- **A feature is not done until it is documented.** Every user-facing addition or change lands in the same commit with all four documentation layers: (1) XML docs on the public API (CS1591 enforces presence on production members; full `<param>`, `<returns>`, and `<exception>` content remains a review policy); (2) `docs/USAGE.md` — a runnable example in the matching section (or a new section + `Contents` entry), with every snippet checked against the real signatures and model properties, not written from memory; (3) `README.md` — the wire-method list, feature bullets, and Layout if the shape of the repo changed (`README.nuget.md` only if the pitch/quick-start changes — it carries no method lists by design); (4) `CHANGELOG.md` under the release being prepared. Release-only extras: pass the advisory audit in the Security section, bump `Version` in `Directory.Build.props`, refresh `PackageReleaseNotes` in `src/SolSharp/SolSharp.csproj` (nuget.org shows only the current version's notes), and update the `Status:` line here.
 
 ## Architecture
 
@@ -143,6 +143,23 @@ SolSharp/
 - Anything that touches transaction bytes or signing must be tested against known-good vectors before it is trusted.
 - Never commit secrets or private keys. `.gitignore` covers `*.key`, `.env`, `secrets.json`, `appsettings.*.local.json`.
 - Never expose or export a raw private key to an RPC provider, hosted service, or third-party transaction builder. Keep signing behind `ISigner`; cryptographic backends are vetted implementation dependencies, not key-custody integrations. Simulate and assert instructions/amounts/destination before sending.
+- **Never push or tag a release that carries a known vulnerability.** Advisories are published without any
+  repository change, so a green run from an earlier day proves nothing. Before pushing a release branch or a
+  `v*` tag, run the advisory audit with the security workflow's flags for the solution and for the benchmark
+  project, which is outside it:
+
+  ```
+  dotnet restore SolSharp.sln --force --locked-mode -p:NuGetAudit=true -p:NuGetAuditMode=all -p:NuGetAuditLevel=low -warnaserror
+  dotnet restore benchmarks/SolSharp.Benchmarks/SolSharp.Benchmarks.csproj --force --locked-mode -p:NuGetAudit=true -p:NuGetAuditMode=all -p:NuGetAuditLevel=low -warnaserror
+  ```
+
+  `--force` is required locally: an up-to-date restore is skipped and audits nothing, so without it the
+  command passes against a newly published advisory (CI always restores a clean checkout). Any
+  `NU1901`–`NU1904` finding, direct or transitive, blocks the push. Then run `dotnet sdk check`: it must
+  report both the SDK pinned in `global.json` and its `Microsoft.NETCore.App` runtime as `Up to date.`,
+  because the ILLink/ILCompiler packages are versioned by that runtime; if a newer patch exists, do the
+  four-part SDK bump before releasing. Fix a finding by updating the package or the SDK pin — never with
+  `--no-verify`, `NuGetAudit=false`, a higher `NuGetAuditLevel`, `NuGetAuditSuppress`, or `NoWarn`.
 
 ## Decisions
 

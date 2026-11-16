@@ -262,7 +262,8 @@ public sealed record InnerInstructionGroup
     [JsonRequired]
     public IReadOnlyList<InnerInstruction> Instructions
     {
-        get => field!;
+        get =>
+            field!;
         init
         {
             if (value is null || value.Any(static instruction => instruction is null))

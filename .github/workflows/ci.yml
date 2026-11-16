@@ -18,7 +18,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up .NET 10
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           # Read the exact SDK from global.json. The AOT toolchain packages (ILLink/ILCompiler) are
           # versioned by the SDK's runtime and land in packages.lock.json, so a floating SDK breaks
@@ -107,7 +107,7 @@ jobs:
 
           dotnet tool install dotnet-reportgenerator-globaltool \
             --tool-path "${REPORTGENERATOR_ROOT}" \
-            --version 5.5.11
+            --version 5.6.0
 
           "${REPORTGENERATOR_ROOT}/reportgenerator" \
             "-reports:${COVERAGE_ROOT}/**/coverage.cobertura.xml" \
@@ -156,7 +156,7 @@ jobs:
 
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-report
           path: ${{ runner.temp }}/solsharp-coverage/report
@@ -173,7 +173,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up .NET 10
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           # Read the exact SDK from global.json. The AOT toolchain packages (ILLink/ILCompiler) are
           # versioned by the SDK's runtime and land in packages.lock.json, so a floating SDK breaks

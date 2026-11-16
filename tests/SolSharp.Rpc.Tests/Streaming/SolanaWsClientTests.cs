@@ -2304,8 +2304,8 @@ public static class SolanaWsClientTests
             var replayVersions = second.SentSnapshot().Select(static request =>
             {
                 using var document = JsonDocument.Parse(request);
-                return document.RootElement.GetProperty("params")[1]
-                    .TryGetProperty("maxSupportedTransactionVersion", out var version)
+                var config = document.RootElement.GetProperty("params")[1];
+                return config.TryGetProperty("maxSupportedTransactionVersion", out var version)
                     ? version.GetInt32()
                     : (int?)null;
             });

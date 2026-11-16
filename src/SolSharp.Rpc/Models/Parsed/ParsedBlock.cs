@@ -56,7 +56,8 @@ public sealed record ParsedBlock
     [JsonRequired]
     public IReadOnlyList<ParsedTransaction> Transactions
     {
-        get => field!;
+        get =>
+            field!;
         init
         {
             if (value is null || value.Any(static transaction => transaction is null))

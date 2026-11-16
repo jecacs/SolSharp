@@ -16,18 +16,22 @@ public static class TransactionV1Tests
     // message/src/versions/v1/message.rs::byte_layout_without_config, version-prefixed for a transaction.
     private static byte[] UpstreamMessage()
     {
-        var bytes = new List<byte> { MessageV1.VersionPrefix, 1, 0, 0 };
-        bytes.AddRange(new byte[sizeof(uint)]);
-        bytes.AddRange(Fill(0xAB));
-        bytes.Add(1);
-        bytes.Add(2);
-        bytes.AddRange(Fill(1));
-        bytes.AddRange(Fill(2));
-        bytes.Add(1);
-        bytes.Add(1);
-        bytes.AddRange([2, 0]);
-        bytes.Add(0);
-        bytes.AddRange([0xDE, 0xAD]);
+        List<byte> bytes =
+        [
+            MessageV1.VersionPrefix, 1, 0, 0,
+            .. new byte[sizeof(uint)],
+            .. Fill(0xAB),
+            1,
+            2,
+            .. Fill(1),
+            .. Fill(2),
+            1,
+            1,
+            2, 0,
+            0,
+            0xDE, 0xAD
+        ];
+
         return [.. bytes];
     }
 

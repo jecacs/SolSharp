@@ -52,7 +52,8 @@ public sealed record Block
     [JsonRequired]
     public IReadOnlyList<string> Signatures
     {
-        get => field ?? throw new InvalidOperationException("The block signatures have not been initialized.");
+        get =>
+            field ?? throw new InvalidOperationException("The block signatures have not been initialized.");
         init
         {
             if (value is null || value.Any(static signature => signature is null))

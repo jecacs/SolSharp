@@ -15,18 +15,22 @@ public static class MessageV1Tests
     // message/src/versions/v1/message.rs::byte_layout_without_config, plus VersionedMessage's 0x81 prefix.
     private static byte[] UpstreamWithoutConfig()
     {
-        var expected = new List<byte> { MessageV1.VersionPrefix, 1, 0, 0 };
-        expected.AddRange(new byte[sizeof(uint)]);
-        expected.AddRange(Fill(0xAB));
-        expected.Add(1);
-        expected.Add(2);
-        expected.AddRange(Fill(1));
-        expected.AddRange(Fill(2));
-        expected.Add(1);
-        expected.Add(1);
-        expected.AddRange([2, 0]);
-        expected.Add(0);
-        expected.AddRange([0xDE, 0xAD]);
+        List<byte> expected =
+        [
+            MessageV1.VersionPrefix, 1, 0, 0,
+            .. new byte[sizeof(uint)],
+            .. Fill(0xAB),
+            1,
+            2,
+            .. Fill(1),
+            .. Fill(2),
+            1,
+            1,
+            2, 0,
+            0,
+            0xDE, 0xAD
+        ];
+
         return [.. expected];
     }
 
@@ -34,18 +38,22 @@ public static class MessageV1Tests
     // message/src/versions/v1/message.rs::byte_layout_with_config, plus VersionedMessage's 0x81 prefix.
     private static byte[] UpstreamWithConfig()
     {
-        var expected = new List<byte> { MessageV1.VersionPrefix, 1, 0, 0 };
-        expected.AddRange([7, 0, 0, 0]);
-        expected.AddRange(Fill(0xBB));
-        expected.Add(1);
-        expected.Add(2);
-        expected.AddRange(Fill(1));
-        expected.AddRange(Fill(2));
-        expected.AddRange([8, 7, 6, 5, 4, 3, 2, 1]);
-        expected.AddRange([0x44, 0x33, 0x22, 0x11]);
-        expected.Add(1);
-        expected.Add(0);
-        expected.AddRange([0, 0]);
+        List<byte> expected =
+        [
+            MessageV1.VersionPrefix, 1, 0, 0,
+            7, 0, 0, 0,
+            .. Fill(0xBB),
+            1,
+            2,
+            .. Fill(1),
+            .. Fill(2),
+            8, 7, 6, 5, 4, 3, 2, 1,
+            0x44, 0x33, 0x22, 0x11,
+            1,
+            0,
+            0, 0
+        ];
+
         return [.. expected];
     }
 

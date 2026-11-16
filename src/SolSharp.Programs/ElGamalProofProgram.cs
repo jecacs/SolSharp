@@ -125,8 +125,12 @@ public static class ElGamalProofProgram
         PublicKey? contextStateAuthority = null)
     {
         ValidateProofInstruction(proofInstruction);
-        var accounts = new List<AccountMeta> { AccountMeta.Readonly(proofAccount) };
-        accounts.AddRange(ContextAccounts(contextStateAccount, contextStateAuthority));
+        List<AccountMeta> accounts =
+        [
+            AccountMeta.Readonly(proofAccount),
+            .. ContextAccounts(contextStateAccount, contextStateAuthority)
+        ];
+
         var data = new byte[1 + sizeof(uint)];
         data[0] = (byte)proofInstruction;
         BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(1), proofDataOffset);

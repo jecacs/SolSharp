@@ -357,9 +357,12 @@ public static class TokenMetadataStateDecoderTests
         public void PinnedBorshValue_IsDecoded()
         {
             // Arrange
-            var data = new List<byte>();
-            data.AddRange(Key(1).ToBytes());
-            data.AddRange(Key(2).ToBytes());
+            List<byte> data =
+            [
+                .. Key(1).ToBytes(),
+                .. Key(2).ToBytes()
+            ];
+
             WriteString(data, "Name");
             WriteString(data, "SYM");
             WriteString(data, "https://example.test");
